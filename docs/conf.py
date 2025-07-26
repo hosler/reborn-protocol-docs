@@ -27,7 +27,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 source_suffix = {
     '.rst': None,
-    '.md': None,
+    '.md': 'myst-parser',
 }
 
 # -- Options for HTML output -------------------------------------------------
