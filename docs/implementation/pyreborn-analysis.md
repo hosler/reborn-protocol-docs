@@ -81,7 +81,7 @@ self.iterator = (self.iterator * 0x8088405 + self.key) & 0xFFFFFFFF
 ### 3. **G-Type Encoding** - **PARTIALLY INCORRECT**
 
 **GSHORT Implementation**:
-**Documented**: `((value >> 6) + 32) + ((value & 0x3f) + 32)`
+**Documented**: 7-bit shift encoding with +32 bias (max 28767)
 
 **PyReborn**:
 ```python
@@ -204,8 +204,13 @@ def decrypt(self, buffer):
 2. **Fix G-type encoding**:
 ```python
 def write_gshort(self, value: int):
-    self.write_gchar((value >> 6) & 0x3F)
-    self.write_gchar(value & 0x3F)
+    t = min(value, 28767)  # GServer max value
+    val0 = t >> 7
+    if val0 > 223:
+        val0 = 223
+    val1 = t - (val0 << 7)
+    self.write_gchar(val0)
+    self.write_gchar(val1)
 ```
 
 3. **Implement missing critical packets**:

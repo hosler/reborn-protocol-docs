@@ -52,11 +52,13 @@ void decrypt(uint8_t* buffer, int length, uint8_t key, uint32_t& iterator, int l
 **MUST** implement exact bit operations:
 
 ```cpp
-// GSHORT encoding
+// GSHORT encoding (7-bit shift, authoritative)
 uint16_t encodeGShort(uint16_t value) {
-    uint8_t byte1 = ((value >> 6) & 0x3F) + 32;
-    uint8_t byte2 = (value & 0x3F) + 32;
-    return (byte1 << 8) | byte2;
+    uint16_t t = (value > 28767) ? 28767 : value;
+    uint8_t val0 = t >> 7;
+    if (val0 > 223) val0 = 223;
+    uint8_t val1 = t - (val0 << 7);
+    return ((val0 + 32) << 8) | (val1 + 32);
 }
 ```
 

@@ -260,25 +260,31 @@ Values: See LevelItemType enum
 
 ### Cross-Language Compatibility
 ```python
-# Python example
+# Python example (corrected 7-bit encoding)
 def encode_gshort(value):
-    return bytes([((value >> 6) & 0x3F) + 32, (value & 0x3F) + 32])
+    t = min(value, 28767)
+    val0 = t >> 7
+    if val0 > 223:
+        val0 = 223
+    val1 = t - (val0 << 7)
+    return bytes([val0 + 32, val1 + 32])
 
 def decode_gshort(data):
-    return ((data[0] - 32) << 6) | (data[1] - 32)
+    return (data[0] << 7) + data[1] - 0x1020
 ```
 
 ```javascript
-// JavaScript example  
+// JavaScript example (corrected 7-bit encoding)
 function encodeGShort(value) {
-    return new Uint8Array([
-        ((value >> 6) & 0x3F) + 32,
-        (value & 0x3F) + 32
-    ]);
+    const t = Math.min(value, 28767);
+    let val0 = t >> 7;
+    if (val0 > 223) val0 = 223;
+    const val1 = t - (val0 << 7);
+    return new Uint8Array([val0 + 32, val1 + 32]);
 }
 
 function decodeGShort(data) {
-    return ((data[0] - 32) << 6) | (data[1] - 32);
+    return (data[0] << 7) + data[1] - 0x1020; // 0x1020 = (32 << 7) + 32
 }
 ```
 

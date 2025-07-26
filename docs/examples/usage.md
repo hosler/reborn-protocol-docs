@@ -250,21 +250,24 @@ private:
 
 ```python
 def encode_gshort(value):
-    """Encode 16-bit value as GSHORT"""
-    byte1 = ((value >> 6) & 0x3F) + 32
-    byte2 = (value & 0x3F) + 32
-    return bytes([byte1, byte2])
+    """Encode 16-bit value as GSHORT (7-bit shift, max 28767)"""
+    t = min(value, 28767)  # GServer max value
+    val0 = t >> 7
+    if val0 > 223:
+        val0 = 223
+    val1 = t - (val0 << 7)
+    return bytes([val0 + 32, val1 + 32])
 
 def decode_gshort(data):
     """Decode GSHORT to 16-bit value"""
-    return ((data[0] - 32) << 6) | (data[1] - 32)
+    return (data[0] << 7) + data[1] - 0x1020  # 0x1020 = (32 << 7) + 32
 
-# Examples
+# Examples (corrected for 7-bit encoding)
 assert encode_gshort(0) == b'\x20\x20'      # 0 -> 32,32
-assert encode_gshort(63) == b'\x20\x5f'     # 63 -> 32,95
-assert encode_gshort(4095) == b'\x5f\x5f'   # 4095 -> 95,95
+assert encode_gshort(1000) == b'\x27\x88'   # 1000 -> 39,136  
+assert encode_gshort(28767) == b'\xff\x7f'  # 28767 -> 255,127 (max)
 assert decode_gshort(b'\x20\x20') == 0
-assert decode_gshort(b'\x5f\x5f') == 4095
+assert decode_gshort(b'\x27\x88') == 1000
 ```
 
 ### GSTRING Encoding
@@ -319,10 +322,14 @@ class PlayerProperties:
                 data.append(int(value) + 32)
                 
             elif prop_id in [14, 27, 28, 29]:  # Short properties
-                # GSHORT encoding
-                val = int(value)
-                data.append(((val >> 6) & 0x3F) + 32)
-                data.append((val & 0x3F) + 32)
+                # GSHORT encoding (7-bit shift)
+                val = min(int(value), 28767)
+                val0 = val >> 7
+                if val0 > 223:
+                    val0 = 223
+                val1 = val - (val0 << 7)
+                data.append(val0 + 32)
+                data.append(val1 + 32)
                 
         return bytes(data)
 

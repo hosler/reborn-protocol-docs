@@ -70,7 +70,7 @@ Special case for raw data:
 The protocol uses specialized encoding for efficient transmission:
 
 - **GCHAR**: `char + 32` (ensures printable ASCII)
-- **GSHORT**: `((value >> 6) + 32) + ((value & 0x3f) + 32)` (2 bytes)
+- **GSHORT**: 7-bit shift encoding with +32 bias (2 bytes, max 28767)
 - **GINT**: 3-byte encoding for medium values
 - **GINT5**: 5-byte encoding for large values/timestamps
 
