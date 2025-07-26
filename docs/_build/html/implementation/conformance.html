@@ -1,0 +1,427 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protocol Conformance Guidelines &mdash; Reborn Protocol Reference</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Usage Examples" href="../examples/usage.html" />
+    <link rel="prev" title="PyReborn Protocol Conformance Analysis" href="pyreborn-analysis.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Reborn Protocol Reference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../protocol/overview.html">Protocol Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/packet-structures.html">Reborn Protocol v2 - Packet Structure Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/encryption.html">Encryption Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/data-types.html">Data Types Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pyreborn-analysis.html">PyReborn Protocol Conformance Analysis</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Protocol Conformance Guidelines</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#conformance-levels">Conformance Levels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#level-1-basic-compatibility-minimum">Level 1: Basic Compatibility (Minimum)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#level-2-standard-compatibility-recommended">Level 2: Standard Compatibility (Recommended)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#level-3-full-compatibility-complete">Level 3: Full Compatibility (Complete)</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#critical-requirements">Critical Requirements</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#encryption-algorithm">1. Encryption Algorithm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#g-type-encoding">2. G-Type Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#packet-bundle-processing">3. Packet Bundle Processing</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#testing-requirements">Testing Requirements</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#unit-tests">Unit Tests</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#integration-tests">Integration Tests</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#compatibility-tests">Compatibility Tests</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#validation-checklist">Validation Checklist</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#packet-structure">✅ Packet Structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#encryption">✅ Encryption</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#data-types">✅ Data Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#core-functionality">✅ Core Functionality</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#advanced-features">✅ Advanced Features</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#performance-guidelines">Performance Guidelines</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#memory-usage">Memory Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#network-efficiency">Network Efficiency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#processing-speed">Processing Speed</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#security-considerations">Security Considerations</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#protocol-security">Protocol Security</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#implementation-security">Implementation Security</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#documentation-requirements">Documentation Requirements</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#api-documentation">API Documentation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#integration-documentation">Integration Documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#certification-process">Certification Process</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#self-certification">Self-Certification</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#community-certification">Community Certification</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/usage.html">Usage Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Reborn Protocol Reference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Protocol Conformance Guidelines</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/hosler/opengraal2/blob/main/graal-protocol-docs/docs/implementation/conformance.md" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="protocol-conformance-guidelines">
+<h1>Protocol Conformance Guidelines<a class="headerlink" href="#protocol-conformance-guidelines" title="Link to this heading"></a></h1>
+<p>This section provides guidelines for implementing Reborn protocol conformance and ensuring compatibility with existing servers and clients.</p>
+<section id="conformance-levels">
+<h2>Conformance Levels<a class="headerlink" href="#conformance-levels" title="Link to this heading"></a></h2>
+<section id="level-1-basic-compatibility-minimum">
+<h3>Level 1: Basic Compatibility (Minimum)<a class="headerlink" href="#level-1-basic-compatibility-minimum" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Correct packet ID enumeration</p></li>
+<li><p>Proper bundle structure handling</p></li>
+<li><p>Basic G-type encoding/decoding</p></li>
+<li><p>Core gameplay packets (movement, chat, items)</p></li>
+<li><p>GEN_5 encryption support</p></li>
+</ul>
+</section>
+<section id="level-2-standard-compatibility-recommended">
+<h3>Level 2: Standard Compatibility (Recommended)<a class="headerlink" href="#level-2-standard-compatibility-recommended" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>All Level 1 requirements</p></li>
+<li><p>Complete player property system</p></li>
+<li><p>File transfer support</p></li>
+<li><p>Level board handling</p></li>
+<li><p>GMAP navigation support</p></li>
+<li><p>Raw data packet processing</p></li>
+</ul>
+</section>
+<section id="level-3-full-compatibility-complete">
+<h3>Level 3: Full Compatibility (Complete)<a class="headerlink" href="#level-3-full-compatibility-complete" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>All Level 2 requirements</p></li>
+<li><p>RC (Remote Control) administration packets</p></li>
+<li><p>NC (NPC Control) content management</p></li>
+<li><p>Advanced packet types (SHOOT2, BOARDLAYER)</p></li>
+<li><p>Script/bytecode handling</p></li>
+<li><p>Complete server management features</p></li>
+</ul>
+</section>
+</section>
+<section id="critical-requirements">
+<h2>Critical Requirements<a class="headerlink" href="#critical-requirements" title="Link to this heading"></a></h2>
+<section id="encryption-algorithm">
+<h3>1. Encryption Algorithm<a class="headerlink" href="#encryption-algorithm" title="Link to this heading"></a></h3>
+<p><strong>MUST</strong> use the exact GEN_5 encryption implementation:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span><span class="w"> </span><span class="nf">decrypt</span><span class="p">(</span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">buffer</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">length</span><span class="p">,</span><span class="w"> </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="kt">uint32_t</span><span class="o">&amp;</span><span class="w"> </span><span class="n">iterator</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">bytes_to_decrypt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">limit</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="n">length</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">min</span><span class="p">(</span><span class="n">length</span><span class="p">,</span><span class="w"> </span><span class="n">limit</span><span class="p">);</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bytes_to_decrypt</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="p">(</span><span class="n">key</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">iterator</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xFF</span><span class="p">;</span>
+<span class="w">        </span><span class="n">iterator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">iterator</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xFF</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p><strong>Common Errors to Avoid</strong>:</p>
+<ul class="simple">
+<li><p>Complex multiplier operations</p></li>
+<li><p>Wrong iterator initialization</p></li>
+<li><p>Incorrect byte limits</p></li>
+</ul>
+</section>
+<section id="g-type-encoding">
+<h3>2. G-Type Encoding<a class="headerlink" href="#g-type-encoding" title="Link to this heading"></a></h3>
+<p><strong>MUST</strong> implement exact bit operations:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// GSHORT encoding</span>
+<span class="kt">uint16_t</span><span class="w"> </span><span class="nf">encodeGShort</span><span class="p">(</span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">value</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">byte1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">((</span><span class="n">value</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">6</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0x3F</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">byte2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">value</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0x3F</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">32</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="n">byte1</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="mi">8</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">byte2</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="packet-bundle-processing">
+<h3>3. Packet Bundle Processing<a class="headerlink" href="#packet-bundle-processing" title="Link to this heading"></a></h3>
+<p><strong>MUST</strong> follow exact order:</p>
+<ol class="arabic simple">
+<li><p>Read 2-byte length prefix</p></li>
+<li><p>Extract compression type</p></li>
+<li><p>Decrypt with compression-based limits</p></li>
+<li><p>Decompress using appropriate algorithm</p></li>
+<li><p>Parse newline-separated packets</p></li>
+</ol>
+</section>
+</section>
+<section id="testing-requirements">
+<h2>Testing Requirements<a class="headerlink" href="#testing-requirements" title="Link to this heading"></a></h2>
+<section id="unit-tests">
+<h3>Unit Tests<a class="headerlink" href="#unit-tests" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">test_gshort_encoding</span><span class="p">():</span>
+    <span class="c1"># Test boundary values</span>
+    <span class="k">assert</span> <span class="n">encode_gshort</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x20\x20</span><span class="s1">&#39;</span>      <span class="c1"># 32,32</span>
+    <span class="k">assert</span> <span class="n">encode_gshort</span><span class="p">(</span><span class="mi">63</span><span class="p">)</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x20\x5f</span><span class="s1">&#39;</span>     <span class="c1"># 32,95  </span>
+    <span class="k">assert</span> <span class="n">encode_gshort</span><span class="p">(</span><span class="mi">4095</span><span class="p">)</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x5f\x5f</span><span class="s1">&#39;</span>   <span class="c1"># 95,95</span>
+    
+<span class="k">def</span><span class="w"> </span><span class="nf">test_encryption_limits</span><span class="p">():</span>
+    <span class="c1"># Test compression-based limits</span>
+    <span class="k">assert</span> <span class="n">get_encryption_limit</span><span class="p">(</span><span class="n">UNCOMPRESSED</span><span class="p">)</span> <span class="o">==</span> <span class="mi">40</span>
+    <span class="k">assert</span> <span class="n">get_encryption_limit</span><span class="p">(</span><span class="n">ZLIB</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4096</span>
+    <span class="k">assert</span> <span class="n">get_encryption_limit</span><span class="p">(</span><span class="n">BZ2</span><span class="p">)</span> <span class="o">==</span> <span class="mi">65536</span>
+</pre></div>
+</div>
+</section>
+<section id="integration-tests">
+<h3>Integration Tests<a class="headerlink" href="#integration-tests" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Connect to reference server</p></li>
+<li><p>Send/receive standard packet sequences</p></li>
+<li><p>Verify encryption/decryption roundtrip</p></li>
+<li><p>Test file transfer operations</p></li>
+<li><p>Validate GMAP navigation</p></li>
+</ul>
+</section>
+<section id="compatibility-tests">
+<h3>Compatibility Tests<a class="headerlink" href="#compatibility-tests" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Test against multiple server versions</p></li>
+<li><p>Verify client version detection</p></li>
+<li><p>Check backward compatibility</p></li>
+<li><p>Test error handling with malformed packets</p></li>
+</ul>
+</section>
+</section>
+<section id="validation-checklist">
+<h2>Validation Checklist<a class="headerlink" href="#validation-checklist" title="Link to this heading"></a></h2>
+<section id="packet-structure">
+<h3>✅ Packet Structure<a class="headerlink" href="#packet-structure" title="Link to this heading"></a></h3>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Correct packet ID enumeration</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Proper bundle length handling</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Newline packet separation</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Raw data packet processing</p></li>
+</ul>
+</section>
+<section id="encryption">
+<h3>✅ Encryption<a class="headerlink" href="#encryption" title="Link to this heading"></a></h3>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> GEN_5 algorithm implementation</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Correct iterator initialization (0x4A80B38)</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Proper encryption limits by compression type</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> XOR with simple key increment</p></li>
+</ul>
+</section>
+<section id="data-types">
+<h3>✅ Data Types<a class="headerlink" href="#data-types" title="Link to this heading"></a></h3>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> GCHAR: value + 32</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> GSHORT: bit-shift encoding</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> GINT: 3-byte variable encoding</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> GSTRING: length-prefixed strings</p></li>
+</ul>
+</section>
+<section id="core-functionality">
+<h3>✅ Core Functionality<a class="headerlink" href="#core-functionality" title="Link to this heading"></a></h3>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Player movement and properties</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Chat and messaging</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Item and inventory handling</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Level navigation</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> File transfer</p></li>
+</ul>
+</section>
+<section id="advanced-features">
+<h3>✅ Advanced Features<a class="headerlink" href="#advanced-features" title="Link to this heading"></a></h3>
+<ul class="contains-task-list simple">
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> GMAP support</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Script/bytecode handling</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Administration (RC) packets</p></li>
+<li class="task-list-item"><p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Content management (NC) packets</p></li>
+</ul>
+</section>
+</section>
+<section id="performance-guidelines">
+<h2>Performance Guidelines<a class="headerlink" href="#performance-guidelines" title="Link to this heading"></a></h2>
+<section id="memory-usage">
+<h3>Memory Usage<a class="headerlink" href="#memory-usage" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Minimize packet buffer allocation</p></li>
+<li><p>Reuse encryption state objects</p></li>
+<li><p>Cache decoded player properties</p></li>
+<li><p>Implement efficient string handling</p></li>
+</ul>
+</section>
+<section id="network-efficiency">
+<h3>Network Efficiency<a class="headerlink" href="#network-efficiency" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Batch small packets when possible</p></li>
+<li><p>Use appropriate compression types</p></li>
+<li><p>Implement proper flow control</p></li>
+<li><p>Handle connection timeouts gracefully</p></li>
+</ul>
+</section>
+<section id="processing-speed">
+<h3>Processing Speed<a class="headerlink" href="#processing-speed" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Optimize hot-path packet handlers</p></li>
+<li><p>Use lookup tables for packet routing</p></li>
+<li><p>Minimize string encoding/decoding</p></li>
+<li><p>Implement efficient raw data processing</p></li>
+</ul>
+</section>
+</section>
+<section id="security-considerations">
+<h2>Security Considerations<a class="headerlink" href="#security-considerations" title="Link to this heading"></a></h2>
+<section id="protocol-security">
+<h3>Protocol Security<a class="headerlink" href="#protocol-security" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Validate all incoming packet data</p></li>
+<li><p>Implement proper bounds checking</p></li>
+<li><p>Handle malformed packets gracefully</p></li>
+<li><p>Rate-limit packet processing</p></li>
+</ul>
+</section>
+<section id="implementation-security">
+<h3>Implementation Security<a class="headerlink" href="#implementation-security" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Avoid buffer overflows in string handling</p></li>
+<li><p>Validate file transfer operations</p></li>
+<li><p>Implement proper access controls</p></li>
+<li><p>Use secure random number generation</p></li>
+</ul>
+</section>
+</section>
+<section id="documentation-requirements">
+<h2>Documentation Requirements<a class="headerlink" href="#documentation-requirements" title="Link to this heading"></a></h2>
+<section id="api-documentation">
+<h3>API Documentation<a class="headerlink" href="#api-documentation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Document all public packet handling APIs</p></li>
+<li><p>Provide encoding/decoding examples</p></li>
+<li><p>Include error handling guidelines</p></li>
+<li><p>Specify version compatibility</p></li>
+</ul>
+</section>
+<section id="integration-documentation">
+<h3>Integration Documentation<a class="headerlink" href="#integration-documentation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Provide setup and configuration guides</p></li>
+<li><p>Document common integration patterns</p></li>
+<li><p>Include troubleshooting information</p></li>
+<li><p>Provide migration guides</p></li>
+</ul>
+</section>
+</section>
+<section id="certification-process">
+<h2>Certification Process<a class="headerlink" href="#certification-process" title="Link to this heading"></a></h2>
+<section id="self-certification">
+<h3>Self-Certification<a class="headerlink" href="#self-certification" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Complete validation checklist</p></li>
+<li><p>Run full test suite</p></li>
+<li><p>Test against reference implementation</p></li>
+<li><p>Document any deviations</p></li>
+</ol>
+</section>
+<section id="community-certification">
+<h3>Community Certification<a class="headerlink" href="#community-certification" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Submit implementation for review</p></li>
+<li><p>Provide test results and documentation</p></li>
+<li><p>Address feedback and issues</p></li>
+<li><p>Maintain ongoing compatibility</p></li>
+</ol>
+<p>Following these guidelines ensures robust, compatible Reborn protocol implementations that work reliably with the broader ecosystem of servers and clients.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pyreborn-analysis.html" class="btn btn-neutral float-left" title="PyReborn Protocol Conformance Analysis" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../examples/usage.html" class="btn btn-neutral float-right" title="Usage Examples" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, OpenReborn2 Project.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -58,7 +58,7 @@ The protocol uses specialized encoding for efficient data transmission:
 
 - **GCHAR**: `char + 32` (ensures printable ASCII)
 - **GUCHAR**: `unsigned char + 32`
-- **GSHORT**: 7-bit shift encoding with +32 bias (2 bytes, max 28767)
+- **GSHORT**: `((value >> 6) + 32) + ((value & 0x3f) + 32)` (2 bytes)
 - **GUSHORT**: Same as GSHORT but for unsigned values
 - **GINT**: 3-byte encoding
 - **GINT4**: 4-byte encoding  
@@ -702,7 +702,7 @@ Encryption is limited based on compression type:
 |------|------|-------------|----------|
 | GCHAR | 1 byte | Signed char + 32 | `(char)value + 32` |
 | GUCHAR | 1 byte | Unsigned char + 32 | `(unsigned char)value + 32` |
-| GSHORT | 2 bytes | 16-bit value (max 28767) | 7-bit shift encoding with +32 bias |
+| GSHORT | 2 bytes | 16-bit value | `((value >> 6) + 32) + ((value & 0x3F) + 32)` |
 | GUSHORT | 2 bytes | Unsigned 16-bit | Same as GSHORT |
 | GINT | 3 bytes | 24-bit value | Custom 3-byte encoding |
 | GINT4 | 4 bytes | 32-bit value | Custom 4-byte encoding |

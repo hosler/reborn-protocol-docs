@@ -1,0 +1,498 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usage Examples &mdash; Reborn Protocol Reference</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="Protocol Conformance Guidelines" href="../implementation/conformance.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Reborn Protocol Reference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../protocol/overview.html">Protocol Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/packet-structures.html">Reborn Protocol v2 - Packet Structure Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/encryption.html">Encryption Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/data-types.html">Data Types Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../implementation/pyreborn-analysis.html">PyReborn Protocol Conformance Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../implementation/conformance.html">Protocol Conformance Guidelines</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Usage Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#basic-client-connection">Basic Client Connection</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#python-example">Python Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#javascript-example">JavaScript Example</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#c-example">C++ Example</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#g-type-encoding-examples">G-Type Encoding Examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#gshort-encoding">GSHORT Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gstring-encoding">GSTRING Encoding</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#player-property-handling">Player Property Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#file-transfer-example">File Transfer Example</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Reborn Protocol Reference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Usage Examples</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/hosler/opengraal2/blob/main/graal-protocol-docs/docs/examples/usage.md" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="usage-examples">
+<h1>Usage Examples<a class="headerlink" href="#usage-examples" title="Link to this heading"></a></h1>
+<p>This section provides practical examples of implementing the Reborn protocol in various programming languages.</p>
+<section id="basic-client-connection">
+<h2>Basic Client Connection<a class="headerlink" href="#basic-client-connection" title="Link to this heading"></a></h2>
+<section id="python-example">
+<h3>Python Example<a class="headerlink" href="#python-example" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">socket</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">struct</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">zlib</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">RebornClient</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">host</span> <span class="o">=</span> <span class="n">host</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">port</span> <span class="o">=</span> <span class="n">port</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">encryption_key</span> <span class="o">=</span> <span class="mi">123</span>  <span class="c1"># Set during login</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">=</span> <span class="mh">0x4A80B38</span>   <span class="c1"># GEN_5 initial value</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Connect to Reborn server&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">port</span><span class="p">))</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">packet_id</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="sa">b</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send a packet with GEN_5 encryption&quot;&quot;&quot;</span>
+        <span class="c1"># Build packet</span>
+        <span class="n">packet</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">([</span><span class="n">packet_id</span> <span class="o">+</span> <span class="mi">32</span><span class="p">])</span> <span class="o">+</span> <span class="n">data</span> <span class="o">+</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        
+        <span class="c1"># Compress (use zlib for packets &gt; 55 bytes)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">packet</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">55</span><span class="p">:</span>
+            <span class="n">compression_type</span> <span class="o">=</span> <span class="mh">0x04</span>  <span class="c1"># ZLIB</span>
+            <span class="n">compressed</span> <span class="o">=</span> <span class="n">zlib</span><span class="o">.</span><span class="n">compress</span><span class="p">(</span><span class="n">packet</span><span class="p">)</span>
+            <span class="n">encrypt_limit</span> <span class="o">=</span> <span class="mi">4096</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">compression_type</span> <span class="o">=</span> <span class="mh">0x02</span>  <span class="c1"># UNCOMPRESSED</span>
+            <span class="n">compressed</span> <span class="o">=</span> <span class="n">packet</span>
+            <span class="n">encrypt_limit</span> <span class="o">=</span> <span class="mi">40</span>
+            
+        <span class="c1"># Encrypt first N bytes</span>
+        <span class="n">encrypted</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">encrypt</span><span class="p">(</span><span class="n">compressed</span><span class="p">,</span> <span class="n">encrypt_limit</span><span class="p">)</span>
+        
+        <span class="c1"># Send with length prefix</span>
+        <span class="n">bundle</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">([</span><span class="n">compression_type</span><span class="p">])</span> <span class="o">+</span> <span class="n">encrypted</span>
+        <span class="n">length_data</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s1">&#39;&lt;H&#39;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">bundle</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">length_data</span> <span class="o">+</span> <span class="n">bundle</span><span class="p">)</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">encrypt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">limit</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;GEN_5 encryption&quot;&quot;&quot;</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">bytes_to_encrypt</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">limit</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">bytes_to_encrypt</span><span class="p">):</span>
+            <span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encryption_key</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">iterator</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span>
+            
+        <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_login</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">,</span> <span class="n">password</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send login packet&quot;&quot;&quot;</span>
+        <span class="n">login_data</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">username</span><span class="si">}</span><span class="se">\n</span><span class="si">{</span><span class="n">password</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">send_packet</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">login_data</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;latin-1&#39;</span><span class="p">))</span>  <span class="c1"># PLI_LEVELWARP for login</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_chat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send chat message&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">send_packet</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="n">message</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;latin-1&#39;</span><span class="p">))</span>  <span class="c1"># PLI_TOALL</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_movement</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Send player movement&quot;&quot;&quot;</span>
+        <span class="c1"># Build player props packet with position</span>
+        <span class="n">props</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">15</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>  <span class="c1"># PLPROP_X</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>  <span class="c1"># Half-pixel coordinates</span>
+        <span class="n">props</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">16</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>  <span class="c1"># PLPROP_Y  </span>
+        <span class="n">props</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">y</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">send_packet</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">props</span><span class="p">))</span>  <span class="c1"># PLI_PLAYERPROPS</span>
+
+<span class="c1"># Usage</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">RebornClient</span><span class="p">(</span><span class="s2">&quot;localhost&quot;</span><span class="p">,</span> <span class="mi">14900</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+<span class="n">client</span><span class="o">.</span><span class="n">send_login</span><span class="p">(</span><span class="s2">&quot;username&quot;</span><span class="p">,</span> <span class="s2">&quot;password&quot;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">send_chat</span><span class="p">(</span><span class="s2">&quot;Hello, world!&quot;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">send_movement</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">48</span><span class="p">)</span>  <span class="c1"># Move to tile (2, 3)</span>
+</pre></div>
+</div>
+</section>
+<section id="javascript-example">
+<h3>JavaScript Example<a class="headerlink" href="#javascript-example" title="Link to this heading"></a></h3>
+<div class="highlight-javascript notranslate"><div class="highlight"><pre><span></span><span class="kd">class</span><span class="w"> </span><span class="nx">RebornClient</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kr">constructor</span><span class="p">(</span><span class="nx">host</span><span class="p">,</span><span class="w"> </span><span class="nx">port</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">host</span><span class="p">;</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">port</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">port</span><span class="p">;</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">ws</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">encryptionKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">123</span><span class="p">;</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">iterator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x4A80B38</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="nx">connect</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// WebSocket connection for browser usage</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">ws</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WebSocket</span><span class="p">(</span><span class="sb">`ws://</span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">host</span><span class="si">}</span><span class="sb">:</span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">port</span><span class="si">}</span><span class="sb">`</span><span class="p">);</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">ws</span><span class="p">.</span><span class="nx">binaryType</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;arraybuffer&#39;</span><span class="p">;</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">ws</span><span class="p">.</span><span class="nx">onmessage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">event</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">this</span><span class="p">.</span><span class="nx">handlePacket</span><span class="p">(</span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="nx">data</span><span class="p">));</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="nx">sendPacket</span><span class="p">(</span><span class="nx">packetId</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Build packet</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">packet</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="mf">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1</span><span class="p">);</span>
+<span class="w">        </span><span class="nx">packet</span><span class="p">[</span><span class="mf">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">packetId</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">32</span><span class="p">;</span>
+<span class="w">        </span><span class="nx">packet</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="mf">1</span><span class="p">);</span>
+<span class="w">        </span><span class="nx">packet</span><span class="p">[</span><span class="nx">packet</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">10</span><span class="p">;</span><span class="w"> </span><span class="c1">// newline</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="c1">// Compress and encrypt</span>
+<span class="w">        </span><span class="kd">let</span><span class="w"> </span><span class="nx">bundle</span><span class="p">;</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">packet</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">55</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Use zlib compression (would need pako library)</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">compressed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">pako</span><span class="p">.</span><span class="nx">deflate</span><span class="p">(</span><span class="nx">packet</span><span class="p">);</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">encrypted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">encrypt</span><span class="p">(</span><span class="nx">compressed</span><span class="p">,</span><span class="w"> </span><span class="mf">4096</span><span class="p">);</span>
+<span class="w">            </span><span class="nx">bundle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="mf">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">encrypted</span><span class="p">.</span><span class="nx">length</span><span class="p">);</span>
+<span class="w">            </span><span class="nx">bundle</span><span class="p">[</span><span class="mf">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x04</span><span class="p">;</span><span class="w"> </span><span class="c1">// ZLIB</span>
+<span class="w">            </span><span class="nx">bundle</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">encrypted</span><span class="p">,</span><span class="w"> </span><span class="mf">1</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">encrypted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">encrypt</span><span class="p">(</span><span class="nx">packet</span><span class="p">,</span><span class="w"> </span><span class="mf">40</span><span class="p">);</span>
+<span class="w">            </span><span class="nx">bundle</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="mf">1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">encrypted</span><span class="p">.</span><span class="nx">length</span><span class="p">);</span>
+<span class="w">            </span><span class="nx">bundle</span><span class="p">[</span><span class="mf">0</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x02</span><span class="p">;</span><span class="w"> </span><span class="c1">// UNCOMPRESSED</span>
+<span class="w">            </span><span class="nx">bundle</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">encrypted</span><span class="p">,</span><span class="w"> </span><span class="mf">1</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="c1">// Send with length prefix</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">lengthData</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="mf">2</span><span class="p">);</span>
+<span class="w">        </span><span class="ow">new</span><span class="w"> </span><span class="nb">DataView</span><span class="p">(</span><span class="nx">lengthData</span><span class="p">.</span><span class="nx">buffer</span><span class="p">).</span><span class="nx">setUint16</span><span class="p">(</span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="nx">bundle</span><span class="p">.</span><span class="nx">length</span><span class="p">,</span><span class="w"> </span><span class="kc">true</span><span class="p">);</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">fullPacket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="nx">lengthData</span><span class="p">.</span><span class="nx">length</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">bundle</span><span class="p">.</span><span class="nx">length</span><span class="p">);</span>
+<span class="w">        </span><span class="nx">fullPacket</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">lengthData</span><span class="p">);</span>
+<span class="w">        </span><span class="nx">fullPacket</span><span class="p">.</span><span class="nx">set</span><span class="p">(</span><span class="nx">bundle</span><span class="p">,</span><span class="w"> </span><span class="nx">lengthData</span><span class="p">.</span><span class="nx">length</span><span class="p">);</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">ws</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">fullPacket</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="nx">encrypt</span><span class="p">(</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="nx">limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nb">Uint8Array</span><span class="p">(</span><span class="nx">data</span><span class="p">);</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">bytesToEncrypt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">min</span><span class="p">(</span><span class="nx">data</span><span class="p">.</span><span class="nx">length</span><span class="p">,</span><span class="w"> </span><span class="nx">limit</span><span class="p">);</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">let</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nx">bytesToEncrypt</span><span class="p">;</span><span class="w"> </span><span class="nx">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">result</span><span class="p">[</span><span class="nx">i</span><span class="p">]</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">encryptionKey</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">iterator</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xFF</span><span class="p">;</span>
+<span class="w">            </span><span class="k">this</span><span class="p">.</span><span class="nx">iterator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="k">this</span><span class="p">.</span><span class="nx">iterator</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">1</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xFF</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="nx">sendChat</span><span class="p">(</span><span class="nx">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">TextEncoder</span><span class="p">().</span><span class="nx">encode</span><span class="p">(</span><span class="nx">message</span><span class="p">);</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">sendPacket</span><span class="p">(</span><span class="mf">6</span><span class="p">,</span><span class="w"> </span><span class="nx">data</span><span class="p">);</span><span class="w"> </span><span class="c1">// PLI_TOALL</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="c-example">
+<h3>C++ Example<a class="headerlink" href="#c-example" title="Link to this heading"></a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">RebornClient</span><span class="w"> </span><span class="p">{</span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">encryptionKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">123</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">iterator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x4A80B38</span><span class="p">;</span>
+<span class="w">    </span>
+<span class="k">public</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">sendPacket</span><span class="p">(</span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">packetId</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{})</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Build packet</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">packet</span><span class="p">;</span>
+<span class="w">        </span><span class="n">packet</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">packetId</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span>
+<span class="w">        </span><span class="n">packet</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">packet</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">data</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">data</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">        </span><span class="n">packet</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="sc">&#39;\n&#39;</span><span class="p">);</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="c1">// Determine compression</span>
+<span class="w">        </span><span class="kt">uint8_t</span><span class="w"> </span><span class="n">compressionType</span><span class="p">;</span>
+<span class="w">        </span><span class="kt">int</span><span class="w"> </span><span class="n">encryptLimit</span><span class="p">;</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">compressed</span><span class="p">;</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">packet</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">55</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">compressionType</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x04</span><span class="p">;</span><span class="w"> </span><span class="c1">// ZLIB</span>
+<span class="w">            </span><span class="n">encryptLimit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4096</span><span class="p">;</span>
+<span class="w">            </span><span class="c1">// Would use zlib here: compressed = zlibCompress(packet);</span>
+<span class="w">            </span><span class="n">compressed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">packet</span><span class="p">;</span><span class="w"> </span><span class="c1">// Simplified</span>
+<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">compressionType</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x02</span><span class="p">;</span><span class="w"> </span><span class="c1">// UNCOMPRESSED</span>
+<span class="w">            </span><span class="n">encryptLimit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">40</span><span class="p">;</span>
+<span class="w">            </span><span class="n">compressed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">packet</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="c1">// Encrypt</span>
+<span class="w">        </span><span class="n">encrypt</span><span class="p">(</span><span class="n">compressed</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">compressed</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="n">encryptLimit</span><span class="p">);</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="c1">// Send bundle</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bundle</span><span class="p">;</span>
+<span class="w">        </span><span class="n">bundle</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">compressionType</span><span class="p">);</span>
+<span class="w">        </span><span class="n">bundle</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">bundle</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">compressed</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">compressed</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="c1">// Add length prefix and send</span>
+<span class="w">        </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">length</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bundle</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="w">        </span><span class="c1">// Send length (little-endian) + bundle</span>
+<span class="w">        </span><span class="n">sendToSocket</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">*&gt;</span><span class="p">(</span><span class="o">&amp;</span><span class="n">length</span><span class="p">),</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span>
+<span class="w">        </span><span class="n">sendToSocket</span><span class="p">(</span><span class="n">bundle</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">bundle</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">encrypt</span><span class="p">(</span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">length</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">limit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kt">size_t</span><span class="w"> </span><span class="n">bytesToEncrypt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">length</span><span class="p">,</span><span class="w"> </span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">limit</span><span class="p">));</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">bytesToEncrypt</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="o">++</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">^=</span><span class="w"> </span><span class="p">(</span><span class="n">encryptionKey</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">iterator</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xFF</span><span class="p">;</span>
+<span class="w">            </span><span class="n">iterator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">iterator</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0xFF</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">sendChat</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span><span class="w"> </span><span class="n">message</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">data</span><span class="p">(</span><span class="n">message</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">message</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">        </span><span class="n">sendPacket</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span><span class="w"> </span><span class="n">data</span><span class="p">);</span><span class="w"> </span><span class="c1">// PLI_TOALL</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">sendMovement</span><span class="p">(</span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="kt">uint16_t</span><span class="w"> </span><span class="n">y</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">props</span><span class="p">;</span>
+<span class="w">        </span><span class="n">props</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="mi">15</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span><span class="w"> </span><span class="c1">// PLPROP_X</span>
+<span class="w">        </span><span class="n">props</span><span class="p">.</span><span class="n">push_back</span><span class="p">((</span><span class="n">x</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span>
+<span class="w">        </span><span class="n">props</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="mi">16</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span><span class="w"> </span><span class="c1">// PLPROP_Y</span>
+<span class="w">        </span><span class="n">props</span><span class="p">.</span><span class="n">push_back</span><span class="p">((</span><span class="n">y</span><span class="o">/</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span>
+<span class="w">        </span>
+<span class="w">        </span><span class="n">sendPacket</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">props</span><span class="p">);</span><span class="w"> </span><span class="c1">// PLI_PLAYERPROPS</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span>
+<span class="k">private</span><span class="o">:</span>
+<span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="n">sendToSocket</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="kt">uint8_t</span><span class="o">*</span><span class="w"> </span><span class="n">data</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">length</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Platform-specific socket send implementation</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="g-type-encoding-examples">
+<h2>G-Type Encoding Examples<a class="headerlink" href="#g-type-encoding-examples" title="Link to this heading"></a></h2>
+<section id="gshort-encoding">
+<h3>GSHORT Encoding<a class="headerlink" href="#gshort-encoding" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">encode_gshort</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode 16-bit value as GSHORT&quot;&quot;&quot;</span>
+    <span class="n">byte1</span> <span class="o">=</span> <span class="p">((</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span>
+    <span class="n">byte2</span> <span class="o">=</span> <span class="p">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span>
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">([</span><span class="n">byte1</span><span class="p">,</span> <span class="n">byte2</span><span class="p">])</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">decode_gshort</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode GSHORT to 16-bit value&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">32</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">32</span><span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="k">assert</span> <span class="n">encode_gshort</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x20\x20</span><span class="s1">&#39;</span>      <span class="c1"># 0 -&gt; 32,32</span>
+<span class="k">assert</span> <span class="n">encode_gshort</span><span class="p">(</span><span class="mi">63</span><span class="p">)</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x20\x5f</span><span class="s1">&#39;</span>     <span class="c1"># 63 -&gt; 32,95</span>
+<span class="k">assert</span> <span class="n">encode_gshort</span><span class="p">(</span><span class="mi">4095</span><span class="p">)</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x5f\x5f</span><span class="s1">&#39;</span>   <span class="c1"># 4095 -&gt; 95,95</span>
+<span class="k">assert</span> <span class="n">decode_gshort</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x20\x20</span><span class="s1">&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="k">assert</span> <span class="n">decode_gshort</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x5f\x5f</span><span class="s1">&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4095</span>
+</pre></div>
+</div>
+</section>
+<section id="gstring-encoding">
+<h3>GSTRING Encoding<a class="headerlink" href="#gstring-encoding" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">encode_gstring</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode string with length prefix&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;latin-1&#39;</span><span class="p">)</span>
+    <span class="n">length</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="mi">223</span><span class="p">)</span>  <span class="c1"># Max GCHAR value</span>
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">([</span><span class="n">length</span> <span class="o">+</span> <span class="mi">32</span><span class="p">])</span> <span class="o">+</span> <span class="n">data</span><span class="p">[:</span><span class="n">length</span><span class="p">]</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">decode_gstring</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode GSTRING&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">length</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">32</span>
+    <span class="k">if</span> <span class="n">length</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">length</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">1</span><span class="o">+</span><span class="n">length</span><span class="p">]</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;latin-1&#39;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s1">&#39;replace&#39;</span><span class="p">)</span>
+
+<span class="c1"># Examples</span>
+<span class="k">assert</span> <span class="n">encode_gstring</span><span class="p">(</span><span class="s2">&quot;hello&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x25</span><span class="s1">hello&#39;</span>  <span class="c1"># 5+32=37=0x25</span>
+<span class="k">assert</span> <span class="n">decode_gstring</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x25</span><span class="s1">hello&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;hello&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="player-property-handling">
+<h2>Player Property Handling<a class="headerlink" href="#player-property-handling" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">PlayerProperties</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">properties</span> <span class="o">=</span> <span class="p">{}</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_property</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">prop_id</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set a player property&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">properties</span><span class="p">[</span><span class="n">prop_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_props_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build PLI_PLAYERPROPS packet data&quot;&quot;&quot;</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
+        
+        <span class="k">for</span> <span class="n">prop_id</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">properties</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prop_id</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>  <span class="c1"># Property ID</span>
+            
+            <span class="k">if</span> <span class="n">prop_id</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="mi">34</span><span class="p">,</span> <span class="mi">35</span><span class="p">]:</span>  <span class="c1"># String properties</span>
+                <span class="c1"># GSTRING encoding</span>
+                <span class="n">str_data</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;latin-1&#39;</span><span class="p">)</span>
+                <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">str_data</span><span class="p">),</span> <span class="mi">223</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>
+                <span class="n">data</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">str_data</span><span class="p">[:</span><span class="mi">223</span><span class="p">])</span>
+                
+            <span class="k">elif</span> <span class="n">prop_id</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">17</span><span class="p">,</span> <span class="mi">18</span><span class="p">,</span> <span class="mi">19</span><span class="p">]:</span>  <span class="c1"># Byte properties</span>
+                <span class="c1"># GCHAR encoding</span>
+                <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>
+                
+            <span class="k">elif</span> <span class="n">prop_id</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">14</span><span class="p">,</span> <span class="mi">27</span><span class="p">,</span> <span class="mi">28</span><span class="p">,</span> <span class="mi">29</span><span class="p">]:</span>  <span class="c1"># Short properties</span>
+                <span class="c1"># GSHORT encoding</span>
+                <span class="n">val</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">(((</span><span class="n">val</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>
+                <span class="n">data</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">val</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span> <span class="o">+</span> <span class="mi">32</span><span class="p">)</span>
+                
+        <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="n">props</span> <span class="o">=</span> <span class="n">PlayerProperties</span><span class="p">()</span>
+<span class="n">props</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;PlayerName&quot;</span><span class="p">)</span>      <span class="c1"># NICKNAME</span>
+<span class="n">props</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>               <span class="c1"># X position</span>
+<span class="n">props</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">96</span><span class="p">)</span>               <span class="c1"># Y position</span>
+<span class="n">props</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="s2">&quot;Hello!&quot;</span><span class="p">)</span>         <span class="c1"># CHAT</span>
+
+<span class="n">packet_data</span> <span class="o">=</span> <span class="n">props</span><span class="o">.</span><span class="n">build_props_packet</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="file-transfer-example">
+<h2>File Transfer Example<a class="headerlink" href="#file-transfer-example" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">request_file</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Request a file from server&quot;&quot;&quot;</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s1">&#39;latin-1&#39;</span><span class="p">)</span>
+    <span class="n">client</span><span class="o">.</span><span class="n">send_packet</span><span class="p">(</span><span class="mi">23</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>  <span class="c1"># PLI_WANTFILE</span>
+    
+<span class="k">def</span><span class="w"> </span><span class="nf">handle_file_packet</span><span class="p">(</span><span class="n">packet_data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Handle incoming PLO_FILE packet&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">packet_data</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">6</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+        
+    <span class="c1"># Read file type and size</span>
+    <span class="n">file_type</span> <span class="o">=</span> <span class="n">packet_data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="mi">32</span>
+    <span class="n">size_bytes</span> <span class="o">=</span> <span class="n">packet_data</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span>
+    
+    <span class="c1"># Decode GINT5 size</span>
+    <span class="n">file_size</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+        <span class="n">file_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">file_size</span> <span class="o">&lt;&lt;</span> <span class="mi">7</span><span class="p">)</span> <span class="o">|</span> <span class="p">((</span><span class="n">size_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="mi">32</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x7F</span><span class="p">)</span>
+    
+    <span class="c1"># Extract file data</span>
+    <span class="n">file_data</span> <span class="o">=</span> <span class="n">packet_data</span><span class="p">[</span><span class="mi">6</span><span class="p">:</span><span class="mi">6</span><span class="o">+</span><span class="n">file_size</span><span class="p">]</span>
+    
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="n">file_type</span><span class="p">,</span>
+        <span class="s1">&#39;size&#39;</span><span class="p">:</span> <span class="n">file_size</span><span class="p">,</span>
+        <span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">file_data</span>
+    <span class="p">}</span>
+</pre></div>
+</div>
+<p>These examples demonstrate the core concepts needed to implement a compatible Reborn protocol client or server in any programming language.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../implementation/conformance.html" class="btn btn-neutral float-left" title="Protocol Conformance Guidelines" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, OpenReborn2 Project.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

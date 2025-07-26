@@ -35,29 +35,19 @@ uint8_t decoded = (encoded - 32) & 0xFF;
 
 #### GSHORT  
 ```
-Encoding: 7-bit shift encoding with +32 bias per byte
+Encoding: ((value >> 6) + 32) + ((value & 0x3F) + 32)
 Size: 2 bytes
-Range: 0-28767
+Range: 0-16383
 ```
 
-**Authoritative Implementation from GServer-v2**:
+**Example**:
 ```cpp
-// Encode (writeGShort)
-unsigned short t = pData;
-if (t > 28767) t = 28767;
+// Encode
+uint8_t byte1 = ((value >> 6) & 0x3F) + 32;
+uint8_t byte2 = (value & 0x3F) + 32;
 
-unsigned char val[2];
-val[0] = t >> 7;
-if (val[0] > 223) val[0] = 223;
-val[1] = t - (val[0] << 7);
-
-val[0] += 32;
-val[1] += 32;
-
-// Decode (readGShort)  
-unsigned char val[2];
-read((char*)val, 2);
-return (val[0] << 7) + val[1] - 0x1020; // 0x1020 = (32 << 7) + 32
+// Decode
+uint16_t decoded = ((byte1 - 32) << 6) | (byte2 - 32);
 ```
 
 #### GINT (3-byte)
@@ -121,12 +111,10 @@ std::string text = packet.readString(length);
 
 ### Regular String  
 ```
-Format: [string_data] (reads until end of packet)
-No delimiter: String continues to packet boundary
+Format: [string_data][delimiter]
+Delimiter: Usually '\n' or '\0'
 Encoding: Latin-1
 ```
-
-**Note**: Regular strings read all remaining bytes in the packet, unlike GSTRING which has a length prefix.
 
 ## Coordinate Types
 
@@ -146,10 +134,9 @@ Usage: Precise object positioning
 
 ### Pixel Coordinates
 ```
-Range: Variable (depends on context)
-Encoding: GSHORT for coordinate values
-Usage: High-precision positioning
-Note: Coordinate system varies by protocol version and context
+Range: 0-2048 (half-tiles × 16)
+Encoding: GCHAR for (pixels/2) or GSHORT for full precision
+Usage: Screen/rendering coordinates
 ```
 
 ## Player Property Data Types

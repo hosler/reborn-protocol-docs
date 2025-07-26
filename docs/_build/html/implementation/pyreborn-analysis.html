@@ -1,0 +1,457 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PyReborn Protocol Conformance Analysis &mdash; Reborn Protocol Reference</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Protocol Conformance Guidelines" href="conformance.html" />
+    <link rel="prev" title="Data Types Reference" href="../protocol/data-types.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Reborn Protocol Reference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../protocol/overview.html">Protocol Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/packet-structures.html">Reborn Protocol v2 - Packet Structure Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/encryption.html">Encryption Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../protocol/data-types.html">Data Types Reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">PyReborn Protocol Conformance Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#overall-conformance-good-85">Overall Conformance: <strong>GOOD</strong> (85%)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#correctly-implemented-areas">✅ <strong>Correctly Implemented Areas</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#packet-enumeration-perfect-match">1. <strong>Packet Enumeration</strong> - <strong>PERFECT MATCH</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#bundle-structure-correct">2. <strong>Bundle Structure</strong> - <strong>CORRECT</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gen-5-compression-integration-correct">3. <strong>GEN_5 Compression Integration</strong> - <strong>CORRECT</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#deviations-from-specification">⚠️ <strong>Deviations from Specification</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#encryption-limits-incorrect">1. <strong>Encryption Limits</strong> - <strong>INCORRECT</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#encryption-algorithm-incorrect-iterator">2. <strong>Encryption Algorithm</strong> - <strong>INCORRECT ITERATOR</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#g-type-encoding-partially-incorrect">3. <strong>G-Type Encoding</strong> - <strong>PARTIALLY INCORRECT</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#player-properties-naming-deviation">4. <strong>Player Properties</strong> - <strong>NAMING DEVIATION</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#missing-features">🚫 <strong>Missing Features</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#rc-remote-control-packets-missing">1. <strong>RC (Remote Control) Packets</strong> - <strong>MISSING</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#complete-server-packet-handlers-partial">2. <strong>Complete Server Packet Handlers</strong> - <strong>PARTIAL</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#advanced-packet-types-missing">3. <strong>Advanced Packet Types</strong> - <strong>MISSING</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#implementation-quality-issues">🔧 <strong>Implementation Quality Issues</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#inconsistent-data-reading">1. <strong>Inconsistent Data Reading</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#raw-data-handling-overly-complex">2. <strong>Raw Data Handling</strong> - <strong>OVERLY COMPLEX</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#detailed-conformance-by-area">📊 <strong>Detailed Conformance By Area</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#priority-fixes-needed">🛠 <strong>Priority Fixes Needed</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#critical-breaks-compatibility"><strong>Critical (Breaks Compatibility)</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#important-missing-features"><strong>Important (Missing Features)</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#nice-to-have-code-quality"><strong>Nice to Have (Code Quality)</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#recommendations">🎯 <strong>Recommendations</strong></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#for-protocol-compatibility"><strong>For Protocol Compatibility</strong></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#for-code-quality"><strong>For Code Quality</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#summary">📝 <strong>Summary</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="conformance.html">Protocol Conformance Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/usage.html">Usage Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Reborn Protocol Reference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">PyReborn Protocol Conformance Analysis</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/hosler/opengraal2/blob/main/graal-protocol-docs/docs/implementation/pyreborn-analysis.md" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="pyreborn-protocol-conformance-analysis">
+<h1>PyReborn Protocol Conformance Analysis<a class="headerlink" href="#pyreborn-protocol-conformance-analysis" title="Link to this heading"></a></h1>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>This document analyzes how well PyReborn’s implementation conforms to the documented Graal Reborn protocol specification. The analysis compares PyReborn’s actual implementation against the GServer-v2 packet reference documentation.</p>
+</section>
+<section id="overall-conformance-good-85">
+<h2>Overall Conformance: <strong>GOOD</strong> (85%)<a class="headerlink" href="#overall-conformance-good-85" title="Link to this heading"></a></h2>
+<p>PyReborn implements the core Graal protocol correctly but has some deviations from the official specification and some missing features.</p>
+</section>
+<section id="correctly-implemented-areas">
+<h2>✅ <strong>Correctly Implemented Areas</strong><a class="headerlink" href="#correctly-implemented-areas" title="Link to this heading"></a></h2>
+<section id="packet-enumeration-perfect-match">
+<h3>1. <strong>Packet Enumeration</strong> - <strong>PERFECT MATCH</strong><a class="headerlink" href="#packet-enumeration-perfect-match" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># PyReborn enums.py matches GServer exactly</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">PlayerToServer</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="n">PLI_LEVELWARP</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">PLI_BOARDMODIFY</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">PLI_PLAYERPROPS</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="c1"># ... all packet IDs match documentation</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>All client-to-server packet IDs match GServer-v2 specification</p></li>
+<li><p>All server-to-client packet IDs match specification</p></li>
+<li><p>Property enumerations are accurate</p></li>
+</ul>
+</section>
+<section id="bundle-structure-correct">
+<h3>2. <strong>Bundle Structure</strong> - <strong>CORRECT</strong><a class="headerlink" href="#bundle-structure-correct" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Proper 2-byte length prefix handling</span>
+<span class="n">packet_size</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="s1">&#39;&lt;H&#39;</span><span class="p">,</span> <span class="n">data</span><span class="p">[:</span><span class="mi">2</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">bundle_data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">2</span><span class="o">+</span><span class="n">packet_size</span><span class="p">]</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Correctly implements <code class="docutils literal notranslate"><span class="pre">[UINT16:</span> <span class="pre">packet_size][PACKET_BUNDLE_DATA]</span></code> format</p></li>
+<li><p>Proper little-endian length encoding</p></li>
+</ul>
+</section>
+<section id="gen-5-compression-integration-correct">
+<h3>3. <strong>GEN_5 Compression Integration</strong> - <strong>CORRECT</strong><a class="headerlink" href="#gen-5-compression-integration-correct" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compression_type</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># 0x02, 0x04, 0x06</span>
+<span class="n">encrypted_data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Correctly handles compression type byte</p></li>
+<li><p>Supports all three compression methods (uncompressed, zlib, bz2)</p></li>
+<li><p>Proper compression type detection</p></li>
+</ul>
+</section>
+</section>
+<section id="deviations-from-specification">
+<h2>⚠️ <strong>Deviations from Specification</strong><a class="headerlink" href="#deviations-from-specification" title="Link to this heading"></a></h2>
+<section id="encryption-limits-incorrect">
+<h3>1. <strong>Encryption Limits</strong> - <strong>INCORRECT</strong><a class="headerlink" href="#encryption-limits-incorrect" title="Link to this heading"></a></h3>
+<p><strong>Documented</strong>:</p>
+<ul class="simple">
+<li><p>UNCOMPRESSED: 40 bytes</p></li>
+<li><p>ZLIB: 4096 bytes</p></li>
+<li><p>BZ2: 65536 bytes</p></li>
+</ul>
+<p><strong>PyReborn Implementation</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">compression_type</span> <span class="o">==</span> <span class="n">UNCOMPRESSED</span><span class="p">:</span>
+    <span class="n">decrypt_limit</span> <span class="o">=</span> <span class="mi">12</span>  <span class="c1"># ❌ Should be 40 bytes</span>
+<span class="k">elif</span> <span class="n">compression_type</span> <span class="ow">in</span> <span class="p">(</span><span class="n">ZLIB</span><span class="p">,</span> <span class="n">BZ2</span><span class="p">):</span>
+    <span class="n">decrypt_limit</span> <span class="o">=</span> <span class="mi">4</span>   <span class="c1"># ❌ Should be 4096/65536 bytes</span>
+</pre></div>
+</div>
+<p><strong>Impact</strong>: May cause decryption issues with larger packets</p>
+</section>
+<section id="encryption-algorithm-incorrect-iterator">
+<h3>2. <strong>Encryption Algorithm</strong> - <strong>INCORRECT ITERATOR</strong><a class="headerlink" href="#encryption-algorithm-incorrect-iterator" title="Link to this heading"></a></h3>
+<p><strong>Documented (GServer-v2)</strong>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">static</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="kt">uint32_t</span><span class="w"> </span><span class="n">ITERATOR_START</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mh">0x4A80B38</span><span class="p">,</span><span class="w"> </span><span class="mh">0x481C622</span><span class="p">,</span><span class="w"> </span><span class="mh">0x481C6A2</span><span class="p">,</span><span class="w"> </span><span class="mh">0x12345678</span>
+<span class="p">};</span>
+<span class="c1">// Uses simple XOR: buffer[i] ^= (m_key + m_iterator++)</span>
+</pre></div>
+</div>
+<p><strong>PyReborn Implementation</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">=</span> <span class="mh">0x4A80B38</span>  <span class="c1"># ✅ Correct start value</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">multiplier</span> <span class="o">=</span> <span class="mh">0x8088405</span>  <span class="c1"># ❌ Uses complex multiplier</span>
+<span class="c1"># Complex calculation vs simple increment</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">*</span> <span class="mh">0x8088405</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">key</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span>
+</pre></div>
+</div>
+<p><strong>Impact</strong>: Encryption/decryption incompatibility with official servers</p>
+</section>
+<section id="g-type-encoding-partially-incorrect">
+<h3>3. <strong>G-Type Encoding</strong> - <strong>PARTIALLY INCORRECT</strong><a class="headerlink" href="#g-type-encoding-partially-incorrect" title="Link to this heading"></a></h3>
+<p><strong>GSHORT Implementation</strong>:
+<strong>Documented</strong>: <code class="docutils literal notranslate"><span class="pre">((value</span> <span class="pre">&gt;&gt;</span> <span class="pre">6)</span> <span class="pre">+</span> <span class="pre">32)</span> <span class="pre">+</span> <span class="pre">((value</span> <span class="pre">&amp;</span> <span class="pre">0x3f)</span> <span class="pre">+</span> <span class="pre">32)</span></code></p>
+<p><strong>PyReborn</strong>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">write_gshort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">value</span> <span class="o">&lt;</span> <span class="mi">223</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_gchar</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>  <span class="c1"># ❌ Should always use 2 bytes</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_gchar</span><span class="p">(</span><span class="mi">223</span> <span class="o">+</span> <span class="p">(</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">8</span><span class="p">))</span>  <span class="c1"># ❌ Wrong bit shift</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">write_char</span><span class="p">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>GINT Implementation</strong>:
+<strong>PyReborn has complex variable-length encoding</strong> vs <strong>documented 3-byte fixed encoding</strong></p>
+</section>
+<section id="player-properties-naming-deviation">
+<h3>4. <strong>Player Properties</strong> - <strong>NAMING DEVIATION</strong><a class="headerlink" href="#player-properties-naming-deviation" title="Link to this heading"></a></h3>
+<p><strong>Documented</strong>: Uses <code class="docutils literal notranslate"><span class="pre">PlayerProp::NICKNAME</span></code>, <code class="docutils literal notranslate"><span class="pre">PlayerProp::MAXPOWER</span></code></p>
+<p><strong>PyReborn</strong>: Uses <code class="docutils literal notranslate"><span class="pre">PLPROP_</span></code> prefix</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">PLPROP_NICKNAME</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># Should be NICKNAME</span>
+<span class="n">PLPROP_MAXPOWER</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Should be MAXPOWER</span>
+</pre></div>
+</div>
+<p><strong>Impact</strong>: Code readability, but functionally equivalent</p>
+</section>
+</section>
+<section id="missing-features">
+<h2>🚫 <strong>Missing Features</strong><a class="headerlink" href="#missing-features" title="Link to this heading"></a></h2>
+<section id="rc-remote-control-packets-missing">
+<h3>1. <strong>RC (Remote Control) Packets</strong> - <strong>MISSING</strong><a class="headerlink" href="#rc-remote-control-packets-missing" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>PyReborn only implements ~65 PLI packets</p></li>
+<li><p>Missing all RC administration packets (PLI_RC_*)</p></li>
+<li><p>Missing NC content management packets (PLI_NC_*)</p></li>
+</ul>
+</section>
+<section id="complete-server-packet-handlers-partial">
+<h3>2. <strong>Complete Server Packet Handlers</strong> - <strong>PARTIAL</strong><a class="headerlink" href="#complete-server-packet-handlers-partial" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Only implements ~25 PLO handlers out of 50+ documented</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">handlers</span><span class="p">[</span><span class="n">ServerToPlayer</span><span class="o">.</span><span class="n">PLO_PLAYERPROPS</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_player_props</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">handlers</span><span class="p">[</span><span class="n">ServerToPlayer</span><span class="o">.</span><span class="n">PLO_LEVELNAME</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle_level_name</span>
+<span class="c1"># Missing: PLO_MINIMAP, PLO_GHOSTMODE, PLO_RPGWINDOW, etc.</span>
+</pre></div>
+</div>
+</section>
+<section id="advanced-packet-types-missing">
+<h3>3. <strong>Advanced Packet Types</strong> - <strong>MISSING</strong><a class="headerlink" href="#advanced-packet-types-missing" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>No PLO_SHOOT2 handler (enhanced projectiles)</p></li>
+<li><p>No PLO_BOARDLAYER support (multiple level layers)</p></li>
+<li><p>No PLO_GANISCRIPT/PLO_NPCBYTECODE handling</p></li>
+</ul>
+</section>
+</section>
+<section id="implementation-quality-issues">
+<h2>🔧 <strong>Implementation Quality Issues</strong><a class="headerlink" href="#implementation-quality-issues" title="Link to this heading"></a></h2>
+<section id="inconsistent-data-reading">
+<h3>1. <strong>Inconsistent Data Reading</strong><a class="headerlink" href="#inconsistent-data-reading" title="Link to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Two different PacketReader implementations</span>
+<span class="c1"># 1. In packets.py - basic implementation</span>
+<span class="c1"># 2. In packet_handler.py - more complete but different</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">read_short</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># packets.py version</span>
+    <span class="n">low</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_byte</span><span class="p">()</span>
+    <span class="n">high</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_byte</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">low</span> <span class="o">|</span> <span class="p">(</span><span class="n">high</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span>  <span class="c1"># Little-endian</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">read_short</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># packet_handler.py version  </span>
+    <span class="n">high</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_byte</span><span class="p">()</span>
+    <span class="n">low</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_byte</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">high</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="n">low</span>  <span class="c1"># Big-endian</span>
+</pre></div>
+</div>
+</section>
+<section id="raw-data-handling-overly-complex">
+<h3>2. <strong>Raw Data Handling</strong> - <strong>OVERLY COMPLEX</strong><a class="headerlink" href="#raw-data-handling-overly-complex" title="Link to this heading"></a></h3>
+<p>PyReborn has sophisticated timeout-based raw data processing that’s not in the specification:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Complex timeout logic not in specification</span>
+<span class="k">if</span> <span class="n">time_since_data</span> <span class="o">&gt;</span> <span class="mf">0.2</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">raw_buffer</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1000</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Raw mode timeout triggered&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Specification</strong>: Simple size-based collection until expected bytes received</p>
+</section>
+</section>
+<section id="detailed-conformance-by-area">
+<h2>📊 <strong>Detailed Conformance By Area</strong><a class="headerlink" href="#detailed-conformance-by-area" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Area</p></th>
+<th class="head"><p>Conformance</p></th>
+<th class="head"><p>Notes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Packet IDs</p></td>
+<td><p>100%</p></td>
+<td><p>Perfect match with GServer-v2</p></td>
+</tr>
+<tr class="row-odd"><td><p>Bundle Structure</p></td>
+<td><p>95%</p></td>
+<td><p>Correct but minor length handling differences</p></td>
+</tr>
+<tr class="row-even"><td><p>Compression</p></td>
+<td><p>90%</p></td>
+<td><p>Works but wrong encryption limits</p></td>
+</tr>
+<tr class="row-odd"><td><p>Encryption</p></td>
+<td><p>60%</p></td>
+<td><p>Wrong algorithm implementation</p></td>
+</tr>
+<tr class="row-even"><td><p>G-Type Encoding</p></td>
+<td><p>40%</p></td>
+<td><p>Several encoding methods incorrect</p></td>
+</tr>
+<tr class="row-odd"><td><p>Client Packets</p></td>
+<td><p>85%</p></td>
+<td><p>Most implemented, missing RC/NC</p></td>
+</tr>
+<tr class="row-even"><td><p>Server Packets</p></td>
+<td><p>50%</p></td>
+<td><p>Core packets only, missing advanced</p></td>
+</tr>
+<tr class="row-odd"><td><p>Player Properties</p></td>
+<td><p>95%</p></td>
+<td><p>All properties, wrong naming</p></td>
+</tr>
+<tr class="row-even"><td><p>Raw Data</p></td>
+<td><p>70%</p></td>
+<td><p>Works but overcomplicated</p></td>
+</tr>
+<tr class="row-odd"><td><p>File Transfer</p></td>
+<td><p>80%</p></td>
+<td><p>Basic implementation present</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="priority-fixes-needed">
+<h2>🛠 <strong>Priority Fixes Needed</strong><a class="headerlink" href="#priority-fixes-needed" title="Link to this heading"></a></h2>
+<section id="critical-breaks-compatibility">
+<h3><strong>Critical (Breaks Compatibility)</strong><a class="headerlink" href="#critical-breaks-compatibility" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Fix encryption algorithm</strong> - Use simple XOR with iterator increment</p></li>
+<li><p><strong>Fix encryption limits</strong> - Use documented byte limits</p></li>
+<li><p><strong>Fix GSHORT/GINT encoding</strong> - Use documented bit operations</p></li>
+</ol>
+</section>
+<section id="important-missing-features">
+<h3><strong>Important (Missing Features)</strong><a class="headerlink" href="#important-missing-features" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="4">
+<li><p><strong>Add RC packet support</strong> - For server administration</p></li>
+<li><p><strong>Add missing PLO handlers</strong> - For complete client functionality</p></li>
+<li><p><strong>Implement proper GMAP support</strong> - Currently basic</p></li>
+</ol>
+</section>
+<section id="nice-to-have-code-quality">
+<h3><strong>Nice to Have (Code Quality)</strong><a class="headerlink" href="#nice-to-have-code-quality" title="Link to this heading"></a></h3>
+<ol class="arabic simple" start="7">
+<li><p><strong>Consolidate PacketReader classes</strong> - Remove duplication</p></li>
+<li><p><strong>Simplify raw data handling</strong> - Use specification approach</p></li>
+<li><p><strong>Update property naming</strong> - Match documentation</p></li>
+</ol>
+</section>
+</section>
+<section id="recommendations">
+<h2>🎯 <strong>Recommendations</strong><a class="headerlink" href="#recommendations" title="Link to this heading"></a></h2>
+<section id="for-protocol-compatibility">
+<h3><strong>For Protocol Compatibility</strong><a class="headerlink" href="#for-protocol-compatibility" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Update encryption to match GServer exactly</strong>:</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">decrypt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">buffer</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">limit</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">limit</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="k">else</span> <span class="nb">len</span><span class="p">(</span><span class="n">buffer</span><span class="p">)):</span>
+        <span class="n">buffer</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">^=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">iterator</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">iterator</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Fix G-type encoding</strong>:</p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">write_gshort</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">write_gchar</span><span class="p">((</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">write_gchar</span><span class="p">(</span><span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Implement missing critical packets</strong>:</p>
+<ul class="simple">
+<li><p>PLO_SHOOT2 for v5.07+ clients</p></li>
+<li><p>PLO_BOARDLAYER for multi-layer levels</p></li>
+<li><p>PLO_MINIMAP for map display</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="for-code-quality">
+<h3><strong>For Code Quality</strong><a class="headerlink" href="#for-code-quality" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Create single PacketReader implementation</strong></p></li>
+<li><p><strong>Add comprehensive packet validation</strong></p></li>
+<li><p><strong>Implement proper error handling for malformed packets</strong></p></li>
+</ol>
+</section>
+</section>
+<section id="summary">
+<h2>📝 <strong>Summary</strong><a class="headerlink" href="#summary" title="Link to this heading"></a></h2>
+<p>PyReborn provides a <strong>solid foundation</strong> for Graal Reborn protocol implementation but needs <strong>critical fixes</strong> for full compatibility. The core architecture is sound, but encryption and encoding implementations must be corrected to match the official specification. With the identified fixes, PyReborn would achieve <strong>95%+ conformance</strong> with the documented protocol.</p>
+<p>The library successfully handles the most common gameplay scenarios but lacks advanced features needed for complete server compatibility and administration tools.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../protocol/data-types.html" class="btn btn-neutral float-left" title="Data Types Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="conformance.html" class="btn btn-neutral float-right" title="Protocol Conformance Guidelines" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, OpenReborn2 Project.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

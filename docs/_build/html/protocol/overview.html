@@ -1,0 +1,244 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protocol Overview &mdash; Reborn Protocol Reference</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Reborn Protocol v2 - Packet Structure Reference" href="packet-structures.html" />
+    <link rel="prev" title="Reborn Protocol Reference Documentation" href="../index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            Reborn Protocol Reference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Protocol Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#protocol-architecture">Protocol Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#connection-types">Connection Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#packet-bundle-structure">Packet Bundle Structure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#encryption-generations">Encryption Generations</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#gen-5-protocol-recommended">GEN_5 Protocol (Recommended)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#bundle-processing">Bundle Processing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#individual-packets">Individual Packets</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#data-encoding">Data Encoding</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#reborn-specific-types-g-types">Reborn-Specific Types (G-Types)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#string-encoding">String Encoding</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#coordinate-system">Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#implementation-notes">Implementation Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="packet-structures.html">Reborn Protocol v2 - Packet Structure Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="encryption.html">Encryption Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="data-types.html">Data Types Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../implementation/pyreborn-analysis.html">PyReborn Protocol Conformance Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../implementation/conformance.html">Protocol Conformance Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/usage.html">Usage Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Reborn Protocol Reference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Protocol Overview</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/hosler/opengraal2/blob/main/graal-protocol-docs/docs/protocol/overview.md" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section class="tex2jax_ignore mathjax_ignore" id="protocol-overview">
+<h1>Protocol Overview<a class="headerlink" href="#protocol-overview" title="Link to this heading"></a></h1>
+<p>The Reborn protocol is a binary packet-based protocol used for communication between Reborn clients and servers. This section provides an overview of the protocol architecture and core concepts.</p>
+<section id="protocol-architecture">
+<h2>Protocol Architecture<a class="headerlink" href="#protocol-architecture" title="Link to this heading"></a></h2>
+<section id="connection-types">
+<h3>Connection Types<a class="headerlink" href="#connection-types" title="Link to this heading"></a></h3>
+<p>The Reborn protocol supports multiple connection types:</p>
+<ul class="simple">
+<li><p><strong>Game Clients</strong> - Standard players connecting to play</p></li>
+<li><p><strong>RC (Remote Control)</strong> - Administrative connections for server management</p></li>
+<li><p><strong>NC (NPC Control)</strong> - Content management connections for NPCs and scripting</p></li>
+<li><p><strong>NPC-Server</strong> - Dedicated NPC scripting server connections</p></li>
+</ul>
+</section>
+<section id="packet-bundle-structure">
+<h3>Packet Bundle Structure<a class="headerlink" href="#packet-bundle-structure" title="Link to this heading"></a></h3>
+<p>All communication uses packet bundles with this structure:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">UINT16</span><span class="p">:</span> <span class="n">packet_size</span><span class="p">][</span><span class="n">PACKET_BUNDLE_DATA</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Where:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">packet_size</span></code>: Size of bundle data in bytes (little-endian)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">PACKET_BUNDLE_DATA</span></code>: Encrypted/compressed packet bundle</p></li>
+</ul>
+</section>
+<section id="encryption-generations">
+<h3>Encryption Generations<a class="headerlink" href="#encryption-generations" title="Link to this heading"></a></h3>
+<p>The protocol supports multiple encryption generations:</p>
+<ul class="simple">
+<li><p><strong>GEN_1</strong>: No encryption, no compression</p></li>
+<li><p><strong>GEN_2</strong>: No encryption, zlib compression</p></li>
+<li><p><strong>GEN_3</strong>: Single byte insertion, zlib compression</p></li>
+<li><p><strong>GEN_4</strong>: Partial encryption, bz2 compression</p></li>
+<li><p><strong>GEN_5</strong>: Partial encryption, multiple compression options (recommended)</p></li>
+</ul>
+</section>
+</section>
+<section id="gen-5-protocol-recommended">
+<h2>GEN_5 Protocol (Recommended)<a class="headerlink" href="#gen-5-protocol-recommended" title="Link to this heading"></a></h2>
+<section id="bundle-processing">
+<h3>Bundle Processing<a class="headerlink" href="#bundle-processing" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Bundle Structure</strong>: <code class="docutils literal notranslate"><span class="pre">[UINT8:</span> <span class="pre">compression_type][ENCRYPTED_COMPRESSED_DATA]</span></code></p></li>
+<li><p><strong>Compression Types</strong>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">0x02</span></code>: Uncompressed</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">0x04</span></code>: Zlib compressed</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">0x06</span></code>: Bzip2 compressed</p></li>
+</ul>
+</li>
+<li><p><strong>Processing Order</strong>:</p>
+<ul class="simple">
+<li><p><strong>Outgoing</strong>: Compress → Encrypt → Send</p></li>
+<li><p><strong>Incoming</strong>: Receive → Decrypt → Decompress</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="individual-packets">
+<h3>Individual Packets<a class="headerlink" href="#individual-packets" title="Link to this heading"></a></h3>
+<p>Within bundles, packets are newline-separated:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">UINT8</span><span class="p">:</span> <span class="n">packet_id</span><span class="p">][</span><span class="n">PACKET_DATA</span><span class="p">]</span>\<span class="n">n</span>
+</pre></div>
+</div>
+<p>Special case for raw data:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">UINT8</span><span class="p">:</span> <span class="n">PLI_RAWDATA</span><span class="p">][</span><span class="n">UINT32</span><span class="p">:</span> <span class="n">data_length</span><span class="p">]</span>
+<span class="p">[</span><span class="n">RAW_DATA_BYTES</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="data-encoding">
+<h2>Data Encoding<a class="headerlink" href="#data-encoding" title="Link to this heading"></a></h2>
+<section id="reborn-specific-types-g-types">
+<h3>Reborn-Specific Types (G-Types)<a class="headerlink" href="#reborn-specific-types-g-types" title="Link to this heading"></a></h3>
+<p>The protocol uses specialized encoding for efficient transmission:</p>
+<ul class="simple">
+<li><p><strong>GCHAR</strong>: <code class="docutils literal notranslate"><span class="pre">char</span> <span class="pre">+</span> <span class="pre">32</span></code> (ensures printable ASCII)</p></li>
+<li><p><strong>GSHORT</strong>: <code class="docutils literal notranslate"><span class="pre">((value</span> <span class="pre">&gt;&gt;</span> <span class="pre">6)</span> <span class="pre">+</span> <span class="pre">32)</span> <span class="pre">+</span> <span class="pre">((value</span> <span class="pre">&amp;</span> <span class="pre">0x3f)</span> <span class="pre">+</span> <span class="pre">32)</span></code> (2 bytes)</p></li>
+<li><p><strong>GINT</strong>: 3-byte encoding for medium values</p></li>
+<li><p><strong>GINT5</strong>: 5-byte encoding for large values/timestamps</p></li>
+</ul>
+</section>
+<section id="string-encoding">
+<h3>String Encoding<a class="headerlink" href="#string-encoding" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>GSTRING</strong>: <code class="docutils literal notranslate"><span class="pre">[GCHAR:</span> <span class="pre">length][string_data]</span></code> - Length-prefixed string</p></li>
+<li><p><strong>Regular String</strong>: Null or delimiter-terminated string</p></li>
+</ul>
+</section>
+</section>
+<section id="coordinate-system">
+<h2>Coordinate System<a class="headerlink" href="#coordinate-system" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Tiles</strong>: 64×64 grid (0-63)</p></li>
+<li><p><strong>Half-tiles</strong>: 128×128 grid (0-127) for precise positioning</p></li>
+<li><p><strong>Pixels</strong>: Half-tiles × 16 for screen coordinates</p></li>
+</ul>
+</section>
+<section id="implementation-notes">
+<h2>Implementation Notes<a class="headerlink" href="#implementation-notes" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Byte Order</strong>: Little-endian before G-encoding</p></li>
+<li><p><strong>String Encoding</strong>: Latin-1 character set</p></li>
+<li><p><strong>Error Handling</strong>: Invalid packets should be ignored</p></li>
+<li><p><strong>Version Compatibility</strong>: Some packets vary by client version</p></li>
+</ol>
+<p>This overview provides the foundation for understanding the detailed packet specifications in the following sections.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../index.html" class="btn btn-neutral float-left" title="Reborn Protocol Reference Documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="packet-structures.html" class="btn btn-neutral float-right" title="Reborn Protocol v2 - Packet Structure Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, OpenReborn2 Project.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

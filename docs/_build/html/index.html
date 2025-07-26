@@ -1,0 +1,223 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reborn Protocol Reference Documentation &mdash; Reborn Protocol Reference</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=8d563738"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Protocol Overview" href="protocol/overview.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            Reborn Protocol Reference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="protocol/overview.html">Protocol Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="protocol/packet-structures.html">Reborn Protocol v2 - Packet Structure Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="protocol/encryption.html">Encryption Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="protocol/data-types.html">Data Types Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="implementation/pyreborn-analysis.html">PyReborn Protocol Conformance Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="implementation/conformance.html">Protocol Conformance Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/usage.html">Usage Examples</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">Reborn Protocol Reference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Reborn Protocol Reference Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/hosler/opengraal2/blob/main/graal-protocol-docs/docs/index.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="reborn-protocol-reference-documentation">
+<h1>Reborn Protocol Reference Documentation<a class="headerlink" href="#reborn-protocol-reference-documentation" title="Link to this heading"></a></h1>
+<p>Welcome to the comprehensive reference documentation for the Reborn protocol. This documentation provides detailed packet structure specifications, encoding formats, and implementation guidelines for developers working with Reborn servers and clients.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="protocol/overview.html">Protocol Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="protocol/overview.html#protocol-architecture">Protocol Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/overview.html#gen-5-protocol-recommended">GEN_5 Protocol (Recommended)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/overview.html#data-encoding">Data Encoding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/overview.html#coordinate-system">Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/overview.html#implementation-notes">Implementation Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="protocol/packet-structures.html">Reborn Protocol v2 - Packet Structure Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#protocol-architecture">Protocol Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#data-encoding-types">Data Encoding Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#client-to-server-packets-pli">Client-to-Server Packets (PLI_*)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#player-properties-pli-playerprops-data">Player Properties (PLI_PLAYERPROPS Data)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#remote-control-packets-pli-rc">Remote Control Packets (PLI_RC_*)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#npc-control-packets-pli-nc">NPC Control Packets (PLI_NC_*)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#special-packets">Special Packets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#encryption-details-encrypt-gen-5">Encryption Details (ENCRYPT_GEN_5)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#data-type-reference">Data Type Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#implementation-notes">Implementation Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#server-to-client-packets-plo">Server-to-Client Packets (PLO_*)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/packet-structures.html#encryption-implementation-details">Encryption Implementation Details</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="protocol/encryption.html">Encryption Details</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="protocol/encryption.html#encryption-generations">Encryption Generations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/encryption.html#encrypt-gen-5-implementation">ENCRYPT_GEN_5 Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/encryption.html#packet-bundle-processing">Packet Bundle Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/encryption.html#implementation-examples">Implementation Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/encryption.html#security-considerations">Security Considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/encryption.html#common-implementation-errors">Common Implementation Errors</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="protocol/data-types.html">Data Types Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#primitive-types">Primitive Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#string-types">String Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#coordinate-types">Coordinate Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#player-property-data-types">Player Property Data Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#time-types">Time Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#file-transfer-types">File Transfer Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#npc-object-types">NPC/Object Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="protocol/data-types.html#implementation-guidelines">Implementation Guidelines</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="implementation/pyreborn-analysis.html">PyReborn Protocol Conformance Analysis</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#overall-conformance-good-85">Overall Conformance: <strong>GOOD</strong> (85%)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#correctly-implemented-areas">✅ <strong>Correctly Implemented Areas</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#deviations-from-specification">⚠️ <strong>Deviations from Specification</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#missing-features">🚫 <strong>Missing Features</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#implementation-quality-issues">🔧 <strong>Implementation Quality Issues</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#detailed-conformance-by-area">📊 <strong>Detailed Conformance By Area</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#priority-fixes-needed">🛠 <strong>Priority Fixes Needed</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#recommendations">🎯 <strong>Recommendations</strong></a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/pyreborn-analysis.html#summary">📝 <strong>Summary</strong></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="implementation/conformance.html">Protocol Conformance Guidelines</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#conformance-levels">Conformance Levels</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#critical-requirements">Critical Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#testing-requirements">Testing Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#validation-checklist">Validation Checklist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#performance-guidelines">Performance Guidelines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#security-considerations">Security Considerations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#documentation-requirements">Documentation Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="implementation/conformance.html#certification-process">Certification Process</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/usage.html">Usage Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/usage.html#basic-client-connection">Basic Client Connection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/usage.html#g-type-encoding-examples">G-Type Encoding Examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/usage.html#player-property-handling">Player Property Handling</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/usage.html#file-transfer-example">File Transfer Example</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="about-this-documentation">
+<h1>About This Documentation<a class="headerlink" href="#about-this-documentation" title="Link to this heading"></a></h1>
+<p>This documentation is derived from deep analysis of the GServer-v2 codebase and provides:</p>
+<ul class="simple">
+<li><p>Complete packet structure specifications</p></li>
+<li><p>Primitive-level encoding details for cross-language implementation</p></li>
+<li><p>ENCRYPT_GEN_5 protocol implementation details</p></li>
+<li><p>PyReborn library conformance analysis</p></li>
+<li><p>Implementation examples and best practices</p></li>
+</ul>
+<p>The documentation is maintained as part of the OpenGraal2 project and is designed to enable developers to create compatible Graal clients and servers in any programming language.</p>
+</section>
+<section id="quick-start">
+<h1>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h1>
+<p>If you’re new to the Reborn protocol, start with the <a class="reference internal" href="protocol/overview.html"><span class="doc">Protocol Overview</span></a> section to understand the basic architecture, then move to <a class="reference internal" href="protocol/packet-structures.html"><span class="doc">Reborn Protocol v2 - Packet Structure Reference</span></a> for detailed packet specifications.</p>
+<p>For existing PyReborn users, see the <a class="reference internal" href="implementation/pyreborn-analysis.html"><span class="doc">PyReborn Protocol Conformance Analysis</span></a> section for compatibility information and recommended fixes.</p>
+</section>
+<section id="contributing">
+<h1>Contributing<a class="headerlink" href="#contributing" title="Link to this heading"></a></h1>
+<p>This documentation is open source and contributions are welcome. The source is available on GitHub as part of the OpenReborn2 project.</p>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="protocol/overview.html" class="btn btn-neutral float-right" title="Protocol Overview" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, OpenReborn2 Project.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

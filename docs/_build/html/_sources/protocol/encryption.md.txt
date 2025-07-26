@@ -12,24 +12,6 @@ This section provides detailed information about the Reborn protocol encryption 
 | GEN_4 (3) | Partial | BZ2 | Secure compression |
 | GEN_5 (4) | Partial | Multi | Current standard |
 
-### Critical Difference: GEN_3 vs GEN_5 Bundle Processing
-
-**GEN_5 (Current Standard)**:
-```
-1. Decrypt bundle
-2. Decompress bundle  
-3. Process packets
-```
-
-**GEN_3 (Legacy)**:
-```
-1. Decompress bundle
-2. Process packets
-3. Decrypt each individual packet
-```
-
-**Key Insight**: GEN_5 encrypts the compressed packet bundle, while GEN_3 encrypts the individual decompressed packets.
-
 ## ENCRYPT_GEN_5 Implementation
 
 ### Key Stream Generation
