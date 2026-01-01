@@ -228,3 +228,13 @@ def write_gshort(self, value: int):
 PyReborn provides a **solid foundation** for Graal Reborn protocol implementation but needs **critical fixes** for full compatibility. The core architecture is sound, but encryption and encoding implementations must be corrected to match the official specification. With the identified fixes, PyReborn would achieve **95%+ conformance** with the documented protocol.
 
 The library successfully handles the most common gameplay scenarios but lacks advanced features needed for complete server compatibility and administration tools.
+
+## 📋 **Recent Discoveries and Fixes**
+
+### **PLO_LEVELLINK Packet Structure** (Fixed in 2025)
+Through real-world implementation testing, it was discovered that PLO_LEVELLINK uses a raw newline-terminated string, NOT a GSTRING as some documentation suggested. This critical finding has been:
+- Fixed in PyReborn's packet parser
+- Documented in the protocol specification
+- Added to the level-link-implementation guide
+
+This discovery resolved a major parsing issue that prevented level links from working correctly in PyReborn.

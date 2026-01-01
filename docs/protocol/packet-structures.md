@@ -4,6 +4,11 @@
 
 This document provides comprehensive documentation of the Reborn protocol packet structures based on analysis of the GServer-v2 codebase. All packet structures are documented down to the primitive level for cross-language implementation.
 
+> **Prerequisites**: Before diving into packet structures, understand:
+> - [Data Types](data-types.md) - G-type encoding (the +32 obsession)
+> - [String Types](strings.md) - The three different string formats (yes, three)
+> - [Encryption](encryption.md) - How packets are bundled and encrypted
+
 ## Protocol Architecture
 
 ### Packet Bundle Structure
@@ -76,14 +81,20 @@ The protocol uses specialized encoding for efficient data transmission:
 ```
 [GUCHAR: tile_x]     // X coordinate (in tiles)
 [GUCHAR: tile_y]     // Y coordinate (in tiles)  
-[STRING: level_name] // Target level name
+[STRING: level_name] // Target level name (reads to end of packet)
 ```
+
+**GServer Implementation Notes**:
+- Coordinates are read as `pPacket.readGChar() * 8` to get pixel position
+- Level name uses `pPacket.readString("")` which reads to end of packet
+- Requires appropriate permissions when `warptoforall = false`
+
 **Variant**: PLI_LEVELWARPMOD (30) - includes modification time:
 ```
 [GUINT5: mod_time]   // Level modification timestamp
 [GUCHAR: tile_x]
 [GUCHAR: tile_y]
-[STRING: level_name]
+[STRING: level_name] // Reads to end of packet
 ```
 
 ### PLI_BOARDMODIFY (1) - Tile Modification
@@ -444,10 +455,36 @@ Player properties use the following format:
 **BOMBSCOUNT (5)**: `[GCHAR: bomb_count]`
 **GLOVEPOWER (6)**: `[GCHAR: glove_power]` (0-3)
 **BOMBPOWER (7)**: `[GCHAR: bomb_power]` (0-3)
-**SWORDPOWER (8)**: `[GCHAR: sword_power]` (0-4)
-**SHIELDPOWER (9)**: `[GCHAR: shield_power]` (0-3)
+**SWORDPOWER (8)**: Variable format (see below)
+**SHIELDPOWER (9)**: Variable format (see below)
+
+> ⚠️ **VARIABLE SIZE WARNING** - SWORDPOWER and SHIELDPOWER
+>
+> These properties change format based on their value:
+>
+> **SWORDPOWER**:
+> - If power ≤ 4: Just `[GCHAR: power]` (1 byte)
+> - If power > 4: `[GCHAR: length][GCHAR: power+30][STRING: image]` (custom sword image)
+>
+> **SHIELDPOWER**:
+> - If power ≤ 3: Just `[GCHAR: power]` (1 byte)
+> - If power > 3: `[GCHAR: length][GCHAR: power+30][STRING: image]` (custom shield image)
+>
+> Yes, the format changes based on the value. Yes, you need to handle both cases.
 **GANI (10)**: `[GCHAR: length][string]` - Animation file
-**HEADGIF (11)**: `[GCHAR: length][string]` - Head image
+**HEADGIF (11)**: Variable format (see below)
+
+> ⚠️ **MAGIC NUMBER ALERT** - HEADGIF
+>
+> The first byte has a dual interpretation:
+> - If byte < 100: It's a **preset head ID** (no string follows, just the ID byte)
+> - If byte ≥ 100: **Subtract 100** to get the actual string length, then read that many bytes
+>
+> Example: Byte value 105 means "read 5 bytes of string data for the head image filename."
+> Byte value 5 means "use preset head #5, no string follows."
+>
+> The magic number 100 was chosen because early Graal had fewer than 100 preset heads.
+> This was a reasonable assumption in 1999.
 **CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble
 **COLORS (13)**: `[5 bytes: color_data]` - Player colors
 **ID (14)**: `[GUSHORT: player_id]`
@@ -730,14 +767,32 @@ Encryption is limited based on compression type:
 Each tile is encoded as a 16-bit value representing the tile type.
 
 ### PLO_LEVELLINK (1) - Level Link/Warp
-**Trigger**: Level has warp/link destinations
+
+> ⚠️ **THE TRAP** ⚠️
+>
+> This packet does NOT use a length-prefixed GSTRING. Multiple client implementations
+> have made this mistake. The server sends raw string data until a newline (0x0A).
+> If you try to read the first byte as a length, you'll read 'l' from "level.nw",
+> compute length = 108 - 32 = 76, and consume half the next packet. Don't do this.
+>
+> See [String Types: The PLO_LEVELLINK Trap](strings.md#the-plo_levellink-trap-) for details.
+
+**Trigger**: Level has warp/link destinations (only sent when serverside=false)
 ```
-[GCHAR: dest_x]      // Destination X coordinate
-[GCHAR: dest_y]      // Destination Y coordinate  
-[GCHAR: new_x]       // New X position after warp
-[GCHAR: new_y]       // New Y position after warp
-[STRING: dest_level] // Destination level name
+[STRING: link_data] // Raw newline-terminated string (NOT a GSTRING!)
 ```
+**String Type**: Newline-terminated (NOT length-prefixed).
+
+**Link Data Format**: "destlevel x y width height destx desty"
+- destlevel: Target level name
+- x, y: Link area position (tiles, 0-63)
+- width, height: Link area size (tiles)
+- destx, desty: Destination position (can be "playerx"/"playery" or numeric)
+
+**Important Server Behavior**:
+- When `serverside = false`: Server sends level links to client, client must handle warping
+- When `serverside = true`: Server handles level links automatically
+- Special values: "playerx"/"playery" mean "keep player's current position"
 
 ### PLO_BADDYPROPS (2) - Baddy Properties
 **Trigger**: Baddy properties change or player enters level

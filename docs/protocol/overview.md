@@ -1,6 +1,26 @@
 # Protocol Overview
 
-The Reborn protocol is a binary packet-based protocol used for communication between Reborn clients and servers. This section provides an overview of the protocol architecture and core concepts.
+The Reborn protocol is a binary packet-based protocol used for communication between Reborn clients and servers. It was designed in the late 1990s and carries the architectural decisions of that era with pride.
+
+## Before You Begin: The Philosophy
+
+Understanding *why* this protocol is the way it is will save you hours of confusion.
+
+### Why Everything Adds 32
+
+Almost every numeric value in this protocol has 32 added to it before transmission. The goal was to ensure all bytes fall within the printable ASCII range (32-255), making packet dumps more readable and allegedly helping with certain network configurations of the era.
+
+The result is a protocol that's *technically* binary but *kinda* looks like ASCII if you squint. The space character (32) becomes the new zero. Newlines (10) are packet separators. It's almost clever.
+
+For details, see [Data Types: The +32 Obsession](data-types.md#the-32-obsession-why-everything-adds-32).
+
+### Why Three String Types
+
+Because one wasn't confusing enough. See [String Types](strings.md) for the full tragedy.
+
+### Why Partial Encryption
+
+The encryption only covers the first N bytes of each bundle because compressed data is "random-looking" and presumably hard to analyze. Also, encrypting everything would be work.
 
 ## Protocol Architecture
 
@@ -8,88 +28,147 @@ The Reborn protocol is a binary packet-based protocol used for communication bet
 
 The Reborn protocol supports multiple connection types:
 
-- **Game Clients** - Standard players connecting to play
-- **RC (Remote Control)** - Administrative connections for server management  
-- **NC (NPC Control)** - Content management connections for NPCs and scripting
-- **NPC-Server** - Dedicated NPC scripting server connections
+| Type | Purpose | Encryption | Notes |
+|------|---------|------------|-------|
+| **Game Client** | Standard players | GEN_5 | Most common |
+| **RC (Remote Control)** | Server administration | GEN_5 | Admin access |
+| **NC (NPC Control)** | Content management | GEN_5 | NPC scripting |
+| **NPC-Server** | Dedicated NPC server | Varies | V8 scripting engine |
+| **Listserver** | Server discovery | Minimal | Login/server list |
 
-### Packet Bundle Structure
+### The Bundle System
 
-All communication uses packet bundles with this structure:
-
-```
-[UINT16: packet_size][PACKET_BUNDLE_DATA]
-```
-
-Where:
-- `packet_size`: Size of bundle data in bytes (little-endian)
-- `PACKET_BUNDLE_DATA`: Encrypted/compressed packet bundle
-
-### Encryption Generations
-
-The protocol supports multiple encryption generations:
-
-- **GEN_1**: No encryption, no compression
-- **GEN_2**: No encryption, zlib compression  
-- **GEN_3**: Single byte insertion, zlib compression
-- **GEN_4**: Partial encryption, bz2 compression
-- **GEN_5**: Partial encryption, multiple compression options (recommended)
-
-## GEN_5 Protocol (Recommended)
-
-### Bundle Processing
-
-1. **Bundle Structure**: `[UINT8: compression_type][ENCRYPTED_COMPRESSED_DATA]`
-2. **Compression Types**:
-   - `0x02`: Uncompressed
-   - `0x04`: Zlib compressed
-   - `0x06`: Bzip2 compressed
-
-3. **Processing Order**:
-   - **Outgoing**: Compress → Encrypt → Send
-   - **Incoming**: Receive → Decrypt → Decompress
-
-### Individual Packets
-
-Within bundles, packets are newline-separated:
+All packets are sent within **bundles**. A bundle contains one or more packets and is processed as a unit.
 
 ```
-[UINT8: packet_id][PACKET_DATA]\n
+┌────────────────────────────────────────────────────────┐
+│                    WIRE FORMAT                          │
+├────────────────────────────────────────────────────────┤
+│                                                         │
+│   [length][compression_type][encrypted_compressed_data] │
+│      2B          1B              variable               │
+│                                                         │
+└────────────────────────────────────────────────────────┘
+
+Inside the bundle (after decrypt + decompress):
+┌────────────────────────────────────────────────────────┐
+│ [packet_id][data][\n][packet_id][data][\n]...         │
+└────────────────────────────────────────────────────────┘
 ```
 
-Special case for raw data:
+**Key points**:
+- Length prefix is 2 bytes, little-endian
+- Compression type is 1 byte (0x02=none, 0x04=zlib, 0x06=bz2)
+- Packets within a bundle are separated by newlines (0x0A)
+- Each packet's first byte is the packet ID (GCHAR-encoded)
+
+### Processing Order
+
+For GEN_5 (the current standard):
+
 ```
-[UINT8: PLI_RAWDATA][UINT32: data_length]
-[RAW_DATA_BYTES]
+SENDING:
+  Raw Packets → Bundle → Compress → Encrypt → Length Prefix → Send
+
+RECEIVING:
+  Receive → Strip Length → Decrypt → Decompress → Split → Parse
 ```
+
+See [Encryption: The Packet Lifecycle](encryption.md#the-packet-lifecycle) for detailed diagrams.
+
+## Encryption Generations
+
+The protocol has evolved through multiple "generations" of encryption:
+
+| Gen | Encryption | Compression | Use |
+|-----|------------|-------------|-----|
+| GEN_1 | None | None | Ancient |
+| GEN_2 | None | Zlib | Ancient |
+| GEN_3 | Weak XOR | Zlib | Legacy |
+| GEN_4 | Weak XOR | BZ2 | Legacy |
+| **GEN_5** | **Weak XOR** | **Multi** | **Current** |
+
+GEN_5 is recommended. "Weak XOR" means it's obfuscation, not cryptographic security.
+
+See [Encryption Details](encryption.md) for implementation specifics.
 
 ## Data Encoding
 
-### Reborn-Specific Types (G-Types)
+### G-Types (The Graal Types)
 
-The protocol uses specialized encoding for efficient transmission:
+All numeric values use "G-type" encoding, which adds 32 to ensure printable ASCII:
 
-- **GCHAR**: `char + 32` (ensures printable ASCII)
-- **GSHORT**: 7-bit shift encoding with +32 bias (2 bytes, max 28767)
-- **GINT**: 3-byte encoding for medium values
-- **GINT5**: 5-byte encoding for large values/timestamps
+| Type | Size | Max Value | Formula |
+|------|------|-----------|---------|
+| GCHAR | 1 byte | 223 | `value + 32` |
+| GSHORT | 2 bytes | 28,767 | 7-bit encoding + 32 per byte |
+| GINT | 3 bytes | 2,097,151 | 7-bit encoding + 32 per byte |
+| GINT5 | 5 bytes | 34 billion | 7-bit encoding + 32 per byte |
+
+See [Data Types](data-types.md) for encoding details and examples.
 
 ### String Encoding
 
-- **GSTRING**: `[GCHAR: length][string_data]` - Length-prefixed string
-- **Regular String**: Null or delimiter-terminated string
+There are **three** types of strings. This is important:
+
+1. **Regular String**: Reads to end of packet (no prefix, no terminator)
+2. **GSTRING**: Length-prefixed with GCHAR (max 223 chars)
+3. **Newline-Terminated**: Reads until 0x0A
+
+The term "gstring" is used inconsistently in various codebases. Always check the specific packet documentation.
+
+See [String Types](strings.md) for the full breakdown.
 
 ## Coordinate System
 
-- **Tiles**: 64×64 grid (0-63)
-- **Half-tiles**: 128×128 grid (0-127) for precise positioning
-- **Pixels**: Half-tiles × 16 for screen coordinates
+```
+1 tile = 16 pixels
+1 level = 64×64 tiles = 1024×1024 pixels
+```
 
-## Implementation Notes
+| Context | Unit | Range |
+|---------|------|-------|
+| Board/tile operations | Tiles | 0-63 |
+| Player movement | Half-tiles | 0-127 |
+| Precise positioning | Pixels | Variable |
+| GMAP world | Tiles + grid offset | See GMAP docs |
 
-1. **Byte Order**: Little-endian before G-encoding
-2. **String Encoding**: Latin-1 character set
-3. **Error Handling**: Invalid packets should be ignored
-4. **Version Compatibility**: Some packets vary by client version
+## Quick Start: Minimal Client
 
-This overview provides the foundation for understanding the detailed packet specifications in the following sections.
+Here's the basic flow to connect and authenticate:
+
+```
+1. TCP connect to server:port
+2. Receive server greeting (PLO_* packets with server info)
+3. Send PLI_LOGIN with credentials
+4. Receive PLO_PLAYERPROPS with your player data
+5. Receive PLO_LEVELBOARD + PLO_LEVELNAME for starting level
+6. Start handling game packets
+```
+
+## Documentation Structure
+
+| Document | Contents |
+|----------|----------|
+| [Data Types](data-types.md) | G-type encoding, coordinates, property types |
+| [String Types](strings.md) | The three string types and their gotchas |
+| [Encryption](encryption.md) | Packet lifecycle, encryption algorithm, magic constants |
+| [Packet Structures](packet-structures.md) | Individual packet formats (PLI_* and PLO_*) |
+| [GServer Behavior](gserver-behavior.md) | Server implementation notes |
+| [Level Links](level-link-implementation.md) | Level warp/link system |
+
+## Common Pitfalls
+
+1. **Forgetting the +32**: Every numeric value is offset by 32. Forgetting this means garbage data.
+
+2. **Wrong string type**: PLO_LEVELLINK uses newline-terminated strings, not GSTRING. This has bitten multiple implementations.
+
+3. **GEN_5 order of operations**: Encrypt *after* compress. GEN_3 did it the other way around.
+
+4. **Partial encryption**: Only the first N bytes are encrypted (N depends on compression type).
+
+5. **Iterator constants**: Each encryption generation has a magic starting value. Get it wrong, everything breaks.
+
+## Acknowledgments
+
+This documentation is based on analysis of the GServer-v2 codebase and years of implementation experience. The protocol's quirks are documented with affection—it's a product of its time, and it works.
