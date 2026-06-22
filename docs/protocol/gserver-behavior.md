@@ -54,9 +54,10 @@ HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
 **Format**: `[GUCHAR: x][GUCHAR: y][STRING: level_name]`
 - X/Y are in tile coordinates (multiply by 8 for pixels)
 - Level name reads to end of packet
-- **Important**: Server sends null-terminated strings (ends with \x00)
+- **Important**: read-to-end, **not** null-terminated (consistent with the string-type
+  rules above — the packet boundary / bundle newline delimits it, there is no `\x00`)
 
-### PLO_LEVELNAME (19)
+### PLO_LEVELNAME (6)
 ```cpp
 // Server sends level name
 sendPacket(CString() >> (char)PLO_LEVELNAME << level->levelName);
@@ -66,7 +67,7 @@ sendPacket(CString() >> (char)PLO_LEVELNAME << map->getMapName());
 **Format**: `[STRING: level_name]`
 - Entire packet payload is the level name
 - No length prefix
-- **Important**: Server sends null-terminated strings (ends with \x00)
+- **Important**: read-to-end, **not** null-terminated (no trailing `\x00`)
 
 ### PLO_PLAYERPROPS (14) / PLO_OTHERPLPROPS (15)
 Player properties use a special encoding:

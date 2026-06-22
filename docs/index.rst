@@ -25,6 +25,7 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
    :caption: Implementation:
 
    implementation/pyreborn-analysis
+   implementation/pyreborn-gaps
    implementation/conformance
    examples/usage
 

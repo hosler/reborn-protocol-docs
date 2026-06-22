@@ -57,7 +57,7 @@ Inside the bundle (after decrypt + decompress):
 ```
 
 **Key points**:
-- Length prefix is 2 bytes, little-endian
+- Length prefix is 2 bytes, **big-endian** (`struct.pack('>H', len)` — high byte first)
 - Compression type is 1 byte (0x02=none, 0x04=zlib, 0x06=bz2)
 - Packets within a bundle are separated by newlines (0x0A)
 - Each packet's first byte is the packet ID (GCHAR-encoded)

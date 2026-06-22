@@ -30,23 +30,32 @@ This section provides guidelines for implementing Reborn protocol conformance an
 ## Critical Requirements
 
 ### 1. Encryption Algorithm
-**MUST** use the exact GEN_5 encryption implementation:
+**MUST** use the exact GEN_5 encryption implementation (from `CEncryption.cpp`):
 
 ```cpp
+// GEN_5 uses Linear Congruential Generator (LCG)
+// Iterator starts at 0x4A80B38
+// Multiplier is 0x8088405
+
 void decrypt(uint8_t* buffer, int length, uint8_t key, uint32_t& iterator, int limit) {
-    int bytes_to_decrypt = (limit < 0) ? length : min(length, limit);
-    
-    for (int i = 0; i < bytes_to_decrypt; i++) {
-        buffer[i] ^= (key + iterator) & 0xFF;
-        iterator = (iterator + 1) & 0xFF;
+    const uint8_t* iter_bytes = reinterpret_cast<const uint8_t*>(&iterator);
+
+    for (int i = 0; i < length; i++) {
+        if (i % 4 == 0) {
+            if (limit == 0) return;
+            iterator = iterator * 0x8088405 + key;  // LCG step
+            if (limit > 0) limit--;
+        }
+        buffer[i] ^= iter_bytes[i % 4];
     }
 }
 ```
 
-**Common Errors to Avoid**:
-- Complex multiplier operations
-- Wrong iterator initialization  
-- Incorrect byte limits
+**Key Points**:
+- Uses LCG multiplier `0x8088405`, NOT simple increment
+- Iterator initialized to `0x4A80B38`
+- XORs each byte with corresponding byte of 32-bit iterator
+- Limit counts iterations (each iteration = 4 bytes)
 
 ### 2. G-Type Encoding
 **MUST** implement exact bit operations:
@@ -81,10 +90,11 @@ def test_gshort_encoding():
     assert encode_gshort(4095) == b'\x5f\x5f'   # 95,95
     
 def test_encryption_limits():
-    # Test compression-based limits
-    assert get_encryption_limit(UNCOMPRESSED) == 40
-    assert get_encryption_limit(ZLIB) == 4096
-    assert get_encryption_limit(BZ2) == 65536
+    # Test compression-based limits (iteration counts, NOT byte counts)
+    # Each iteration encrypts 4 bytes
+    assert get_encryption_limit(UNCOMPRESSED) == 0x0C  # 12 iterations = 48 bytes
+    assert get_encryption_limit(ZLIB) == 0x04          # 4 iterations = 16 bytes
+    assert get_encryption_limit(BZ2) == 0x04           # 4 iterations = 16 bytes
 ```
 
 ### Integration Tests
@@ -109,10 +119,10 @@ def test_encryption_limits():
 - [ ] Raw data packet processing
 
 ### ✅ Encryption
-- [ ] GEN_5 algorithm implementation  
+- [ ] GEN_5 algorithm implementation (LCG with multiplier 0x8088405)
 - [ ] Correct iterator initialization (0x4A80B38)
-- [ ] Proper encryption limits by compression type
-- [ ] XOR with simple key increment
+- [ ] Proper encryption limits by compression type (0x0C, 0x04, 0x04)
+- [ ] XOR with 32-bit iterator bytes (not simple increment)
 
 ### ✅ Data Types
 - [ ] GCHAR: value + 32

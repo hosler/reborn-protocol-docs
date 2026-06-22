@@ -472,9 +472,9 @@ Player properties use the following format:
 >
 > Yes, the format changes based on the value. Yes, you need to handle both cases.
 **GANI (10)**: `[GCHAR: length][string]` - Animation file
-**HEADGIF (11)**: Variable format (see below)
+**HEADIMAGE (11)**: Variable format (see below) — *also called HEADGIF in some older docs*
 
-> ⚠️ **MAGIC NUMBER ALERT** - HEADGIF
+> ⚠️ **MAGIC NUMBER ALERT** - HEADIMAGE
 >
 > The first byte has a dual interpretation:
 > - If byte < 100: It's a **preset head ID** (no string follows, just the ID byte)
@@ -486,7 +486,7 @@ Player properties use the following format:
 > The magic number 100 was chosen because early Graal had fewer than 100 preset heads.
 > This was a reasonable assumption in 1999.
 **CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble
-**COLORS (13)**: `[5 bytes: color_data]` - Player colors
+**COLORS (13)**: `[8 bytes: color_data]` (new-world / v6.037) or `[5 bytes]` (classic) - Player colors. The reborn stack targets v6.037, so **8 bytes** here. Each byte is a palette index (+32 encoded).
 **ID (14)**: `[GUSHORT: player_id]`
 **X (15)**: `[GCHAR: pixel_x / 2]` - X position
 **Y (16)**: `[GCHAR: pixel_y / 2]` - Y position
@@ -496,7 +496,7 @@ Player properties use the following format:
 **CURLEVEL (20)**: `[GCHAR: length][string]` - Current level name
 **HORSEGIF (21)**: `[GCHAR: length][string]` - Horse image
 **HORSEBUSHES (22)**: `[GCHAR: bush_count]` - Bushes eaten by horse
-**EFFECTCOLORS (23)**: `[4 bytes: effect_colors]` - Visual effect colors
+**EFFECTCOLORS (23)**: Variable - `[GCHAR: first]`; if `first == 0` the prop is just that 1 byte, otherwise 5 bytes total (`first` + 4 color bytes). Visual effect colors (RGBA tint)
 **CARRYNPC (24)**: `[GUINT: npc_id]` - Carried NPC ID
 **APCOUNTER (25)**: `[GCHAR: ap_time]` - AP recovery counter
 **MAGICPOINTS (26)**: `[GCHAR: mp_count]` - Magic points
@@ -509,11 +509,27 @@ Player properties use the following format:
 **ADDITFLAGS (33)**: `[GCHAR: flags]` - Additional player flags
 **ACCOUNTNAME (34)**: `[GCHAR: length][string]` - Account name
 **BODYIMG (35)**: `[GCHAR: length][string]` - Body image
-**RATING (36)**: `[GFLOAT: rating][GFLOAT: deviation]` - ELO rating
-**GATTRIB1-30 (37-74)**: `[GCHAR: length][string]` - Custom attributes
-**Z (45)**: `[GCHAR: (z_pos + 50)]` - Z position
-**GMAPLEVELX (43)**: `[GCHAR: gmap_x]` - GMAP level X
-**GMAPLEVELY (44)**: `[GCHAR: gmap_y]` - GMAP level Y
+**RATING (36)**: `[GINT3: packed_rating]` (3 bytes) - ELO rating + deviation packed into a single gInt3 (`PropertyEloRating`). Not two floats.
+
+> ⚠️ **PROP NUMBERING IS NOT CONTIGUOUS** - props 37-74
+>
+> The custom-attribute (GATTRIB) range is **interleaved** with other props. Do **not** assume GATTRIB1-30 fills 37-74. The real layout:
+
+| Prop # | Name | Format |
+|--------|------|--------|
+| 37-41 | GATTRIB1-5 | `[GCHAR: length][string]` |
+| 42 | ATTACHNPC | `[GINT3: npc_id]` - attached NPC |
+| 43 | GMAPLEVELX | `[GCHAR: gmap_x]` - GMAP level X (segment) |
+| 44 | GMAPLEVELY | `[GCHAR: gmap_y]` - GMAP level Y (segment) |
+| 45 | Z | `[GCHAR: (z_pos + 50)]` - Z position |
+| 46-49 | GATTRIB6-9 | `[GCHAR: length][string]` |
+| 50 | JOINLEAVELVL | join/leave-level flag |
+| 51 | PCONNECTED | connected flag |
+| 52 | PLANGUAGE | `[GCHAR: length][string]` - client language |
+| 53 | PSTATUSMSG | `[GCHAR: length][string]` - status message |
+| 54-74 | GATTRIB10-30 | `[GCHAR: length][string]` |
+
+A parser that treats 37-74 as one flat GATTRIB block will misalign every subsequent property.
 
 ## Remote Control Packets (PLI_RC_*)
 
@@ -762,9 +778,13 @@ Encryption is limited based on compression type:
 ### PLO_LEVELBOARD (0) - Level Board Data
 **Trigger**: Player enters level or requests level data
 ```
-[64x64 tile_data]    // 8192 bytes of tile data (2 bytes per tile)
+[tile_data...][\n]   // Newline-terminated inline board data
 ```
-Each tile is encoded as a 16-bit value representing the tile type.
+Inline (newline-terminated) board data. **Note**: the full 64×64 board is normally
+*not* sent here. The complete 8192-byte tile dump is delivered out-of-band as
+**PLO_BOARDPACKET (101)**, announced by a preceding **PLO_RAWDATA (100)** length packet.
+PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is a
+16-bit value (2 bytes) representing the tile index.
 
 ### PLO_LEVELLINK (1) - Level Link/Warp
 
@@ -1195,11 +1215,14 @@ Each tile is encoded as a 16-bit value representing the tile type.
 [RAW_DATA...]        // Raw binary data
 ```
 
-### PLO_BOARDPACKET (101) - Board Packet
-**Trigger**: Special board data transfer
+### PLO_BOARDPACKET (101) - Full Board (8192 bytes)
+**Trigger**: Player enters a level — the full tile board is sent here.
 ```
-[BOARD_DATA...]      // Board-specific data
+[8192 bytes tile_data]   // 64×64 tiles, 2 bytes per tile (little-endian)
 ```
+This is the **raw 8192-byte board dump**, sent as raw data immediately after a
+**PLO_RAWDATA (100)** packet that announces the byte count. This is the canonical
+way a client receives a level's tiles (not PLO_LEVELBOARD).
 
 ### PLO_FILE (102) - File Data
 **Trigger**: File content transfer

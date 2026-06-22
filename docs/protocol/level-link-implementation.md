@@ -70,30 +70,25 @@ def should_process_link(link, current_level, gmap_manager):
     # Check if destination is a GMAP level
     if gmap_manager.is_gmap_level(link.destination):
         # This is an edge link - check if we should filter it
-        if is_edge_link(link, current_level):
+        if is_edge_link(link):
             return False  # Ignore edge links in GMAP mode
     
     # Process indoor/dungeon links
     return True
 
-def is_edge_link(link, current_level):
-    """Check if link is at the edge of the level"""
-    # Edge links typically have specific patterns:
-    # - X position 0 with width 1 (left edge)
-    # - X position 63 with width 1 (right edge)
-    # - Y position 0 with height 1 (top edge)
-    # - Y position 63 with height 1 (bottom edge)
-    
-    if link.x == 0 and link.width == 1:  # Left edge
-        return True
-    if link.x == 63 and link.width == 1:  # Right edge
-        return True
-    if link.y == 0 and link.height == 1:  # Top edge
-        return True
-    if link.y == 63 and link.height == 1:  # Bottom edge
-        return True
-    
-    return False
+def is_edge_link(link):
+    """Check if a link sits against a level edge.
+
+    This mirrors pyReborn's actual heuristic (client.py / game/actions.py):
+    a link is treated as an edge link if its rectangle touches any of the
+    four borders of the 64-tile level. The thresholds are <=1 / >=63 (not
+    an exact x==0 && width==1 match), so links one tile in from the border
+    still count.
+    """
+    return (link.x <= 1
+            or link.x + link.width >= 63
+            or link.y <= 1
+            or link.y + link.height >= 63)
 ```
 
 ## Complete Implementation Example

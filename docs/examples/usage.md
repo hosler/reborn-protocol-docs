@@ -29,33 +29,37 @@ class RebornClient:
         # Build packet
         packet = bytes([packet_id + 32]) + data + b'\n'
         
-        # Compress (use zlib for packets > 55 bytes)
+        # Compress (use zlib for packets > 55 bytes). The encrypt limit is an
+        # ITERATION count (each iteration covers 4 bytes), not a byte count.
         if len(packet) > 55:
             compression_type = 0x04  # ZLIB
             compressed = zlib.compress(packet)
-            encrypt_limit = 4096
+            encrypt_limit = 0x04     # 4 iterations = 16 bytes
         else:
             compression_type = 0x02  # UNCOMPRESSED
             compressed = packet
-            encrypt_limit = 40
+            encrypt_limit = 0x0C     # 12 iterations = 48 bytes
             
-        # Encrypt first N bytes
+        # Encrypt the first `limit` 4-byte blocks
         encrypted = self.encrypt(compressed, encrypt_limit)
         
-        # Send with length prefix
+        # Send with 2-byte BIG-ENDIAN length prefix
         bundle = bytes([compression_type]) + encrypted
-        length_data = struct.pack('<H', len(bundle))
+        length_data = struct.pack('>H', len(bundle))
         self.socket.send(length_data + bundle)
         
     def encrypt(self, data, limit):
-        """GEN_5 encryption"""
+        """GEN_5 encryption: XOR with the LCG keystream, advancing the 32-bit
+        iterator every 4 bytes. limit = number of 4-byte iterations (-1 = all)."""
         result = bytearray(data)
-        bytes_to_encrypt = min(len(data), limit)
-        
-        for i in range(bytes_to_encrypt):
-            result[i] ^= (self.encryption_key + self.iterator) & 0xFF
-            self.iterator = (self.iterator + 1) & 0xFF
-            
+        for i in range(len(data)):
+            if i % 4 == 0:
+                if limit == 0:
+                    break
+                self.iterator = (self.iterator * 0x8088405 + self.encryption_key) & 0xFFFFFFFF
+                if limit > 0:
+                    limit -= 1
+            result[i] ^= struct.pack('<I', self.iterator)[i % 4]
         return bytes(result)
         
     def send_login(self, username, password):
@@ -115,25 +119,26 @@ class RebornClient {
         packet.set(data, 1);
         packet[packet.length - 1] = 10; // newline
         
-        // Compress and encrypt
+        // Compress and encrypt. The encrypt limit is an ITERATION count
+        // (4 bytes per iteration), not a byte count.
         let bundle;
         if (packet.length > 55) {
             // Use zlib compression (would need pako library)
             const compressed = pako.deflate(packet);
-            const encrypted = this.encrypt(compressed, 4096);
+            const encrypted = this.encrypt(compressed, 0x04); // 4 iterations
             bundle = new Uint8Array(1 + encrypted.length);
             bundle[0] = 0x04; // ZLIB
             bundle.set(encrypted, 1);
         } else {
-            const encrypted = this.encrypt(packet, 40);
+            const encrypted = this.encrypt(packet, 0x0C);     // 12 iterations
             bundle = new Uint8Array(1 + encrypted.length);
             bundle[0] = 0x02; // UNCOMPRESSED
             bundle.set(encrypted, 1);
         }
         
-        // Send with length prefix
+        // Send with 2-byte BIG-ENDIAN length prefix (setUint16 littleEndian=false)
         const lengthData = new Uint8Array(2);
-        new DataView(lengthData.buffer).setUint16(0, bundle.length, true);
+        new DataView(lengthData.buffer).setUint16(0, bundle.length, false);
         
         const fullPacket = new Uint8Array(lengthData.length + bundle.length);
         fullPacket.set(lengthData);
@@ -142,15 +147,19 @@ class RebornClient {
         this.ws.send(fullPacket);
     }
     
+    // GEN_5: XOR with the LCG keystream, advancing the 32-bit iterator every
+    // 4 bytes. limit = number of 4-byte iterations (-1 = encrypt all).
     encrypt(data, limit) {
         const result = new Uint8Array(data);
-        const bytesToEncrypt = Math.min(data.length, limit);
-        
-        for (let i = 0; i < bytesToEncrypt; i++) {
-            result[i] ^= (this.encryptionKey + this.iterator) & 0xFF;
-            this.iterator = (this.iterator + 1) & 0xFF;
+        for (let i = 0; i < data.length; i++) {
+            if (i % 4 === 0) {
+                if (limit === 0) break;
+                // LCG step, kept as unsigned 32-bit
+                this.iterator = (Math.imul(this.iterator, 0x8088405) + this.encryptionKey) >>> 0;
+                if (limit > 0) limit--;
+            }
+            result[i] ^= (this.iterator >>> (8 * (i % 4))) & 0xFF;
         }
-        
         return result;
     }
     
@@ -206,19 +215,29 @@ public:
         bundle.push_back(compressionType);
         bundle.insert(bundle.end(), compressed.begin(), compressed.end());
         
-        // Add length prefix and send
+        // Add length prefix and send. The prefix is 2 bytes BIG-ENDIAN
+        // (high byte first) — do NOT memcpy a host uint16_t.
         uint16_t length = bundle.size();
-        // Send length (little-endian) + bundle
-        sendToSocket(reinterpret_cast<uint8_t*>(&length), 2);
+        uint8_t lenPrefix[2] = {
+            static_cast<uint8_t>((length >> 8) & 0xFF),  // high byte first
+            static_cast<uint8_t>(length & 0xFF)
+        };
+        sendToSocket(lenPrefix, 2);
         sendToSocket(bundle.data(), bundle.size());
     }
     
+    // GEN_5: XOR with the LCG keystream, advancing the 32-bit iterator every
+    // 4 bytes. `limit` is the number of 4-byte iterations (NOT a byte count);
+    // -1 means encrypt everything. Using a simple increment here is the most
+    // common implementation mistake — see encryption.md.
     void encrypt(uint8_t* data, size_t length, int limit) {
-        size_t bytesToEncrypt = std::min(length, static_cast<size_t>(limit));
-        
-        for (size_t i = 0; i < bytesToEncrypt; i++) {
-            data[i] ^= (encryptionKey + iterator) & 0xFF;
-            iterator = (iterator + 1) & 0xFF;
+        for (size_t i = 0; i < length; i++) {
+            if (i % 4 == 0) {
+                if (limit == 0) return;
+                iterator = iterator * 0x8088405u + encryptionKey;  // LCG step
+                if (limit > 0) limit--;
+            }
+            data[i] ^= reinterpret_cast<uint8_t*>(&iterator)[i % 4];
         }
     }
     
@@ -265,7 +284,7 @@ def decode_gshort(data):
 # Examples (corrected for 7-bit encoding)
 assert encode_gshort(0) == b'\x20\x20'      # 0 -> 32,32
 assert encode_gshort(1000) == b'\x27\x88'   # 1000 -> 39,136  
-assert encode_gshort(28767) == b'\xff\x7f'  # 28767 -> 255,127 (max)
+assert encode_gshort(28767) == b'\xff\xff'  # 28767 -> 255,255 (max; both bytes clamp to 223+32)
 assert decode_gshort(b'\x20\x20') == 0
 assert decode_gshort(b'\x27\x88') == 1000
 ```

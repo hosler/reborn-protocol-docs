@@ -44,9 +44,9 @@ Understanding the full journey of a packet is crucial. Here's what happens:
 │     └───────────────────────────────────────────────────────────────┘  │
 │                                   │                                     │
 │                                   ▼                                     │
-│  6. PREPEND LENGTH (2 bytes, little-endian)                             │
+│  6. PREPEND LENGTH (2 bytes, big-endian)                                │
 │     ┌───────────────────────────────────────────────────────────────┐  │
-│     │ [len_lo][len_hi][encrypted...][plaintext...]                  │  │
+│     │ [len_hi][len_lo][encrypted...][plaintext...]                  │  │
 │     └───────────────────────────────────────────────────────────────┘  │
 │                                   │                                     │
 │                                   ▼                                     │
@@ -63,7 +63,7 @@ Understanding the full journey of a packet is crucial. Here's what happens:
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  1. READ LENGTH PREFIX                                                  │
-│     [len_lo][len_hi] → length = (len_hi << 8) | len_lo                 │
+│     [len_hi][len_lo] → length = (len_hi << 8) | len_lo  (big-endian)   │
 │                                                                         │
 │  2. READ BUNDLE (length bytes)                                          │
 │     ┌───────────────────────────────────────────────────────────────┐  │
@@ -126,39 +126,49 @@ GEN_5 encrypts the *compressed bundle*. GEN_3 encrypts the *decompressed packets
 
 ### The Algorithm
 
-GEN_5 uses an XOR stream cipher. It's not cryptographically secure—it's obfuscation to discourage casual packet sniffing.
+GEN_5 uses a Linear Congruential Generator (LCG) to produce a key stream, then XORs each byte. It's not cryptographically secure—it's obfuscation to discourage casual packet sniffing.
 
 ```cpp
 class Encryption {
     uint8_t key;           // Current key byte (0-255)
-    uint32_t iterator;     // Counter for key generation
-    int32_t limit;         // How many bytes to encrypt
+    uint32_t iterator;     // LCG state (starts at 0x4A80B38 for GEN_5)
+    int32_t limit;         // How many 4-byte blocks to encrypt (-1 = unlimited)
 };
 
+// From GServer-v2 CEncryption.cpp
 void decrypt(uint8_t* data, size_t length) {
-    size_t bytes_to_process = min(length, limit);
-    for (size_t i = 0; i < bytes_to_process; i++) {
-        data[i] ^= (key + iterator) & 0xFF;
-        iterator++;
+    const uint8_t* iter_bytes = reinterpret_cast<const uint8_t*>(&iterator);
+
+    for (size_t i = 0; i < length; i++) {
+        if (i % 4 == 0) {
+            if (limit == 0) return;
+            iterator = iterator * 0x8088405 + key;  // LCG step
+            if (limit > 0) limit--;
+        }
+        data[i] ^= iter_bytes[i % 4];
     }
 }
 ```
 
-The key stream is simply `key + iterator`, incrementing the iterator each byte. That's it. No S-boxes, no rounds, no key schedule. Just XOR with a counter.
+The iterator is advanced using an LCG with multiplier `0x8088405` every 4 bytes. Each of the 4 bytes of the 32-bit iterator is used to XOR one byte of data.
 
 ### Encryption Limits
 
-Here's the quirk: encryption is only applied to the first N bytes. Beyond that, it's plaintext.
+Here's the quirk: encryption is only applied to the first N iterations. Each iteration processes 4 bytes. Beyond that, it's plaintext.
 
-| Compression Type | Byte Value | Encryption Limit | Encrypted |
-|------------------|------------|------------------|-----------|
-| UNCOMPRESSED | 0x02 | 40 bytes | First 40 bytes |
-| ZLIB | 0x04 | 4,096 bytes | First 4KB |
-| BZ2 | 0x06 | 65,536 bytes | First 64KB |
+| Compression Type | Byte Value | Limit (iterations) | Bytes Encrypted |
+|------------------|------------|-------------------|-----------------|
+| UNCOMPRESSED | 0x02 | 0x0C (12) | 48 bytes |
+| ZLIB | 0x04 | 0x04 (4) | 16 bytes |
+| BZ2 | 0x06 | 0x04 (4) | 16 bytes |
+
+These values come directly from GServer-v2's `CEncryption.cpp`:
+```cpp
+static int limits[] = { 0x02, 0x0C, 0x04, 0x04, 0x06, 0x04 };
+// { type, limit, type, limit, ... }
+```
 
 Why these specific limits? The theory is that compressing data makes the first bytes more "random" and thus harder to analyze, so you don't need to encrypt the whole thing. In practice, this means if your packet is larger than the limit, part of it is unencrypted.
-
-For uncompressed data, only 40 bytes are encrypted. Why 40? Your guess is as good as mine.
 
 ### Compression Types
 
@@ -176,13 +186,20 @@ Why 0x02, 0x04, 0x06 instead of 0, 1, 2? Probably to avoid having 0x00 bytes in 
 
 Each encryption generation has a starting value for the iterator. These values are not cryptographically significant—they're just arbitrary starting points.
 
-| Generation | Iterator Start | In Hex | Notes |
-|------------|---------------|--------|-------|
-| GEN_1 | 0 | 0x0 | No encryption anyway |
-| GEN_2 | 0 | 0x0 | Still no encryption |
-| GEN_3 | 78,061,368 | 0x4A80B38 | Why this number? Lost to time. |
-| GEN_4 | 75,924,002 | 0x481C622 | See above. |
-| GEN_5 | 305,419,896 | 0x12345678 | At least this one is obviously arbitrary |
+From GServer-v2's `CEncryption.cpp`:
+```cpp
+const uint32_t CEncryption::ITERATOR_START[6] = {0, 0, 0x04A80B38, 0x4A80B38, 0x4A80B38, 0};
+```
+
+| Generation | Enum Index | Iterator Start | In Hex | Notes |
+|------------|------------|---------------|--------|-------|
+| GEN_1 | 0 | 0 | 0x0 | No encryption anyway |
+| GEN_2 | 1 | 0 | 0x0 | Still no encryption |
+| GEN_3 | 2 | 78,061,368 | 0x4A80B38 | Why this number? Lost to time. |
+| GEN_4 | 3 | 78,061,368 | 0x4A80B38 | Same as GEN_3 |
+| **GEN_5** | 4 | **78,061,368** | **0x4A80B38** | **Same as GEN_3/4** |
+
+Note: GEN_3, GEN_4, and GEN_5 all use the same iterator start value (0x4A80B38). The difference is in the algorithm—GEN_3 uses single-byte insertion, while GEN_4/5 use the LCG-based XOR method.
 
 These values were presumably chosen by someone in the early 2000s. The rationale is lost. If you get them wrong, your packets are garbage. Get them right, and don't ask questions.
 
@@ -192,54 +209,81 @@ The encryption key is typically set during the login handshake. Both client and 
 
 ## Implementation Examples
 
-### Python
+### Python (GEN_5)
 
 ```python
+import struct
+
 class Encryption:
-    def __init__(self, generation=5):
+    """GEN_5 encryption matching GServer-v2 CEncryption.cpp"""
+
+    # Iterator starting values by generation index
+    ITERATOR_START = [0, 0, 0x4A80B38, 0x4A80B38, 0x4A80B38, 0]
+    # Limits by compression type: {type: iterations}
+    LIMITS = {0x02: 0x0C, 0x04: 0x04, 0x06: 0x04}
+
+    def __init__(self, generation=4):  # GEN_5 is index 4
         self.key = 0
-        self.iterator = [0, 0, 0x4A80B38, 0x481C622, 0x12345678][generation]
-        self.limit = 0
+        self.iterator = self.ITERATOR_START[generation]
+        self.limit = -1  # -1 = unlimited
+        self.multiplier = 0x8088405
 
     def set_limit_from_compression(self, compression_type):
-        limits = {0x02: 40, 0x04: 4096, 0x06: 65536}
-        self.limit = limits.get(compression_type, 0)
+        self.limit = self.LIMITS.get(compression_type, -1)
 
     def decrypt(self, data):
         result = bytearray(data)
-        bytes_to_process = min(len(data), self.limit)
 
-        for i in range(bytes_to_process):
-            result[i] ^= (self.key + self.iterator) & 0xFF
-            self.iterator = (self.iterator + 1) & 0xFFFFFFFF
+        for i in range(len(data)):
+            if i % 4 == 0:
+                if self.limit == 0:
+                    break
+                self.iterator = (self.iterator * self.multiplier + self.key) & 0xFFFFFFFF
+                if self.limit > 0:
+                    self.limit -= 1
+
+            # XOR with corresponding byte of 32-bit iterator (little-endian)
+            iterator_bytes = struct.pack('<I', self.iterator)
+            result[i] ^= iterator_bytes[i % 4]
 
         return bytes(result)
 
     encrypt = decrypt  # XOR is its own inverse
 ```
 
-### JavaScript
+### JavaScript (GEN_5)
 
 ```javascript
 class Encryption {
-    constructor(generation = 5) {
+    // GEN_5 encryption matching GServer-v2 CEncryption.cpp
+    static ITERATOR_START = [0, 0, 0x4A80B38, 0x4A80B38, 0x4A80B38, 0];
+    static LIMITS = {0x02: 0x0C, 0x04: 0x04, 0x06: 0x04};
+    static MULTIPLIER = 0x8088405;
+
+    constructor(generation = 4) {  // GEN_5 is index 4
         this.key = 0;
-        this.iterator = [0, 0, 0x4A80B38, 0x481C622, 0x12345678][generation];
-        this.limit = 0;
+        this.iterator = Encryption.ITERATOR_START[generation];
+        this.limit = -1;  // -1 = unlimited
     }
 
     setLimitFromCompression(compressionType) {
-        const limits = {0x02: 40, 0x04: 4096, 0x06: 65536};
-        this.limit = limits[compressionType] || 0;
+        this.limit = Encryption.LIMITS[compressionType] ?? -1;
     }
 
     decrypt(data) {
         const result = new Uint8Array(data);
-        const bytesToProcess = Math.min(data.length, this.limit);
 
-        for (let i = 0; i < bytesToProcess; i++) {
-            result[i] ^= (this.key + this.iterator) & 0xFF;
-            this.iterator = (this.iterator + 1) >>> 0;  // Keep as unsigned 32-bit
+        for (let i = 0; i < data.length; i++) {
+            if (i % 4 === 0) {
+                if (this.limit === 0) break;
+                // LCG step (keep as unsigned 32-bit)
+                this.iterator = Math.imul(this.iterator, Encryption.MULTIPLIER);
+                this.iterator = (this.iterator + this.key) >>> 0;
+                if (this.limit > 0) this.limit--;
+            }
+
+            // XOR with corresponding byte of 32-bit iterator (little-endian)
+            result[i] ^= (this.iterator >>> (8 * (i % 4))) & 0xFF;
         }
 
         return result;
@@ -251,14 +295,22 @@ class Encryption {
 }
 ```
 
-### C++ (from GServer-v2)
+### C++ (from GServer-v2 CEncryption.cpp)
 
 ```cpp
-void CEncryption::decrypt(CString& buffer) {
-    int len = (m_limit < buffer.length()) ? m_limit : buffer.length();
+// GEN_4 and GEN_5 use the same algorithm
+void CEncryption::decrypt(CString& pBuf) {
+    const uint8_t* iterator = reinterpret_cast<const uint8_t*>(&m_iterator);
 
-    for (int i = 0; i < len; i++) {
-        buffer[i] ^= (m_key + m_iterator++);
+    for (int32_t i = 0; i < pBuf.length(); ++i) {
+        if (i % 4 == 0) {
+            if (m_limit == 0) return;
+            m_iterator *= 0x8088405;  // LCG multiplier
+            m_iterator += m_key;
+            if (m_limit > 0) m_limit--;
+        }
+
+        pBuf[i] ^= iterator[i % 4];
     }
 }
 ```
@@ -278,19 +330,51 @@ Let's be clear: this is not secure encryption. It's obfuscation.
 
 ## Common Implementation Errors
 
-1. **Wrong iterator start**: Each generation has a specific starting value. GEN_5 uses 0x12345678.
+1. **Wrong iterator start**: GEN_3, GEN_4, and GEN_5 all use `0x4A80B38`, not other values.
 
-2. **Forgetting the limit**: You must stop encrypting/decrypting after `limit` bytes.
+2. **Using simple increment**: GEN_4/5 use an LCG (`iterator = iterator * 0x8088405 + key`), NOT simple increment.
 
-3. **Wrong compression type handling**: The compression type byte determines the limit.
+3. **Wrong limit interpretation**: Limits are iteration counts (each iteration = 4 bytes), not raw byte counts.
 
-4. **Order of operations**: GEN_5 encrypts *after* compression. GEN_3 encrypts *after* decompression.
+4. **Forgetting the limit check**: You must stop after `limit` iterations.
 
-5. **Iterator overflow**: The iterator should wrap around at 32 bits (for GEN_5), but the key XOR only uses the low 8 bits.
+5. **Order of operations**: GEN_5 encrypts *after* compression. GEN_3 encrypts *after* decompression.
+
+6. **Wrong byte ordering**: The 32-bit iterator is accessed as little-endian bytes for XOR.
 
 ## Full Bundle Processing Example
 
 ```python
+import struct
+import zlib
+import bz2
+
+class Gen5Encryption:
+    """GEN_5 encryption matching GServer-v2"""
+    LIMITS = {0x02: 0x0C, 0x04: 0x04, 0x06: 0x04}
+
+    def __init__(self, key=0):
+        self.key = key
+        self.iterator = 0x4A80B38
+        self.limit = -1
+
+    def set_limit_from_compression(self, compression_type):
+        self.limit = self.LIMITS.get(compression_type, -1)
+
+    def decrypt(self, data):
+        result = bytearray(data)
+        for i in range(len(data)):
+            if i % 4 == 0:
+                if self.limit == 0:
+                    break
+                self.iterator = (self.iterator * 0x8088405 + self.key) & 0xFFFFFFFF
+                if self.limit > 0:
+                    self.limit -= 1
+            iterator_bytes = struct.pack('<I', self.iterator)
+            result[i] ^= iterator_bytes[i % 4]
+        return bytes(result)
+
+
 def process_incoming_bundle(raw_data, encryption):
     # Step 1: Extract compression type
     compression_type = raw_data[0]

@@ -8,11 +8,13 @@ The `serverside` option in `serveroptions.txt` controls whether the server autom
 
 ```ini
 # Determines whether the server handles certain things like signs and links.
-# Don't set to true.
-serverside = false
+# Enabled so the GS2/GS1 npc-server loads (drives NC NPC/class coverage).
+serverside = true
 ```
 
-**Default Value**: `true` (despite the comment suggesting otherwise)
+**Default Value**: `true` (`Server.cpp` reads `serverside` with `.value_or(true)`, and the
+shipped `serveroptions.txt` sets it to `true`). Enabling it loads the NPC server, which in
+turn changes whether links/signs are sent clientside — see the source reference below.
 
 ## How It Affects Level Links
 
@@ -53,15 +55,24 @@ When implementing level links in GMAP mode:
 
 ## GServer Source Code References
 
-From `PlayerClient.cpp`:
+From `PlayerClient.cpp` (current source, ~line 1450):
 ```cpp
-// Send links, signs, and mod time.
-if (!settings.getBool("serverside", false)) // TODO: NPC server check instead.
-{
-    pLevel->sendLinksToPlayer(shared_from_this());
-    pLevel->sendSignsToPlayer(shared_from_this());
-}
+// Send clientside links/signs only when there is NO NPC server
+// (or when explicitly forced, or on a bigmap segment).
+if (!m_server->hasNPCServer() || m_server->cached.forceClientsideLinks.getValue()
+        || (subLevel && subLevel->isOnBigMap))
+    staticLevelData->sendLinksToPlayer(self, false);
+
+if (!m_server->hasNPCServer() || m_server->cached.forceClientsideSigns.getValue())
+    staticLevelData->sendSignsToPlayer(self);
 ```
+
+> **Note**: The real gate is **whether an NPC server is loaded** (`hasNPCServer()`),
+> not the `serverside` config bool directly. They are correlated because enabling
+> `serverside` is what loads the NPC server — but the precise condition checked at
+> send time is `hasNPCServer()` (plus the `forceClientsideLinks/Signs` overrides and
+> the bigmap case). Older docs quoted a `getBool("serverside", false)` check that no
+> longer exists in source.
 
 From `LevelLink.cpp` (handling special values):
 ```cpp
@@ -74,13 +85,12 @@ if (m_destinationX == "-1")
 
 ## PyReborn Implementation
 
-PyReborn correctly handles this by:
-1. Checking `_check_level_links()` on every movement
-2. Logging when a link is touched
-3. Currently waiting for server to handle (needs client-side warp implementation)
+PyReborn handles this by:
+1. Checking level links on every movement (`client.py` edge-link detection + `game/actions.py`)
+2. Performing a client-side warp when a non-edge link is touched
+3. Treating GMAP edge links as automatic segment transitions rather than warps
 
 ## Recommendations
 
 - Servers should generally keep `serverside = true` unless they have custom level link handling
 - Clients should support both modes for maximum compatibility
-- The comment "Don't set to true" in serveroptions.txt appears to be incorrect
