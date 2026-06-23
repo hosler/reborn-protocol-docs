@@ -72,9 +72,9 @@ html_theme_options = {
 html_context = {
     "display_github": True,
     "github_user": "hosler",
-    "github_repo": "opengraal2",
-    "github_version": "main",
-    "conf_py_path": "/graal-protocol-docs/docs/",
+    "github_repo": "reborn-protocol-docs",
+    "github_version": "master",
+    "conf_py_path": "/docs/",
 }
 
 html_title = "Reborn Protocol Reference"
