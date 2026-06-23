@@ -96,44 +96,10 @@ See [Encryption Details](encryption.md) for implementation specifics.
 
 ## Data Encoding
 
-### G-Types (The Graal Types)
-
-All numeric values use "G-type" encoding, which adds 32 to ensure printable ASCII:
-
-| Type | Size | Max Value | Formula |
-|------|------|-----------|---------|
-| GCHAR | 1 byte | 223 | `value + 32` |
-| GSHORT | 2 bytes | 28,767 | 7-bit encoding + 32 per byte |
-| GINT | 3 bytes | 2,097,151 | 7-bit encoding + 32 per byte |
-| GINT5 | 5 bytes | 34 billion | 7-bit encoding + 32 per byte |
-
-See [Data Types](data-types.md) for encoding details and examples.
-
-### String Encoding
-
-There are **three** types of strings. This is important:
-
-1. **Regular String**: Reads to end of packet (no prefix, no terminator)
-2. **GSTRING**: Length-prefixed with GCHAR (max 223 chars)
-3. **Newline-Terminated**: Reads until 0x0A
-
-The term "gstring" is used inconsistently in various codebases. Always check the specific packet documentation.
-
-See [String Types](strings.md) for the full breakdown.
-
-## Coordinate System
-
-```
-1 tile = 16 pixels
-1 level = 64×64 tiles = 1024×1024 pixels
-```
-
-| Context | Unit | Range |
-|---------|------|-------|
-| Board/tile operations | Tiles | 0-63 |
-| Player movement | Half-tiles | 0-127 |
-| Precise positioning | Pixels | Variable |
-| GMAP world | Tiles + grid offset | See GMAP docs |
+The actual wire formats for numeric values, coordinates, and property widths live in
+[Data Types](data-types.md). String behavior is covered in [String Types](strings.md).
+The quick rule is simple: packet docs show the field layout, while `data-types.md`
+explains what each encoded width means.
 
 ## Quick Start: Minimal Client
 

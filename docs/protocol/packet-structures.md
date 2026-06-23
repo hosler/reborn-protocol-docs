@@ -57,22 +57,9 @@ Special case for raw data:
 
 ## Data Encoding Types
 
-### Reborn-Specific Encoding (G-Types)
-
-The protocol uses specialized encoding for efficient data transmission:
-
-- **GCHAR**: `char + 32` (ensures printable ASCII)
-- **GUCHAR**: `unsigned char + 32`
-- **GSHORT**: 7-bit shift encoding with +32 bias (2 bytes, max 28767)
-- **GUSHORT**: Same as GSHORT but for unsigned values
-- **GINT**: 3-byte encoding
-- **GINT4**: 4-byte encoding  
-- **GINT5/GUINT5**: 5-byte encoding for timestamps/large values
-
-### String Encoding
-
-- **GSTRING**: `[GCHAR: length][string_data]` - String with Graal-encoded length prefix
-- **Regular String**: Null-terminated or delimiter-terminated string
+The wire-format details for G-types, coordinate packing, and property widths live in
+[Data Types](data-types.md). This page stays focused on packet layouts; when a field width
+matters, follow the link rather than re-deriving it here.
 
 ## Client-to-Server Packets (PLI_*)
 
@@ -448,10 +435,9 @@ Player properties use the following format:
 ### Property Encodings by Type:
 
 > **Width discipline:** the single most common parser bug is using the wrong width for a
-> numeric prop and desyncing every property after it. The widths below are from
-> GServer-v2 `PropertySerializers.cpp` (the authoritative encoders) and are cross-checked
-> against pyReborn's corrected `parse_player_props`. `GINT3` = 3 bytes, `GSHORT` = 2 bytes,
-> `GINT5` = 5 bytes. **Do not assume "a count fits in a byte."**
+> numeric prop and desyncing every property after it. The canonical width table and the
+> cross-prop quirks are documented in [Data Types](data-types.md#player-property-data-types).
+> **Do not assume "a count fits in a byte."**
 
 **NICKNAME (0)**: `[GCHAR: length][string]`
 **MAXPOWER (1)**: `[GCHAR: hearts * 2]` (1 byte, half-hearts; 1 heart = 2)
@@ -783,25 +769,14 @@ Encryption is limited based on compression type:
 
 ## Data Type Reference
 
-| Type | Size | Description | Encoding |
-|------|------|-------------|----------|
-| GCHAR | 1 byte | Signed char + 32 | `(char)value + 32` |
-| GUCHAR | 1 byte | Unsigned char + 32 | `(unsigned char)value + 32` |
-| GSHORT | 2 bytes | 16-bit value (max 28767) | 7-bit shift encoding with +32 bias |
-| GUSHORT | 2 bytes | Unsigned 16-bit | Same as GSHORT |
-| GINT | 3 bytes | 24-bit value | Custom 3-byte encoding |
-| GINT4 | 4 bytes | 32-bit value | Custom 4-byte encoding |
-| GINT5/GUINT5 | 5 bytes | Large values/timestamps | Custom 5-byte encoding |
-| GSTRING | Variable | Length-prefixed string | `[GCHAR: len][string_data]` |
+See [Data Types](data-types.md) for the canonical encoding table, coordinate rules, and
+property-width notes.
 
 ## Implementation Notes
 
-1. **Byte Order**: All multi-byte values use little-endian encoding before G-encoding
-2. **String Termination**: Regular strings are null-terminated or delimiter-terminated
-3. **Coordinate System**: 
-   - Tiles: 64×64 grid (0-63)
-   - Half-tiles: 128×128 grid (0-127) 
-   - Pixels: Multiply half-tiles by 16
+1. **Byte Order**: Multi-byte primitive encoding is summarized in [Data Types](data-types.md)
+2. **String Termination**: String formats are documented in [String Types](strings.md)
+3. **Coordinate System**: Coordinate frames and GMAP packing live in [Data Types](data-types.md)
 4. **Error Handling**: Invalid packets should be ignored, not cause disconnection
 5. **Version Compatibility**: Some packets vary by client version (check version ID)
 

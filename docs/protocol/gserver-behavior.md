@@ -4,33 +4,8 @@ This document provides a quick reference for how GServer-v2 implements various p
 
 ## String Encoding
 
-### Three Types of Strings in GServer
-
-1. **Regular String (read to end of packet)**
-   ```cpp
-   CString level = packet.readString("");  // Empty delimiter = read to end
-   ```
-   - Used in: PLI_LEVELWARP, PLO_LEVELNAME, PLO_FILESENDFAILED
-   - No length prefix, no terminator
-   - Reads ALL remaining bytes in the packet
-   - **NOT** null-terminated despite what some old docs say
-
-2. **Length-Prefixed String (GSTRING)**
-   ```cpp
-   uint8_t length = packet.readGChar();
-   std::string text = packet.read(length);
-   ```
-   - Used in: Player properties, NPC properties, file packets
-   - First byte is length (encoded as GCHAR)
-   - Maximum length: 223 characters
-
-3. **Newline-Terminated String**
-   ```cpp
-   std::string text = packet.readString("\n");
-   ```
-   - Used in: Level links, some packet handlers
-   - Reads until newline (0x0A)
-   - Newline is consumed but not included
+The string forms used by GServer are documented in [String Types](strings.md). This page
+only calls out the packet handlers that use them.
 
 ## Critical Packet Implementations
 
@@ -52,10 +27,10 @@ HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
 }
 ```
 **Format**: `[GUCHAR: x][GUCHAR: y][STRING: level_name]`
-- X/Y are in tile coordinates (multiply by 8 for pixels)
+- X/Y are in tile coordinates; the wire-format details for coordinate packing live in
+  [Data Types](data-types.md#coordinates-a-field-guide)
 - Level name reads to end of packet
-- **Important**: read-to-end, **not** null-terminated (consistent with the string-type
-  rules above — the packet boundary / bundle newline delimits it, there is no `\x00`)
+- **Important**: read-to-end, **not** null-terminated
 
 ### PLO_LEVELNAME (6)
 ```cpp
@@ -67,7 +42,7 @@ sendPacket(CString() >> (char)PLO_LEVELNAME << map->getMapName());
 **Format**: `[STRING: level_name]`
 - Entire packet payload is the level name
 - No length prefix
-- **Important**: read-to-end, **not** null-terminated (no trailing `\x00`)
+- **Important**: read-to-end, **not** null-terminated
 
 ### PLO_PLAYERPROPS (9) / PLO_OTHERPLPROPS (8)
 Player properties use a special encoding:
@@ -75,15 +50,14 @@ Player properties use a special encoding:
 - Property data (varies by property)
 
 Special cases:
-- **HEADGIF (11)**: If byte < 100, it's a preset head id (no string). Otherwise byte-100 is the string length.
-- **SWORDPOWER (8)**: custom image form is `[power+30][img_len][image]` (power byte first, +30 bias).
-- **SHIELDPOWER (9)**: custom image form is `[power+10][img_len][image]` (note **+10**, not +30).
-- **X2/Y2 (78/79)**: Encoded as `(abs(pixels) << 1) | (negative ? 1 : 0)`, sent as GShort.
-- **GATTRIB1-30**: length-prefixed strings (`[GCHAR len][string]`), **not** flag-only props.
+- **HEADGIF (11)**: If byte < 100, it's a preset head id. Otherwise byte-100 is the string length.
+- **SWORDPOWER (8)**: custom image form is `[power+30][img_len][image]`.
+- **SHIELDPOWER (9)**: custom image form is `[power+10][img_len][image]`.
+- **X2/Y2 (78/79)**: See [Data Types](data-types.md#x2y2-encoding-the-weird-one).
+- **GATTRIB1-30**: length-prefixed strings, not flag-only props.
 
-See [Packet Structures: Player Properties](packet-structures.md#player-properties-pli_playerprops-data)
-for the full id/width table (props 0-83), and [NPC Properties](npc-properties.md) for the
-separate NPC enum.
+See [Data Types](data-types.md#player-property-data-types) for the full id/width table
+(props 0-83), and [NPC Properties](npc-properties.md) for the separate NPC enum.
 
 ### CString Operators
 
@@ -134,33 +108,14 @@ packet >> (char)PLO_BOARDMODIFY >> (char)x >> (char)y
 
 ## Coordinate Systems
 
-### Tile vs Pixel Coordinates
-- **Tiles**: 0-63 range, used for board positions
-- **Pixels**: Tiles * 16, used for precise positioning
-- **Wire format**: Often pixels/2 or pixels/8 depending on packet
-
-### GMAP Coordinates
-- **Local**: Position within current 64x64 segment
-- **World**: `gmaplevelx * 64 + localx` (in tiles)
-- **X2/Y2**: Always in pixels, can be negative (encoded with bit flag)
+Coordinate frames and the X2/Y2 packing live in [Data Types](data-types.md#coordinates-a-field-guide)
+and [Data Types](data-types.md#coordinate-frames-in-gmaps).
 
 ## Property Encoding
 
-### Numeric Properties
-- Most use GCHAR encoding (value + 32)
-- Larger values use GINT3 (3 bytes: RUPEES, CARRYNPC, KILLS, DEATHS, ONLINESECS, UDPPORT) or GINT5 (5 bytes: IPADDR, ONLINESECS2)
-- APCOUNTER (25) is GSHORT (2 bytes), not 1 byte — a common mis-width
-- Special offset: **Z property has a +50 offset** (`z_tile + 50`), not +25
-
-### String Properties
-- Length-prefixed with GCHAR
-- Maximum 223 characters
-- Common: nickname, chat, level name, guild
-
-### Special Encodings
-- **Colors**: 5 GCHARs (classic) or **8 GCHARs (new-world / v6.037)** — generation-dependent
-- **Sprite**: `(sprite << 2) | direction` — direction in lower 2 bits
-- **AP**: Alignment points, 100 units = full alignment
+The numeric widths, string forms, and special offsets are documented in
+[Data Types](data-types.md). The main implementation gotcha here is not the values
+themselves, but using the wrong width for a given property.
 
 ## Error Handling
 
@@ -180,20 +135,11 @@ Filename reads to end of packet.
 
 1. **Packet Boundaries**: Each packet is self-contained. "Read to end" means read to the end of the current packet, not the stream.
 
-2. **Null Characters**: Level names may contain nulls. The server doesn't strip them, but clients should handle them appropriately for display.
+2. **GMAP Mode**: When on a GMAP, PLO_LEVELNAME sends the GMAP name, not the segment name. Segment info comes from GMAP file parsing.
 
-3. **GMAP Mode**: When on a GMAP, PLO_LEVELNAME sends the GMAP name, not the segment name. Segment info comes from GMAP file parsing.
-
-4. **Version Differences**: Some behaviors change based on client version (e.g., GANI format, encryption type).
+3. **Version Differences**: Some behaviors change based on client version (e.g., GANI format, encryption type).
 
 ## Quick Reference Table
 
-| Packet | String Type | Notes |
-|--------|------------|-------|
-| PLI_LEVELWARP | Read to end | Level name after X,Y |
-| PLO_LEVELNAME | Read to end | Entire packet is name |
-| PLO_LEVELLINK | Newline-terminated | Link data as single string |
-| PLO_PRIVATEMESSAGE | GSTRING | Player ID, then length+message |
-| PLO_FILESENDFAILED | Read to end | Filename |
-| Player properties | GSTRING | Length-prefixed strings |
-| NPC properties | GSTRING | Length-prefixed strings |
+See [String Types](strings.md) for the packet-by-packet string forms, and
+[Data Types](data-types.md) for the width rules behind the property payloads.

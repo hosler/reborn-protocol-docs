@@ -2,8 +2,10 @@
 
 NPCs are serialized with their **own property enum** (`NPCProp`, from GServer-v2
 `server/include/object/NPC.h`'s `FOR_LIST_OF_NPC_PROPS` X-macro), with byte widths defined
-in `PropertySerializers.cpp`. This enum is **not** the same as the player property enum —
-sharing assumptions between them is the single biggest source of garbled NPC parsing.
+in `PropertySerializers.cpp`. The authoritative wire-width table now lives in
+[Data Types](data-types.md#npc-property-data-types). This enum is **not** the same as the
+player property enum — sharing assumptions between them is the single biggest source of
+garbled NPC parsing.
 
 ## Packet Framing
 
@@ -28,8 +30,9 @@ A parser that decodes NPC prop 5 as a direction/sprite byte, or 17 as a 1-byte s
 desync everything after it.
 
 ## Full NPCProp Table
-
 Widths from `PropertySerializers.cpp`; cross-checked against pyReborn `parse_npc_props`.
+For the canonical wire-width and encoding notes, see
+[Data Types](data-types.md#npc-property-data-types).
 
 | ID | Name | Wire encoding |
 |----|------|---------------|
@@ -78,12 +81,8 @@ Widths from `PropertySerializers.cpp`; cross-checked against pyReborn `parse_npc
 
 ### Variable-width props to watch
 
-The non-`PropertyString` string-ish props each have their own length scheme:
-
-- **SCRIPT (1)** — GSHORT length (2 bytes), not GCHAR.
-- **CLASS (74)** — `PropertyLongString`, GSHORT length (2 bytes).
-- **IMAGEPART (34)** — fixed 6 bytes (`gshort x, gshort y, gchar w, gchar h`).
-- **HURTDXDY (16)** — fixed 2 bytes.
+The non-`PropertyString` string-ish props each have their own length scheme. The wire
+formats are summarized in [Data Types](data-types.md#npc-property-data-types).
 
 ### Server-internal props (48-52)
 

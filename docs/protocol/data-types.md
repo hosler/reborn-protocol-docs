@@ -187,10 +187,12 @@ def decode_gint5(data):
 | Type | Size | Max Value | Decode Formula |
 |------|------|-----------|----------------|
 | GCHAR | 1 byte | 223 | `byte - 32` |
+| GUCHAR | 1 byte | 223 | `byte - 32` |
 | GSHORT | 2 bytes | 28,767 | `(b1 << 7) + b2 - 0x1020` |
+| GUSHORT | 2 bytes | 28,767 | same as `GSHORT` |
 | GINT / GINT3 | 3 bytes | 3,682,399 | `((b1 << 7) + b2 << 7) + b3 - 0x81020` |
 | GINT4 | 4 bytes | 471,347,295 | byte-shift, bias `0x4081020` |
-| GINT5 | 5 bytes | 4,294,967,295 | 7-bit unpack, subtract 32 each |
+| GINT5 / GUINT5 | 5 bytes | 4,294,967,295 | 7-bit unpack, subtract 32 each |
 
 > **Naming note:** GServer's `CString` exposes `writeGInt`/`readGInt` for the **3-byte**
 > type. Throughout this documentation "GINT" and "GINT3" are the same thing.
@@ -250,6 +252,29 @@ def decode_x2y2(gshort_value):
     return pixels / 16.0  # Convert to tiles
 ```
 
+### Coordinate Frames in GMAPs
+
+The wire format often uses **local segment coordinates** even when the client is on a GMAP.
+
+| Frame | Meaning | Common use |
+|-------|---------|------------|
+| Local | Position inside the current 64×64 segment | `PLO_PLAYERPROPS` X/Y and X2/Y2 |
+| World | Position across the full GMAP | client-side reconstruction |
+| Segment | GMAP grid column/row | `GMAPLEVELX` / `GMAPLEVELY` |
+
+Conversions:
+
+```text
+world_x = local_x + gmaplevelx * 64
+world_y = local_y + gmaplevely * 64
+
+grid = floor(world / 64)
+local = world % 64
+```
+
+`X2/Y2/Z2` use the signed pixel packing above. The NPC equivalents use the same GSHORT
+encoding.
+
 ## Player Property Data Types
 
 ### Colors (5 or 8 bytes)
@@ -287,6 +312,69 @@ Format: GCHAR
 Range: 0-100
 Values: 0 = evil, 20 = neutral, 100 = good
 ```
+
+### Other Common Player Encodings
+
+| Field | Encoding | Notes |
+|-------|----------|-------|
+| `STATUS` | GCHAR bitfield | `PAUSED`, `HIDDEN`, `MALE`, `DEAD`, `ALLOWWEAPONS`, `HIDESWORD`, `HASSPIN` |
+| `COLORS` | 5 or 8 GCHARs | Classic mode uses 5 bytes; new-world/v6.037 uses 8 |
+| `X2`, `Y2`, `Z2` | GSHORT | Signed pixel values packed with the low-bit sign flag |
+| `ONLINESECS` | GINT3 | 3-byte online time counter |
+| `ONLINESECS2` | GINT5 | 5-byte online time counter |
+| `IPADDR` | GINT5 | Packed integer, not raw octets |
+| `TEXTCODEPAGE` | GINT3 | 3-byte code page value |
+
+## NPC Property Data Types
+
+NPCs use a separate property enum and several width quirks that are easy to misread. The
+full semantic table lives in [NPC Properties](npc-properties.md); this section covers the
+wire widths.
+
+| ID(s) | Field | Encoding | Notes |
+|-------|-------|----------|-------|
+| 0 | IMAGE | GCHAR length + string | Length-prefixed image name |
+| 1 | SCRIPT | GSHORT length + raw bytes | Modern servers may send length 0 |
+| 2-3 | X/Y | GCHAR | Tile coordinates encoded as Graal chars |
+| 4 | POWER | GCHAR | Hit points in half-hearts |
+| 5 | RUPEES | GINT3 | 3-byte value, not a direction byte |
+| 6-7 | ARROWS/BOMBS | GCHAR | Single-byte counts |
+| 8-11 | SWORD/SHIELD/POWER IMAGE | Variable | Same power+image rules as player props |
+| 12 | GANI | GCHAR length + string | Animation name |
+| 13-14 | VISFLAGS/BLOCKFLAGS | GCHAR bitfields | Packed flags |
+| 15 | MESSAGE | GCHAR length + string | Chat text |
+| 16 | HURTDXDY | 2 GCHARs | Packed x/y knockback offsets |
+| 17 | ID | GINT3 | NPC identifier |
+| 18 | SPRITE | GCHAR | Sprite + direction packed into one byte |
+| 19 | COLORS | 5 or 8 GCHARs | Same generation split as player colors |
+| 20-22 | NICKNAME/HORSEIMAGE/HEADIMAGE | Variable | `HEADIMAGE` uses the preset-id threshold of 100 |
+| 23-32 | SAVE0-SAVE9 | GCHAR | Single-byte save slots |
+| 33 | ALIGNMENT | GCHAR | AP value |
+| 34 | IMAGEPART | GSHORT/GSHORT/GCHAR/GCHAR | Fixed 6-byte rectangle |
+| 35 | BODYIMAGE | GCHAR length + string | Body image filename |
+| 36-40 | GATTRIB1-5 | GCHAR length + string | Custom strings |
+| 41-43 | GMAPLEVELX/Y, Z | GCHAR | GMAP segment and Z offset |
+| 44-47 | GATTRIB6-9 | GCHAR length + string | Custom strings |
+| 48-52 | Server-internal | Various | Not sent to game clients |
+| 53-73 | GATTRIB10-30 | GCHAR length + string | Custom strings |
+| 74 | CLASS | GSHORT length + string | Long string |
+| 75-77 | X2/Y2/Z2 | GSHORT | Signed pixel coordinates |
+
+See [NPC Properties](npc-properties.md) for the meaning of each field and the server-side
+exceptions.
+
+## Common Packet Field Patterns
+
+These patterns show up repeatedly in the packet docs and are defined here for reference.
+
+| Pattern | Meaning | Notes |
+|---------|---------|-------|
+| Read-to-end string | Raw bytes until packet end | Used for `PLI_LEVELWARP`, `PLO_LEVELNAME`, `PLO_FILESENDFAILED`, and similar fields |
+| Newline-terminated string | Raw bytes until `0x0A` | Used by `PLO_LEVELLINK` and some server-side text payloads |
+| GCHAR length + string | Length-prefixed string | Maximum 223 bytes |
+| GINT3 length | 3-byte count | Used for raw-data packet lengths and several counters |
+| GINT5 length | 5-byte count | Used for timestamps, file sizes, and large counters |
+| Packed coordinate byte | Graal char with unit-specific scaling | Common for tile, half-tile, and pixel fields |
 
 ## Time Types
 
