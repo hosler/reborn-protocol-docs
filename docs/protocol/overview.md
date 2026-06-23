@@ -31,10 +31,12 @@ The Reborn protocol supports multiple connection types:
 | Type | Purpose | Encryption | Notes |
 |------|---------|------------|-------|
 | **Game Client** | Standard players | GEN_5 | Most common |
-| **RC (Remote Control)** | Server administration | GEN_5 | Admin access |
-| **NC (NPC Control)** | Content management | GEN_5 | NPC scripting |
-| **NPC-Server** | Dedicated NPC server | Varies | V8 scripting engine |
-| **Listserver** | Server discovery | Minimal | Login/server list |
+| **RC (Remote Control)** | Server administration | GEN_5 (RC2) / GEN_2 (legacy RC) | Admin access |
+| **NC (NPC Control)** | Content management | **GEN_2** | NPC scripting; no key byte |
+| **NPC-Server** | Dedicated NPC server | Varies | GS1/GS2 (V8 optional) |
+| **Listserver** | Server discovery | GEN_2 | Login/server list |
+
+See [RC & NC Protocols](rc-nc-protocols.md) for the admin sub-protocol login handshakes.
 
 ### The Bundle System
 
@@ -83,7 +85,7 @@ The protocol has evolved through multiple "generations" of encryption:
 | Gen | Encryption | Compression | Use |
 |-----|------------|-------------|-----|
 | GEN_1 | None | None | Ancient |
-| GEN_2 | None | Zlib | Ancient |
+| GEN_2 | None | Zlib | Live: NC + listserver |
 | GEN_3 | Weak XOR | Zlib | Legacy |
 | GEN_4 | Weak XOR | BZ2 | Legacy |
 | **GEN_5** | **Weak XOR** | **Multi** | **Current** |

@@ -1,6 +1,6 @@
 # Reborn Protocol Documentation
 
-[![Documentation Status](https://readthedocs.org/projects/reborn-protocol/badge/?version=latest)](https://reborn-protocol.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/reborn-protocol-docs/badge/?version=latest)](https://reborn-protocol-docs.readthedocs.io/en/latest/?badge=latest)
 
 Comprehensive documentation for the Reborn protocol, providing detailed packet structure specifications, encoding formats, and implementation guidelines for developers working with Reborn servers and clients.
 
@@ -43,7 +43,7 @@ open _build/html/index.html
 
 ## Online Documentation
 
-The documentation is automatically built and hosted at: **https://reborn-protocol.readthedocs.io/**
+The documentation is automatically built and hosted at: **https://reborn-protocol-docs.readthedocs.io/**
 
 ## Contributing
 

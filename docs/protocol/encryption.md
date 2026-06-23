@@ -99,7 +99,7 @@ The protocol supports multiple "generations" of encryption. Each subsequent gene
 | Generation | Encryption | Compression | Status |
 |------------|------------|-------------|--------|
 | GEN_1 (0) | None | None | Ancient history |
-| GEN_2 (1) | None | Zlib | Also ancient |
+| GEN_2 (1) | None | Zlib | **Live: NC clients + listserver** |
 | GEN_3 (2) | Single byte XOR | Zlib | Legacy |
 | GEN_4 (3) | Partial XOR | BZ2 | Less legacy |
 | **GEN_5 (4)** | **Partial XOR** | **Multi** | **Current standard** |
@@ -121,6 +121,35 @@ Recv: Decompress → Decrypt individual packets → Parse
 ```
 
 GEN_5 encrypts the *compressed bundle*. GEN_3 encrypts the *decompressed packets*. Getting this wrong means nothing works.
+
+## ENCRYPT_GEN_2: The NC / Listserver Format
+
+GEN_2 is not just "ancient history" — it is the **live** encryption for two current
+connection types: **NC (NPC Control)** clients and **listserver** communication. If you
+implement an NC client, you implement GEN_2.
+
+GEN_2 is the simplest format:
+
+```
+[uint16 big-endian length][zlib-compressed bundle]
+```
+
+- **No per-packet/partial encryption.** GEN_2's encrypt/decrypt is a no-op. The "encryption"
+  is purely the zlib wrapping.
+- **No compression-type byte.** Unlike GEN_5, there is no leading `0x02/0x04/0x06` — the
+  payload is *always* zlib. (A tolerant reader may fall back to treating the body as raw if
+  zlib inflation fails.)
+- **The login packet omits the encryption-key byte.** The server reads the key byte only
+  when `gen > ENCRYPT_GEN_3`. Since GEN_2 < GEN_3, NC/listserver logins do **not** send it.
+- The decompressed bundle is the usual `[id+32][body]\n` packet stream.
+
+This is why an NC client cannot share the GEN_5 codec path: it must swap to a GEN_2 codec
+(zlib-frame in/out, no key byte, no compression byte) before login. See
+[RC & NC Protocols](rc-nc-protocols.md) for the full NC login handshake.
+
+> RC is the other admin protocol but does **not** use GEN_2: modern **RC2** clients use
+> GEN_5 (with the key byte and compression byte, exactly like a game client). Only the
+> legacy `PLTYPE_RC` and `PLTYPE_NC` paths use GEN_2.
 
 ## ENCRYPT_GEN_5: The Details
 

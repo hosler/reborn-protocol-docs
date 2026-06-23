@@ -95,9 +95,12 @@ Functionally equivalent. Note the GATTRIB property range (37–74) is
 
 ## 🚫 Remaining Gaps
 
-### 1. NC content management — partial/unverified
-`nc_client.py` exists; the breadth of NPC/class management coverage is not
-verified. (RC administration is now fully handled in `rc_client.py`.)
+### 1. NC content management — now verified
+`nc_client.py` is complete and byte-validated against a GS2 npc-server: all NC
+PLI builders match the server wire format and the NC PLO family is parsed
+(`--coverage-nc`). NC uses **ENCRYPT_GEN_2** (`Protocol.use_gen2`), not GEN_5.
+RC administration is fully handled in `rc_client.py` (`--coverage-rc`). See
+[RC & NC Protocols](../protocol/rc-nc-protocols.md).
 
 ### 2. Inbound enhanced packets — partial
 - The client sends `PLI_SHOOT2`; inbound `PLO_SHOOT2` handling is unverified.
@@ -120,7 +123,7 @@ remaining duplication is between `listserver.py` and the shared library.
 | Packet IDs | High | From shared `reborn_protocol.constants` |
 | Bundle Structure | Correct | Big-endian `>H` framing |
 | Compression | Correct | uncompressed / zlib / bz2 |
-| Encryption | Correct | Matches GServer-v2 (shared lib) |
+| Encryption | Correct | GEN_5 matches GServer-v2 (shared lib); GEN_2 for NC/listserver |
 | G-Type Encoding | Correct | Shared `PacketReader`/`PacketBuilder` |
 | Client Packets | High | RC sends + most PLI implemented |
 | Server Packets | High | Sign/explosion/hitobjects/board-layer/minimap/bigmap/ghostmode/rpgwindow handled |

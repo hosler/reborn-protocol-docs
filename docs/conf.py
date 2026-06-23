@@ -26,8 +26,8 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 source_suffix = {
-    '.rst': None,
-    '.md': None,
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
 }
 
 # -- Options for HTML output -------------------------------------------------
@@ -49,6 +49,11 @@ myst_enable_extensions = [
     "substitution",
     "tasklist",
 ]
+
+# Generate anchors for headings (h1-h4) so cross-document `file.md#heading`
+# links resolve. Without this, MyST emits no heading ids and every such link
+# silently 404s.
+myst_heading_anchors = 4
 
 # -- Theme options -----------------------------------------------------------
 html_theme_options = {

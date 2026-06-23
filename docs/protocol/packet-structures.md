@@ -190,7 +190,7 @@ Property format:
 ```
 [GUCHAR: tile_x]     // X position (in half-tiles)
 [GUCHAR: tile_y]     // Y position (in half-tiles)
-[GUCHAR: item_type]  // Item type (0-5: various items)
+[GUCHAR: item_id]    // NUMERIC LevelItemType id (0-24) — see PLO_ITEMADD table
 ```
 
 ### PLI_ITEMDEL (13) - Remove Item
@@ -447,10 +447,16 @@ Player properties use the following format:
 
 ### Property Encodings by Type:
 
+> **Width discipline:** the single most common parser bug is using the wrong width for a
+> numeric prop and desyncing every property after it. The widths below are from
+> GServer-v2 `PropertySerializers.cpp` (the authoritative encoders) and are cross-checked
+> against pyReborn's corrected `parse_player_props`. `GINT3` = 3 bytes, `GSHORT` = 2 bytes,
+> `GINT5` = 5 bytes. **Do not assume "a count fits in a byte."**
+
 **NICKNAME (0)**: `[GCHAR: length][string]`
-**MAXPOWER (1)**: `[GCHAR: hearts * 2]` (1 heart = 2 power)
-**CURPOWER (2)**: `[GCHAR: current_power]`
-**RUPEESCOUNT (3)**: `[GUINT: rupee_count]`
+**MAXPOWER (1)**: `[GCHAR: hearts * 2]` (1 byte, half-hearts; 1 heart = 2)
+**CURPOWER (2)**: `[GCHAR: current_power]` (1 byte, half-hearts)
+**RUPEESCOUNT (3)**: `[GINT3: rupee_count]` (**3 bytes**, not 1)
 **ARROWSCOUNT (4)**: `[GCHAR: arrow_count]`
 **BOMBSCOUNT (5)**: `[GCHAR: bomb_count]`
 **GLOVEPOWER (6)**: `[GCHAR: glove_power]` (0-3)
@@ -462,15 +468,20 @@ Player properties use the following format:
 >
 > These properties change format based on their value:
 >
-> **SWORDPOWER**:
-> - If power ≤ 4: Just `[GCHAR: power]` (1 byte)
-> - If power > 4: `[GCHAR: length][GCHAR: power+30][STRING: image]` (custom sword image)
+> **SWORDPOWER** (`PropertySwordPower`):
+> - power `0` → `[GCHAR: 0]`
+> - power 1-4 with **no** custom image → `[GCHAR: power]` (1 byte)
+> - otherwise → `[GCHAR: power+30][GCHAR: img_len][STRING: image]` — the **power byte comes
+>   first**, biased by **+30**, then the length-prefixed image name
 >
-> **SHIELDPOWER**:
-> - If power ≤ 3: Just `[GCHAR: power]` (1 byte)
-> - If power > 3: `[GCHAR: length][GCHAR: power+30][STRING: image]` (custom shield image)
+> **SHIELDPOWER** (`PropertyShieldPower`):
+> - power `0` → `[GCHAR: 0]`
+> - power 1-3 with **no** custom image → `[GCHAR: power]` (1 byte)
+> - otherwise → `[GCHAR: power+10][GCHAR: img_len][STRING: image]` — note the bias is
+>   **+10** here, not +30 like the sword
 >
-> Yes, the format changes based on the value. Yes, you need to handle both cases.
+> Yes, the format changes based on the value. Yes, the power byte precedes the length.
+> Yes, sword and shield use different biases.
 **GANI (10)**: `[GCHAR: length][string]` - Animation file
 **HEADIMAGE (11)**: Variable format (see below) — *also called HEADGIF in some older docs*
 
@@ -487,29 +498,29 @@ Player properties use the following format:
 > This was a reasonable assumption in 1999.
 **CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble
 **COLORS (13)**: `[8 bytes: color_data]` (new-world / v6.037) or `[5 bytes]` (classic) - Player colors. The reborn stack targets v6.037, so **8 bytes** here. Each byte is a palette index (+32 encoded).
-**ID (14)**: `[GUSHORT: player_id]`
-**X (15)**: `[GCHAR: pixel_x / 2]` - X position
-**Y (16)**: `[GCHAR: pixel_y / 2]` - Y position
-**SPRITE (17)**: `[GCHAR: sprite_index]` - Current animation frame
+**ID (14)**: `[GSHORT: player_id]` (2 bytes)
+**X (15)**: `[GCHAR: x * 2]` - X position in **half-tiles** (tile = value/2). *Not* pixels/2.
+**Y (16)**: `[GCHAR: y * 2]` - Y position in **half-tiles** (tile = value/2)
+**SPRITE (17)**: `[GCHAR: (sprite << 2) | direction]` - direction = low 2 bits, sprite/frame = rest
 **STATUS (18)**: `[GCHAR: status_flags]` - Player status bits
 **CARRYSPRITE (19)**: `[GCHAR: carry_sprite]` - Carried object sprite
 **CURLEVEL (20)**: `[GCHAR: length][string]` - Current level name
 **HORSEGIF (21)**: `[GCHAR: length][string]` - Horse image
 **HORSEBUSHES (22)**: `[GCHAR: bush_count]` - Bushes eaten by horse
 **EFFECTCOLORS (23)**: Variable - `[GCHAR: first]`; if `first == 0` the prop is just that 1 byte, otherwise 5 bytes total (`first` + 4 color bytes). Visual effect colors (RGBA tint)
-**CARRYNPC (24)**: `[GUINT: npc_id]` - Carried NPC ID
-**APCOUNTER (25)**: `[GCHAR: ap_time]` - AP recovery counter
+**CARRYNPC (24)**: `[GINT3: npc_id]` (**3 bytes**) - Carried NPC ID
+**APCOUNTER (25)**: `[GSHORT: ap_time]` (**2 bytes** — not 1) - AP recovery counter
 **MAGICPOINTS (26)**: `[GCHAR: mp_count]` - Magic points
-**KILLSCOUNT (27)**: `[GUINT: kill_count]` - Player kills
-**DEATHSCOUNT (28)**: `[GUINT: death_count]` - Player deaths
-**ONLINESECS (29)**: `[GUINT: online_time]` - Online time in seconds
-**IPADDR (30)**: `[5 bytes: ip_address]` - Player IP address
-**UDPPORT (31)**: `[GUSHORT: udp_port]` - UDP port
+**KILLSCOUNT (27)**: `[GINT3: kill_count]` (**3 bytes**) - Player kills
+**DEATHSCOUNT (28)**: `[GINT3: death_count]` (**3 bytes**) - Player deaths
+**ONLINESECS (29)**: `[GINT3: online_time]` (**3 bytes**) - Online time in seconds
+**IPADDR (30)**: `[GINT5: ip_address]` (**5 bytes**) - IP as a packed gint5 integer, *not* 5 raw octets
+**UDPPORT (31)**: `[GINT3: udp_port]` (**3 bytes** — not GSHORT) - UDP port
 **ALIGNMENT (32)**: `[GCHAR: ap_value]` - Alignment Points
 **ADDITFLAGS (33)**: `[GCHAR: flags]` - Additional player flags
 **ACCOUNTNAME (34)**: `[GCHAR: length][string]` - Account name
 **BODYIMG (35)**: `[GCHAR: length][string]` - Body image
-**RATING (36)**: `[GINT3: packed_rating]` (3 bytes) - ELO rating + deviation packed into a single gInt3 (`PropertyEloRating`). Not two floats.
+**RATING (36)**: `[GINT3: packed_rating]` (3 bytes) - ELO rating + deviation packed into a single gint3 (`PropertyEloRating`), `(rating & 0xFFF) << 9 | (deviation & 0x1FF)`. Not two floats.
 
 > ⚠️ **PROP NUMBERING IS NOT CONTIGUOUS** - props 37-74
 >
@@ -518,22 +529,43 @@ Player properties use the following format:
 | Prop # | Name | Format |
 |--------|------|--------|
 | 37-41 | GATTRIB1-5 | `[GCHAR: length][string]` |
-| 42 | ATTACHNPC | `[GINT3: npc_id]` - attached NPC |
-| 43 | GMAPLEVELX | `[GCHAR: gmap_x]` - GMAP level X (segment) |
-| 44 | GMAPLEVELY | `[GCHAR: gmap_y]` - GMAP level Y (segment) |
-| 45 | Z | `[GCHAR: (z_pos + 50)]` - Z position |
+| 42 | ATTACHNPC | `[GCHAR: type][GINT3: npc_id]` (**4 bytes** — a type byte then a 3-byte id, *not* a bare gint3) |
+| 43 | GMAPLEVELX | `[GCHAR: gmap_x]` - GMAP segment column |
+| 44 | GMAPLEVELY | `[GCHAR: gmap_y]` - GMAP segment row |
+| 45 | Z | `[GCHAR: (z_tile + 50)]` - Z position in **tiles** + 50, clamped [-50,170] |
 | 46-49 | GATTRIB6-9 | `[GCHAR: length][string]` |
-| 50 | JOINLEAVELVL | join/leave-level flag |
-| 51 | PCONNECTED | connected flag |
-| 52 | PLANGUAGE | `[GCHAR: length][string]` - client language |
-| 53 | PSTATUSMSG | `[GCHAR: length][string]` - status message |
+| 50 | JOINLEAVELVL | `[GCHAR]` join/leave-level flag |
+| 51 | DISCONNECT | **`PropertyVoid` — 0 bytes** (no payload). *Not* a "connected" flag byte. |
+| 52 | LANGUAGE | `[GCHAR: length][string]` - client language |
+| 53 | PLAYERLISTSTATUS | **`[GCHAR]` — a single status byte, NOT a string** |
 | 54-74 | GATTRIB10-30 | `[GCHAR: length][string]` |
+| 75 | OSTYPE | `[GCHAR: length][string]` - client OS |
+| 76 | TEXTCODEPAGE | `[GINT3]` (3 bytes) |
+| 77 | ONLINESECS2 | `[GINT5]` (5 bytes) |
+| 78 | X2 | `[GSHORT]` (2 bytes) high-precision X pixel coord — see X2/Y2 encoding below |
+| 79 | Y2 | `[GSHORT]` (2 bytes) high-precision Y pixel coord |
+| 80 | Z2 | `[GSHORT]` (2 bytes) high-precision Z pixel coord |
+| 81 | PLAYERLISTCATEGORY | `[GCHAR]` (1 byte) |
+| 82 | COMMUNITYNAME | `[GCHAR: length][string]` |
+| 83 | UNKNOWN83 | `[GINT5]` (client reads 5 bytes) |
 
-A parser that treats 37-74 as one flat GATTRIB block will misalign every subsequent property.
+A parser that treats 37-74 as one flat GATTRIB block will misalign every subsequent
+property. Likewise, props **51** (void) and **53** (1 byte, not a string) are the two that
+most often desync a naive parser.
+
+**X2/Y2/Z2 (78/79/80)** are the high-precision pixel coordinates used on GMAPs and for
+sub-tile positions. Each is a GSHORT carrying `value = (abs(pixels) << 1) | (negative ? 1 : 0)`.
+Decode: `pixels = value >> 1; if (value & 1) pixels = -pixels;` then `tiles = pixels / 16`.
+See [Data Types: X2/Y2 Encoding](data-types.md#x2y2-encoding-the-weird-one).
 
 ## Remote Control Packets (PLI_RC_*)
 
 These packets are used by RC (Remote Control) clients for server administration.
+
+> **For the complete, byte-validated RC and NC reference** — including the login handshakes,
+> the GEN_2 vs GEN_5 distinction, the full PLI/PLO tables, and the `getPropsForRCPacket`
+> blob layout — see [RC & NC Protocols](rc-nc-protocols.md). The entries below are a quick
+> subset.
 
 ### PLI_RC_SERVEROPTIONSGET (51) - Get Server Options
 **Trigger**: RC requests server configuration
@@ -817,32 +849,90 @@ PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is
 ### PLO_BADDYPROPS (2) - Baddy Properties
 **Trigger**: Baddy properties change or player enters level
 ```
-[GCHAR: baddy_id]    // Baddy identifier
-[BADDY_PROPS...]     // Variable baddy property data
+[GCHAR: baddy_id]    // Baddy identifier (leading byte)
+[GCHAR: prop_id][value...] ...   // sequence of prop pairs
 ```
+
+Baddy props use their **own** `BaddyProp` enum (GServer `LevelBaddy`), distinct from
+player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the leading byte):
+
+| ID | Name | Payload |
+|----|------|---------|
+| 0 | ID | *(the leading byte; not repeated)* |
+| 1 | X | `[GCHAR]` position.x()/8 (half-tile units) |
+| 2 | Y | `[GCHAR]` position.y()/8 |
+| 3 | TYPE | `[GCHAR]` baddy type id |
+| 4 | POWERIMAGE | `[GCHAR: power][GCHAR: img_len][image]` — power byte **then** length-prefixed image |
+| 5 | MODE | `[GCHAR]` BaddyMode |
+| 6 | ANI | `[GCHAR]` animation index |
+| 7 | DIR | `[GCHAR]` `(headDirection << 2) | direction` |
+| 8 | VERSESIGHT | `[GCHAR: len][string]` |
+| 9 | VERSEHURT | `[GCHAR: len][string]` |
+| 10 | VERSEATTACK | `[GCHAR: len][string]` |
+
+> Note prop **4 (POWERIMAGE)** is a power byte followed by a length-prefixed image string —
+> a common mis-parse is to read power as a bare byte and lose sync. pyReborn reliably reads
+> ID/X/Y/TYPE; clients that only need the type can stop after prop 3.
 
 ### PLO_NPCPROPS (3) - NPC Properties  
 **Trigger**: NPC properties change or player enters level
 ```
-[GUINT: npc_id]      // NPC identifier
-[NPC_PROPS...]       // Variable NPC property data
+[GINT3: npc_id]      // NPC identifier (3 bytes)
+[GCHAR: prop_id][payload]...   // NPC property pairs (their OWN enum, not player props)
 ```
+
+> NPCs use a **distinct `NPCProp` enum** — prop 5 is RUPEES (not a direction), 17 is ID,
+> 75/76/77 are X2/Y2/Z2. See the full table in [NPC Properties](npc-properties.md).
 
 ### PLO_LEVELCHEST (4) - Level Chest
 **Trigger**: Player opens chest or enters level with chests
 ```
-[GCHAR: state]       // 0=closed, 1=opened
-[GCHAR: tile_x]      // Chest X coordinate
-[GCHAR: tile_y]      // Chest Y coordinate
+[GCHAR: opened]      // 1 = already opened by this account, 0 = unopened
+[GCHAR: tile_x]      // Chest X coordinate (WHOLE tiles, 0-63)
+[GCHAR: tile_y]      // Chest Y coordinate (WHOLE tiles, 0-63)
+// present ONLY when opened == 0 (unopened chest announced on level entry):
+[GCHAR: item_id]     // LevelItemType numeric id (see PLO_ITEMADD table)
+[GCHAR: sign_index]  // associated sign index
 ```
+**Two forms**:
+- **3-byte form** (`opened == 1`): an already-opened chest, or the response to the player
+  opening a chest. No trailing item/sign.
+- **5-byte form** (`opened == 0`): an unopened chest announced on level entry, carrying the
+  reward `item_id` and `sign_index`.
+
+> Coordinates are **whole tiles**, not half-tiles. `PLI_OPENCHEST` must echo the same
+> whole-tile coords or the server won't match the chest.
 
 ### PLO_LEVELSIGN (5) - Level Sign
 **Trigger**: Player enters level with signs
 ```
-[GCHAR: tile_x]      // Sign X coordinate
-[GCHAR: tile_y]      // Sign Y coordinate
-[STRING: sign_text]  // Sign text content
+[GCHAR: tile_x]      // Sign X coordinate (WHOLE tiles, 0-63)
+[GCHAR: tile_y]      // Sign Y coordinate (WHOLE tiles, 0-63)
+[ENCODED_TEXT...]    // Graal sign-encoded text, to end of packet (NOT plain ASCII!)
 ```
+
+> ⚠️ **The sign text is NOT plain ASCII.** It is encoded with a custom alphabet + a
+> button-symbol escape table (`encodeSign`/`decodeSign` in GServer `LevelSign.cpp`). Each
+> encoded byte is `alphabet_index + 32` (a GCHAR). Reading it as a raw string gives
+> garbage.
+
+**Decoding**: for each byte, `code = byte - 32`. If `code` is in the symbol code-table
+(`ctab`), emit `#` followed by the mapped button symbol; otherwise emit `signAlphabet[code]`.
+Literal `#K` (code 13) sequences are stripped.
+
+**Sign alphabet** (`signText`, verbatim — index 0 = 'A'):
+```
+ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?-.,#>()#####"####':/~&### <####;\n
+```
+
+**Button-symbol escape tables**:
+```
+signSymbols = "ABXYudlrhxyz#4."
+ctablen     = {1,1,1,1,1,1,1,1,2,1,1,1,2,2,1}
+ctabindex   = {0,1,2,3,4,5,6,7,8,10,11,12,13,15,17}
+ctab        = {91,92,93,94,77,78,79,80,74,75,71,72,73,86,86,87,88,67}
+```
+`signSymbols` are controller/keyboard glyphs (A/B/X/Y buttons, u/d/l/r dpad, etc.).
 
 ### PLO_LEVELNAME (6) - Level Name
 **Trigger**: Player enters level
@@ -969,10 +1059,27 @@ PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is
 ### PLO_ITEMADD (22) - Item Added
 **Trigger**: Item is dropped or spawned
 ```
-[GCHAR: tile_x]      // X position
-[GCHAR: tile_y]      // Y position
-[GCHAR: item_type]   // Item type (0-5)
+[GCHAR: x * 2]       // X position (half-tiles; tile = value/2)
+[GCHAR: y * 2]       // Y position (half-tiles)
+[GCHAR: item_id]     // NUMERIC LevelItemType id (0-24), NOT a length-prefixed string
 ```
+
+> `item_id` is a single numeric byte, mapped through the `LevelItemType` table below — it is
+> **not** a string. (`PLI_ITEMADD (12)` uses the same `[x*2][y*2][item_id]` layout.)
+
+**LevelItemType table** (`LevelItem.h`, index = id):
+
+| id | name | id | name | id | name |
+|----|------|----|------|----|------|
+| 0 | greenrupee | 9 | shield | 18 | lizardsword |
+| 1 | bluerupee | 10 | sword | 19 | goldrupee |
+| 2 | redrupee | 11 | fullheart | 20 | fireball |
+| 3 | bombs | 12 | superbomb | 21 | fireblast |
+| 4 | darts | 13 | battleaxe | 22 | nukeshot |
+| 5 | heart | 14 | goldensword | 23 | joltbomb |
+| 6 | glove1 | 15 | mirrorshield | 24 | spinattack |
+| 7 | bow | 16 | glove2 | | |
+| 8 | bomb | 17 | lizardshield | | |
 
 ### PLO_ITEMDEL (23) - Item Removed
 **Trigger**: Item is picked up or destroyed
@@ -1076,9 +1183,13 @@ PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is
 ### PLO_PRIVATEMESSAGE (37) - Private Message
 **Trigger**: Player receives PM
 ```
-[GUSHORT: sender_id] // Sender player ID
-[STRING: message]    // Private message text
+[GSHORT: from_id]    // Sender player ID (graal short — ((b1-32)<<7)|(b2-32), NOT raw big-endian)
+[CSV body...]        // toCSV: "","Private message:",<msg>   (or "Mass message:")
 ```
+
+> Two gotchas: (1) `from_id` is a **GSHORT** (graal-encoded), not a raw 16-bit big-endian
+> value — decoding it as `(b0<<8)|b1` gives wildly wrong ids. (2) The body is a quoted-CSV
+> structure (`"<sender>","Private message:",<msg>`), not a bare message string.
 
 ### PLO_PUSHAWAY (38) - Push Away
 **Trigger**: Player is pushed by force
@@ -1095,12 +1206,17 @@ PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is
 ### PLO_HURTPLAYER (40) - Hurt Player
 **Trigger**: Player takes damage
 ```
-[GUSHORT: attacker_id] // Attacking player ID
-[GCHAR: hurt_dx]     // Knockback X direction
-[GCHAR: hurt_dy]     // Knockback Y direction
-[GCHAR: power]       // Damage amount
-[GUINT: npc_id]      // NPC ID (if NPC attack)
+[GSHORT: attacker_id] // Attacking player ID (0 for environment/self)
+[GCHAR: hurt_dx]      // Knockback X direction
+[GCHAR: hurt_dy]      // Knockback Y direction
+[GCHAR: power]        // Damage in HALF-HEARTS
+[GINT3: npc_id]       // NPC ID (3 bytes — NOT 4) if NPC caused the damage
 ```
+
+> **The server is a pure relay for PvP.** It forwards `PLO_HURTPLAYER` to the victim; the
+> victim's client decrements its own `CURPOWER` and rebroadcasts. `power` is in half-hearts.
+> `PLI_HURTPLAYER (26)` has the identical field layout (with `victim_id` instead of
+> `attacker_id`), `npc_id` also a **GINT3 (3 bytes)**.
 
 ### PLO_NEWWORLDTIME (42) - New World Time
 **Trigger**: Server updates world time
@@ -1152,12 +1268,16 @@ PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is
 ### PLO_PLAYERWARP2 (49) - Player Warp v2
 **Trigger**: Player warps with GMAP coordinates
 ```
-[GCHAR: pixel_x]     // X position (pixels/2)
-[GCHAR: pixel_y]     // Y position (pixels/2)
-[GCHAR: pixel_z]     // Z position
-[GCHAR: gmap_x]      // GMAP level X
-[GCHAR: gmap_y]      // GMAP level Y
+[GCHAR: x]           // X position (half-tiles, x*2)
+[GCHAR: y]           // Y position (half-tiles)
+[GCHAR: z]           // Z position (serialized)
+[GCHAR: gmap_x]      // GMAP segment column (mapPosition.x())
+[GCHAR: gmap_y]      // GMAP segment row (mapPosition.y())
+[STRING: level_name] // Target level/gmap name, to end of packet — DON'T forget this field
 ```
+
+> The trailing level name (e.g. `"chicken.gmap"`) is easy to miss — the server appends
+> `<< level->levelName` after `gmap_y`. Several parsers stopped at `gmap_y` and dropped it.
 
 ### PLO_ADDPLAYER (55) - Add Player (Legacy)
 **Trigger**: Player joins server (pre-v5.07)
@@ -1172,16 +1292,26 @@ PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is
 ```
 
 ### PLO_LARGEFILESTART (68) - Large File Start
-**Trigger**: Large file transfer begins
+**Trigger**: Large file transfer begins (file > 32000 bytes)
 ```
-[STRING: filename]   // File being transferred
-[GUINT5: file_size]  // Total file size
+[STRING: filename]   // File being transferred (raw, to end of packet)
 ```
+
+> The total size is **not** in this packet — it arrives separately as `PLO_LARGEFILESIZE (84)`.
+> Full chunked sequence for a large file:
+> ```
+> PLO_LARGEFILESTART (68): [filename]
+> PLO_LARGEFILESIZE  (84): [GINT5 total_size]
+>   ...then per 32000-byte chunk:
+>   PLO_RAWDATA (100): [GINT3 chunk_packet_len]
+>   PLO_FILE    (102): [GINT5 modtime][GCHAR name_len][name][chunk_data][0x0A]
+> PLO_LARGEFILEEND   (69): [filename]
+> ```
 
 ### PLO_LARGEFILEEND (69) - Large File End
 **Trigger**: Large file transfer completes
 ```
-[STRING: filename]   // Completed file name
+[STRING: filename]   // Completed file name (raw, to end of packet)
 ```
 
 ### PLO_RC_CHAT (74) - RC Chat
@@ -1225,12 +1355,32 @@ This is the **raw 8192-byte board dump**, sent as raw data immediately after a
 way a client receives a level's tiles (not PLO_LEVELBOARD).
 
 ### PLO_FILE (102) - File Data
-**Trigger**: File content transfer
+**Trigger**: File content transfer (small files, ≤ 32000 bytes)
+
+A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte count of the
+*following* packet, then the `PLO_FILE (102)` itself.
+
 ```
-[GCHAR: file_type]   // File type indicator
-[GUINT5: file_size]  // File size
-[FILE_DATA...]       // File content
+[GINT5: modtime]     // 5 bytes — file modification time (operator>>(long long))
+[GCHAR: name_len]    // 1 byte
+[name]               // name_len raw bytes
+[file_data]          // raw file bytes
+[0x0A]               // single trailing newline
 ```
+
+> The doc previously claimed `[GCHAR file_type][GUINT5 file_size][data]` — **that is wrong**.
+> There is no "file type" byte and no inline size: the size comes from the preceding
+> `PLO_RAWDATA`, and a `GINT5 modtime` precedes a GCHAR-length-prefixed name.
+>
+> The announced `PLO_RAWDATA` length = `1 (file id byte) + 5 (modtime) + 1 + name_len +
+> data_len + 1 (trailing \n)`.
+>
+> **Double-strip trap:** the raw-data framing layer already strips the trailing `\n`. Do
+> **not** strip it a second time when parsing the file body, or files ending in `0x0A` come
+> out truncated.
+>
+> **Pre-2.1 client variant:** no `modtime` field — `[GCHAR name_len][name][data]`, no
+> trailing newline, and the RAWDATA length is correspondingly smaller.
 
 ### PLO_UPDATEPACKAGESIZE (105) - Update Package Size
 **Trigger**: Update package download size

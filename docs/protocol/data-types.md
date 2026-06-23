@@ -105,45 +105,71 @@ def decode_gshort(data):
     return (data[0] << 7) + data[1] - 0x1020
 ```
 
-### GINT: Three Bytes, Same Energy
+### GINT (GINT3): Three Bytes, Same Energy
 
-Extends the pattern to 3 bytes. Each carries 7 bits of data.
+Extends the pattern to 3 bytes. Often called **GINT3** to disambiguate from GINT4/GINT5.
+This is what the GServer `CString` `operator>>(int)` / `readGInt()` produce — used for
+3-byte numeric props (RUPEES, CARRYNPC, KILLS, etc.), NPC ids, and the `PLO_RAWDATA`
+length field.
 
 ```
-Bit layout:
+Bit layout (high byte carries the top of the value):
 ┌───────────────────────────────────────────────────────────┐
-│ Byte 1: [ 0 | d₂₀ d₁₉ d₁₈ d₁₇ d₁₆ d₁₅ d₁₄ ] + 32        │
-│ Byte 2: [ 0 | d₁₃ d₁₂ d₁₁ d₁₀ d₉  d₈  d₇  ] + 32        │
-│ Byte 3: [ 0 | d₆  d₅  d₄  d₃  d₂  d₁  d₀  ] + 32        │
+│ Byte 1: [ value >> 14 ] + 32   (top byte, clamped to 223)  │
+│ Byte 2: [ (value >> 7) & 0x7F ] + 32                       │
+│ Byte 3: [  value       & 0x7F ] + 32                       │
 └───────────────────────────────────────────────────────────┘
-Total data bits: 21
-Maximum value: 2,097,151
 ```
+
+> ⚠️ **Don't say "21 bits / max 2,097,151."** The reference `CString` does **not**
+> mask the top byte to 7 bits — it clamps it to **223** (`if (val[0] > 223) val[0] = 223`),
+> exactly like GSHORT. So the real encodable max is `223 << 14 + 223 << 7 + 223 = 3,682,399`,
+> not `2^21 − 1`. For values ≤ 2,097,151 the bytes are identical either way, which is why
+> the bug rarely bites — but a strict 7-bit-mask encoder will truncate large rupee/online
+> counts.
 
 ```python
-def encode_gint(value):
-    byte1 = ((value >> 14) & 0x7F) + 32
-    byte2 = ((value >> 7) & 0x7F) + 32
-    byte3 = (value & 0x7F) + 32
-    return bytes([byte1, byte2, byte3])
+# Decode: the GSHORT trick extended one more byte (combined +32 bias removal)
+def decode_gint3(data):
+    # 0x81020 = combined +32 bias for 3 bytes = ((32<<7)+32 << 7) + 32
+    return (((data[0] << 7) + data[1]) << 7) + data[2] - 0x81020
+    # equivalently: ((data[0]-32)<<14) + ((data[1]-32)<<7) + (data[2]-32)
 
-def decode_gint(data):
-    return ((data[0] - 32) << 14) | ((data[1] - 32) << 7) | (data[2] - 32)
+def encode_gint3(value):
+    t = min(value, 3682399)
+    b0 = t >> 14
+    if b0 > 223: b0 = 223
+    rem = t - (b0 << 14)
+    b1 = rem >> 7
+    b2 = rem - (b1 << 7)
+    return bytes([b0 + 32, b1 + 32, b2 + 32])
 ```
+
+### GINT4: Four Bytes
+
+A 4-byte G-type (`CString` `readGInt4`). Same byte-shift scheme, top byte clamped to 223.
+Encodable max `≈ 471,347,295`. Decode bias is `0x4081020`. Rare on the wire but part of
+the type system, so a complete codec should implement it.
 
 ### GINT5: For When You Need Bigger Numbers
 
-Five bytes for large values like timestamps. Same 7-bit pattern.
+Five bytes for large values like timestamps and file sizes (`operator>>(long long)` /
+`readGInt5`).
 
 ```
 Size: 5 bytes
-Total data bits: 35
-Maximum value: 34,359,738,367
-Common use: Unix timestamps, file sizes
+Carries: a full 32-bit value (the reference encoder clamps the top nibble to 15)
+Maximum value: 4,294,967,295  (NOT 2^35 − 1)
+Common use: Unix timestamps, file sizes, file modtimes, adminRights bitmask
 ```
+
+> ⚠️ The frequently-quoted "35-bit / 34 billion" max is wrong. `CString::writeGInt5`
+> caps the value at `0xFFFFFFFF` (the top of the 5 bytes is clamped to 15), so GINT5
+> transports a 32-bit value across 5 bytes.
 
 ```python
 def encode_gint5(value):
+    value = min(value, 0xFFFFFFFF)
     result = bytearray(5)
     for i in range(4, -1, -1):
         result[4-i] = ((value >> (i * 7)) & 0x7F) + 32
@@ -162,8 +188,12 @@ def decode_gint5(data):
 |------|------|-----------|----------------|
 | GCHAR | 1 byte | 223 | `byte - 32` |
 | GSHORT | 2 bytes | 28,767 | `(b1 << 7) + b2 - 0x1020` |
-| GINT | 3 bytes | 2,097,151 | 7-bit unpack, subtract 32 each |
-| GINT5 | 5 bytes | 34,359,738,367 | 7-bit unpack, subtract 32 each |
+| GINT / GINT3 | 3 bytes | 3,682,399 | `((b1 << 7) + b2 << 7) + b3 - 0x81020` |
+| GINT4 | 4 bytes | 471,347,295 | byte-shift, bias `0x4081020` |
+| GINT5 | 5 bytes | 4,294,967,295 | 7-bit unpack, subtract 32 each |
+
+> **Naming note:** GServer's `CString` exposes `writeGInt`/`readGInt` for the **3-byte**
+> type. Throughout this documentation "GINT" and "GINT3" are the same thing.
 
 ## Coordinates: A Field Guide
 
@@ -222,14 +252,20 @@ def decode_x2y2(gshort_value):
 
 ## Player Property Data Types
 
-### Colors (5 bytes)
+### Colors (5 or 8 bytes)
 
-Player colors are 5 consecutive GCHARs:
+Player colors are consecutive GCHARs:
 
 ```
-[coat][sleeves][shoes][belt][skin]
-Each byte: color index 0-31 (+ 32 for encoding)
+[coat][sleeves][shoes][belt][skin]   (classic / old-world: 5 bytes)
++ [sword][shield][unused]            (new-world: 8 bytes total)
+Each byte: color index (+ 32 for encoding)
 ```
+
+> The count is **generation-dependent, not version-string dependent**: the server emits
+> 8 colour bytes in new-world mode (`isNewWorldMode()`) and 5 in classic mode. The reborn
+> stack targets v6.037 (new-world) → **8 bytes**. A parser hard-coded to 5 will desync the
+> rest of the property block against a modern server.
 
 ### Status Flags (Bitfield)
 

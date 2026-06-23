@@ -16,6 +16,9 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
    protocol/strings
    protocol/encryption
    protocol/packet-structures
+   protocol/npc-properties
+   protocol/rc-nc-protocols
+   protocol/gmap
    protocol/gserver-behavior
    protocol/level-link-implementation
    protocol/serverside-behavior
@@ -38,7 +41,10 @@ This documentation is derived from deep analysis of the GServer-v2 codebase and 
 * Primitive-level encoding details for cross-language implementation
 * The infamous G-type encoding explained with visual diagrams
 * The three string types (yes, three) and their gotchas
-* ENCRYPT_GEN_5 protocol implementation with flow diagrams
+* ENCRYPT_GEN_5 and ENCRYPT_GEN_2 protocol implementations with flow diagrams
+* Full player-property AND NPC-property tables (separate enums, props 0-83)
+* The RC and NC admin sub-protocols, including the NC GEN_2 login handshake
+* The GMAP coordinate system and the local-vs-world coordinate quirk
 * PyReborn library conformance analysis
 * Implementation examples in Python, JavaScript, and C++
 
@@ -58,6 +64,9 @@ For newcomers to the Reborn protocol:
 For existing developers:
 
 * :doc:`protocol/gserver-behavior` - How GServer-v2 actually implements things
+* :doc:`protocol/npc-properties` - The NPC property enum (distinct from player props)
+* :doc:`protocol/rc-nc-protocols` - RC/NC admin sub-protocols and the GEN_2 login
+* :doc:`protocol/gmap` - GMAP coordinate frames and the local/world quirk
 * :doc:`implementation/pyreborn-analysis` - Conformance issues and fixes
 
 Contributing

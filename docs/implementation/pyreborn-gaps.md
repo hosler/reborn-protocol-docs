@@ -45,13 +45,22 @@ props. See [Packet Structures](../protocol/packet-structures.md) for the table.
 - `showpoly` / `hidepoly` — polygon display
 - `drawoverplayer` / `drawunderplayer` — explicit Z-order control
 
-### Inbound projectile / NC management — unverified
+### Inbound projectile handling — unverified
 
 - Inbound **PLO_SHOOT2** handling: the client *sends* `PLI_SHOOT2`
   (`packets.py` / `client.py`), but processing of inbound projectile packets
   from the server is not confirmed.
-- **NC (NPC-Control) management**: `nc_client.py` exists, but the breadth of
-  NPC/class management coverage has not been verified against GServer-v2.
+
+### NC / RC management — now verified
+
+- **NC (NPC-Control) management**: `nc_client.py` is complete. Driven against a
+  GS2 npc-server (`serverside = true`), all NC PLI builders byte-match the
+  server and the NC PLO family is fully parsed — verified by the
+  `--coverage-nc` harness in `game_tester`. NC negotiates **ENCRYPT_GEN_2**
+  (`Protocol.use_gen2`), distinct from the client's GEN_5; see
+  [RC & NC Protocols](../protocol/rc-nc-protocols.md).
+- **RC administration**: `rc_client.py` covers the full RC PLO family with
+  byte-validated PLI builders (`--coverage-rc`).
 
 ### Level board decompression fallback (by design)
 

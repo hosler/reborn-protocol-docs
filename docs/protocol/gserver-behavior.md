@@ -69,16 +69,21 @@ sendPacket(CString() >> (char)PLO_LEVELNAME << map->getMapName());
 - No length prefix
 - **Important**: read-to-end, **not** null-terminated (no trailing `\x00`)
 
-### PLO_PLAYERPROPS (14) / PLO_OTHERPLPROPS (15)
+### PLO_PLAYERPROPS (9) / PLO_OTHERPLPROPS (8)
 Player properties use a special encoding:
 - Property ID (1 byte)
 - Property data (varies by property)
 
 Special cases:
-- **HEADGIF**: If length < 100, it's a preset head. Otherwise length-100 is string length
-- **SWORDPOWER/SHIELDPOWER**: `[length][power+30][image_string]`
-- **X2/Y2**: Encoded as `(abs(pixels) << 1) | (negative ? 1 : 0)`, sent as GShort
-- **GATTRIB1-30**: Flag properties with no data
+- **HEADGIF (11)**: If byte < 100, it's a preset head id (no string). Otherwise byte-100 is the string length.
+- **SWORDPOWER (8)**: custom image form is `[power+30][img_len][image]` (power byte first, +30 bias).
+- **SHIELDPOWER (9)**: custom image form is `[power+10][img_len][image]` (note **+10**, not +30).
+- **X2/Y2 (78/79)**: Encoded as `(abs(pixels) << 1) | (negative ? 1 : 0)`, sent as GShort.
+- **GATTRIB1-30**: length-prefixed strings (`[GCHAR len][string]`), **not** flag-only props.
+
+See [Packet Structures: Player Properties](packet-structures.md#player-properties-pli_playerprops-data)
+for the full id/width table (props 0-83), and [NPC Properties](npc-properties.md) for the
+separate NPC enum.
 
 ### CString Operators
 
@@ -143,8 +148,9 @@ packet >> (char)PLO_BOARDMODIFY >> (char)x >> (char)y
 
 ### Numeric Properties
 - Most use GCHAR encoding (value + 32)
-- Larger values use GINT (3 bytes) or GINT5 (5 bytes)
-- Special offsets: Z property has +25 offset
+- Larger values use GINT3 (3 bytes: RUPEES, CARRYNPC, KILLS, DEATHS, ONLINESECS, UDPPORT) or GINT5 (5 bytes: IPADDR, ONLINESECS2)
+- APCOUNTER (25) is GSHORT (2 bytes), not 1 byte — a common mis-width
+- Special offset: **Z property has a +50 offset** (`z_tile + 50`), not +25
 
 ### String Properties
 - Length-prefixed with GCHAR
@@ -152,8 +158,8 @@ packet >> (char)PLO_BOARDMODIFY >> (char)x >> (char)y
 - Common: nickname, chat, level name, guild
 
 ### Special Encodings
-- **Colors**: 5 consecutive GCHARs
-- **Sprite**: Encoded with direction in lower 2 bits
+- **Colors**: 5 GCHARs (classic) or **8 GCHARs (new-world / v6.037)** — generation-dependent
+- **Sprite**: `(sprite << 2) | direction` — direction in lower 2 bits
 - **AP**: Alignment points, 100 units = full alignment
 
 ## Error Handling
