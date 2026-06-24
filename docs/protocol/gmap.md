@@ -34,31 +34,15 @@ local  = world % 64
 ## High-Precision Pixel Coords (X2/Y2/Z2)
 
 Sub-tile positions and gmap movement use player props **X2 (78) / Y2 (79) / Z2 (80)** (and
-the NPC equivalents **75/76/77**). Each is a GSHORT carrying a signed pixel value:
-
-```
-encode: value = (abs(pixels) << 1) | (pixels < 0 ? 1 : 0)
-decode: pixels = value >> 1; if (value & 1) pixels = -pixels
-        tiles  = pixels / 16
-```
+the NPC equivalents **75/76/77**). The wire-format packing is documented in
+[Data Types](data-types.md#x2y2-encoding-the-weird-one).
 
 ## The gs2emu LOCAL-Coordinate Quirk
 
 ⚠️ **The single biggest GMAP gotcha.** Even when a player is on a gmap, GServer-v2 sends
-**LOCAL per-segment coordinates** (0-63) in `PLO_PLAYERPROPS` X/Y (and X2/Y2) — *not* world
-coordinates, despite older docs claiming "props 78/79 are world coords."
-
-The client must reconstruct world position itself:
-
-```
-world_x = local_x + gmaplevelx * 64    # props 43/44 give the segment
-world_y = local_y + gmaplevely * 64
-```
-
-A robust handler rebuilds `world = (x % 64) + grid * 64` when the current level is a real
-grid segment, and falls back to `x % 64` otherwise. Applying the server's local X (e.g. 0.0)
-directly as a world coord clobbers the camera onto the wrong segment — the classic "seeing
-one level but standing in another" bug.
+**LOCAL per-segment coordinates** in `PLO_PLAYERPROPS` X/Y (and X2/Y2) rather than world
+coordinates. The reconstruction formula and the coordinate frames are documented in
+[Data Types](data-types.md#coordinate-frames-in-gmaps).
 
 ## "A GMAP Is Loaded" ≠ "I'm In A Segment Right Now"
 
