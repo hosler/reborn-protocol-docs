@@ -6,7 +6,7 @@ This section provides detailed specifications for all data types used in the Reb
 
 Before we dive in, let's address the elephant in the room: almost every value in this protocol has 32 added to it before transmission. Why?
 
-The Graal protocol was designed in the late 1990s, when:
+The Reborn protocol was designed in the late 1990s, when:
 - Binary protocols made some network administrators nervous
 - Debug logs looked nicer with printable characters
 - Certain naive firewalls were suspicious of bytes below 32
@@ -335,7 +335,7 @@ wire widths.
 |-------|-------|----------|-------|
 | 0 | IMAGE | GCHAR length + string | Length-prefixed image name |
 | 1 | SCRIPT | GSHORT length + raw bytes | Modern servers may send length 0 |
-| 2-3 | X/Y | GCHAR | Tile coordinates encoded as Graal chars |
+| 2-3 | X/Y | GCHAR | Tile coordinates encoded as Reborn chars |
 | 4 | POWER | GCHAR | Hit points in half-hearts |
 | 5 | RUPEES | GINT3 | 3-byte value, not a direction byte |
 | 6-7 | ARROWS/BOMBS | GCHAR | Single-byte counts |
@@ -374,7 +374,7 @@ These patterns show up repeatedly in the packet docs and are defined here for re
 | GCHAR length + string | Length-prefixed string | Maximum 223 bytes |
 | GINT3 length | 3-byte count | Used for raw-data packet lengths and several counters |
 | GINT5 length | 5-byte count | Used for timestamps, file sizes, and large counters |
-| Packed coordinate byte | Graal char with unit-specific scaling | Common for tile, half-tile, and pixel fields |
+| Packed coordinate byte | Reborn char with unit-specific scaling | Common for tile, half-tile, and pixel fields |
 
 ## Time Types
 

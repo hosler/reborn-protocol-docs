@@ -5,10 +5,24 @@ packet set.
 
 > **Status (current):** The large gaps that earlier versions of this document
 > described — broken chat, missing RC response handling, and a long list of
-> unhandled PLO_* packets — have since been **implemented**. The automated QA
-> suite (`pyReborn/game_tester`) passes its full single-bot + multi-bot set. The
-> sections below have been updated to reflect the current code; the historical
-> "critical issues" list is preserved at the bottom for reference.
+> unhandled PLO_* packets — have since been **implemented**. Final QA numbers:
+> base suite **16/16**, tier1 **2/2** (board modify, large files), tier2 **4/4**
+> (bomb/arrow/horse/flagdel relay), tier3 **4/4** (freeze/say2 cycle,
+> triggeraction relay, serverwarp round-trip, synthetic parsers), tier5 **5/5**
+> (GS2 bytecode transport), GMAP suite **6/6**, and the packet-coverage
+> harnesses (`--coverage`, `--coverage-rc`, `--coverage-nc`) report **100%** of
+> emitted types parsed for base/RC/NC sessions. The version probe
+> (`game_tester/version_probe.py`) passes with **live 1.411, 2.17, and 2.21
+> logins** — exercising the GEN_3 and GEN_4 codecs end-to-end against GServer.
+>
+> Previously listed here as "in progress", now **done**: GEN_3/GEN_4 codecs
+> (`reborn-protocol/reborn_protocol/codec.py` `Gen3Codec`/`Gen4Codec` — wire
+> details in [Client Versions & Encryption](../protocol/versions-encryption.md#gen_3s-single-byte-insertion-precisely)),
+> server-control packets (freeze/say2/serverwarp/inbound triggeraction/profile,
+> `game_tester/tier3_tests.py`), GS2 bytecode **transport** (parse + store of
+> NPCBYTECODE/GANISCRIPT/NPCWEAPONSCRIPT/LOADGANI/LOADSCRIPT — layouts in
+> [Version-Gated Behavior](../protocol/version-gated-behavior.md#bytecode-packet-family)),
+> and the RC write-side builders (protocol parity tier 6, `packets.py`).
 
 ---
 
@@ -26,6 +40,10 @@ packet set.
 | GATTRIB props parsed but discarded | Stored as `props['gattrib<N>']` via the `_GATTRIB_IDS` map (both parse paths). |
 | Weapon selection by click | Implemented in `inventory_ui.py` (`InventoryUI.handle_click`). |
 | Tile restoration always at pickup spot | Thrown tiles now land ahead of the player with collision validation (`game/actions.py`), falling back to the pickup spot only when blocked. |
+| PLI_BOARDMODIFY / PLO_BOARDMODIFY / PLO_BOARDMODIFY2 / PLO_BOARDHEIGHTS | Parsed and byte-validated against C++ (`tier1_tests.py:test_board_modify`); see [Packet Structures](../protocol/packet-structures.md#pli_boardmodify-1---tile-modification). |
+| Large-file transfer (LARGEFILESTART/SIZE/END + chunked PLO_FILE) | Implemented and tested (`tier1_tests.py:test_large_file_transfer`). The `parse_file` modtime 8-bit-shift bug flagged earlier in this audit is now **fixed** (7-bit GINT5 decode, `packets.py:2717`) — see the historical note in [Packet Structures: PLO_FILE](../protocol/packet-structures.md#plo_file-102---file-data). |
+| Bombs/arrows/horses relay (PLO/PLI 4/5/7/8/9/11/12/17/18/19) | Implemented and tested (`tier2_tests.py`: `test_bomb_relay`, `test_arrow_relay`, `test_horse_relay`). |
+| PLI_FLAGDEL relay | Tested (`tier2_tests.py:test_flagdel_relay`). |
 
 Note: GATTRIB property numbering is **not** the contiguous `36–74` range the old
 doc assumed. The real layout is non-contiguous (37–41, 46–49, 54–74) and is
@@ -36,6 +54,26 @@ props. See [Packet Structures](../protocol/packet-structures.md) for the table.
 
 ## Remaining genuine gaps
 
+### GS2 bytecode execution — no VM
+
+GS2 bytecode is now fully **transported** (requested, parsed, stored — tier5 suite), but
+nothing in the Python stack **executes** it: there is no GS2 VM. Weapons/NPCs whose
+behavior exists only as compiled GS2 will render but not run. (GS1 source scripts run fine
+via the shared GS1 interpreter.)
+
+### GEN_6 / v6-native encryption
+
+`ENCRYPT_GEN_6` remains unimplemented — but so is it **server-side** (see
+[Client Versions & Encryption](../protocol/versions-encryption.md#pli_set_enc_key-252--pli_bundle-253-declared-unimplemented)),
+so this is a protocol-wide gap, not a pyReborn-specific one. No action possible until a
+server implements it.
+
+### Ground-item sprites — pics1.png tile table
+
+The `LevelItemType` → pics1.png tile-rectangle mapping for ground-item rendering is
+incomplete; some item drops render with placeholder art in the pygame client. Protocol
+handling of items is complete — this is a client art-table gap only.
+
 ### GS1 interpreter — unimplemented commands
 
 `pyreborn/gs1_interpreter.py` implements most common commands (including
@@ -45,11 +83,16 @@ props. See [Packet Structures](../protocol/packet-structures.md) for the table.
 - `showpoly` / `hidepoly` — polygon display
 - `drawoverplayer` / `drawunderplayer` — explicit Z-order control
 
-### Inbound projectile handling — unverified
+### Inbound projectile handling — now verified
 
-- Inbound **PLO_SHOOT2** handling: the client *sends* `PLI_SHOOT2`
-  (`packets.py` / `client.py`), but processing of inbound projectile packets
-  from the server is not confirmed.
+- Inbound **PLO_SHOOT (175)** / **PLO_SHOOT2 (191)** are both dispatched in
+  `client.py` (`elif packet_id in (PacketID.PLO_SHOOT, PacketID.PLO_SHOOT2):`,
+  parsed via `parse_shoot(data, v2=...)`). This was previously listed as
+  unconfirmed; it is implemented. The exact `constructShootV1()`/
+  `constructShootV2()` C++ field layouts have not been independently
+  re-derived for this docs pass — see the stub note on
+  [Packet Structures: PLO_SHOOT](../protocol/packet-structures.md#plo_shoot-175---shoot-projectile-v1--clver_5_07)
+  if byte-level verification is still needed.
 
 ### NC / RC management — now verified
 

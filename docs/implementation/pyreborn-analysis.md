@@ -3,7 +3,7 @@
 ## Overview
 
 This document analyzes how well PyReborn's implementation conforms to the
-documented Graal Reborn protocol, comparing it against the GServer-v2 source.
+documented Reborn protocol, comparing it against the GServer-v2 source.
 
 > **Architecture note:** Encryption, the Gen5 codec, the framing/`PacketBuffer`,
 > and the `PacketReader`/`PacketBuilder` G-type helpers now live in the shared
@@ -14,7 +14,7 @@ documented Graal Reborn protocol, comparing it against the GServer-v2 source.
 
 ## Overall Conformance: **EXCELLENT**
 
-PyReborn implements the core Graal protocol correctly and matches GServer-v2.
+PyReborn implements the core Reborn protocol correctly and matches GServer-v2.
 The previously-listed missing handlers have largely been implemented (see
 [PyReborn Implementation Gaps](pyreborn-gaps.md)).
 
@@ -132,7 +132,7 @@ remaining duplication is between `listserver.py` and the shared library.
 
 ## 📝 Summary
 
-PyReborn provides an excellent implementation of the Graal Reborn protocol. The
+PyReborn provides an excellent implementation of the Reborn protocol. The
 core protocol (encryption, encoding, framing) is provided by the shared
 `reborn-protocol` library and matches GServer-v2. Remaining gaps are narrow
 (NC management, a few inbound enhanced packets), not core-protocol issues.

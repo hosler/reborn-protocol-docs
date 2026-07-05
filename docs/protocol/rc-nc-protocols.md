@@ -52,7 +52,7 @@ byte, exactly like a game client).
 |--------|-------|-----------|
 | `\xa7` (0xA7) substitution | weapon **code** (RC/NC weapon add/get); admin-message header/body separator | newline ⇄ `\xa7` |
 | **gtokenize** (`CString::gtokenize`/`guntokenize`) | NPC and class **scripts** sent client→server | one source line per comma token; complex lines quoted with doubled `"`/`\` |
-| **Graal quoted-CSV** (`toCSV`) | server→client lists (options, folders, rights folders, weapon/level lists, NPC var dumps) | comma-separated, each element optionally quoted |
+| **Reborn quoted-CSV** (`toCSV`) | server→client lists (options, folders, rights folders, weapon/level lists, NPC var dumps) | comma-separated, each element optionally quoted |
 
 NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 

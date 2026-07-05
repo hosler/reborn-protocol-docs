@@ -1,10 +1,10 @@
 # Level Link Implementation Guide
 
-This document provides comprehensive guidance for implementing level links in Graal Reborn clients, based on real-world implementation experience with PyReborn.
+This document provides comprehensive guidance for implementing level links in Reborn clients, based on real-world implementation experience with PyReborn.
 
 ## Overview
 
-Level links are rectangular areas in a level that transport players to other levels when touched. They are a fundamental navigation mechanism in Graal worlds.
+Level links are rectangular areas in a level that transport players to other levels when touched. They are a fundamental navigation mechanism in Reborn worlds.
 
 ## Packet Structure
 

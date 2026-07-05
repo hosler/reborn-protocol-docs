@@ -15,7 +15,9 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
    protocol/data-types
    protocol/strings
    protocol/encryption
+   protocol/versions-encryption
    protocol/packet-structures
+   protocol/version-gated-behavior
    protocol/npc-properties
    protocol/rc-nc-protocols
    protocol/gmap
@@ -48,7 +50,7 @@ This documentation is derived from deep analysis of the GServer-v2 codebase and 
 * PyReborn library conformance analysis
 * Implementation examples in Python, JavaScript, and C++
 
-The documentation is maintained as part of the OpenGraal2 project and is designed to enable developers to create compatible Graal clients and servers in any programming language.
+The documentation is maintained as part of the OpenReborn2 project and is designed to enable developers to create compatible Reborn clients and servers in any programming language.
 
 Reading Order
 =============
@@ -59,11 +61,13 @@ For newcomers to the Reborn protocol:
 2. :doc:`protocol/data-types` - G-type encoding (the +32 obsession)
 3. :doc:`protocol/strings` - The three string types and the PLO_LEVELLINK trap
 4. :doc:`protocol/encryption` - Packet bundling, compression, and "encryption"
-5. :doc:`protocol/packet-structures` - Individual packet formats
+5. :doc:`protocol/versions-encryption` - The client version table and which PLTYPE picks which encryption gen
+6. :doc:`protocol/packet-structures` - Individual packet formats
 
 For existing developers:
 
 * :doc:`protocol/gserver-behavior` - How GServer-v2 actually implements things
+* :doc:`protocol/version-gated-behavior` - Everything the server does differently per client version
 * :doc:`protocol/npc-properties` - The NPC property enum (distinct from player props)
 * :doc:`protocol/rc-nc-protocols` - RC/NC admin sub-protocols and the GEN_2 login
 * :doc:`protocol/gmap` - GMAP coordinate frames and the local/world quirk
@@ -72,7 +76,7 @@ For existing developers:
 Contributing
 ============
 
-This documentation is open source and contributions are welcome. The source is available on GitHub as part of the OpenGraal2 project.
+This documentation is open source and contributions are welcome. The source is available on GitHub as part of the OpenReborn2 project.
 
 Indices and tables
 ==================

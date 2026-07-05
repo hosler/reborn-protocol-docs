@@ -2,6 +2,17 @@
 
 This section provides guidelines for implementing Reborn protocol conformance and ensuring compatibility with existing servers and clients.
 
+> **pyReborn's current conformance status** (see [PyReborn Implementation Gaps](pyreborn-gaps.md)
+> for detail): base QA suite 16/16, tier1 2/2, tier2 4/4, tier3 4/4, tier5 5/5, GMAP suite
+> 6/6, and PLO packet-coverage harnesses at 100% of emitted types for base/RC/NC sessions.
+> GEN_2, GEN_3, GEN_4, and GEN_5 codecs are all implemented and live-verified (the version
+> probe logs in as 1.411/2.17/2.21/2.22/6.037 against GServer). Server-control packets,
+> GS2 bytecode *transport*, and the RC write-side builders are done. Remaining genuine
+> gaps: GS2 bytecode **execution** (no VM), GEN_6/v6-native encryption (also unimplemented
+> server-side), and a client-art table for ground-item sprites — none of which block the
+> Level 3 checklist items below except "Script/bytecode handling" if read as execution
+> rather than transport.
+
 ## Conformance Levels
 
 ### Level 1: Basic Compatibility (Minimum)

@@ -91,8 +91,13 @@ matters, follow the link rather than re-deriving it here.
 [GUCHAR: start_y]    // Starting Y coordinate (0-63)
 [GUCHAR: width]      // Width of modification area
 [GUCHAR: height]     // Height of modification area
-[STRING: tile_data]  // Raw tile data (2 bytes per tile)
+[GSHORT: tile]...    // width*height tiles, one GSHORT each (row-major)
 ```
+**Source**: `PlayerClient::msgPLI_BOARDMODIFY` (`PlayerClientPackets.cpp:109-134`) reads
+`x/y/w/h` via `readGUChar()` ×4, then the level applies the tiles (`Level::alterBoard`,
+`Level.cpp:1476`, `tileData.readGShort()` per tile — **not** a raw opaque string; each tile
+is a proper GSHORT). **Not echoed back to the sender** — see
+[GServer Behavior: PLI_BOARDMODIFY Is Not Echoed](gserver-behavior.md#pli_boardmodify-is-not-echoed-to-the-sender).
 
 ### PLI_PLAYERPROPS (2) - Player Property Update
 **Trigger**: Player properties change (movement, appearance, stats, etc.)
@@ -163,8 +168,11 @@ Property format:
 ### PLI_FIRESPY (10) - Fire Spy
 **Trigger**: Player uses fire spy weapon
 ```
-[GUCHAR: length_power] // Length (5 bits) + Power (3 bits)
+[GUCHAR: (length << 3) | power]  // length = bits 3-7, power = low 3 bits
 ```
+**Source**: `msgPLI_FIRESPY` (`PlayerClientPackets.cpp:314-330`); the relayed
+`PLO_FIRESPY (20)` is `[GSHORT owner_id][GUCHAR: (length << 3) | power]` — same byte,
+prefixed with the sender's player id.
 
 ### PLI_THROWCARRIED (11) - Throw Carried Object
 **Trigger**: Player throws carried item/NPC
@@ -480,7 +488,7 @@ Player properties use the following format:
 > Example: Byte value 105 means "read 5 bytes of string data for the head image filename."
 > Byte value 5 means "use preset head #5, no string follows."
 >
-> The magic number 100 was chosen because early Graal had fewer than 100 preset heads.
+> The magic number 100 was chosen because early Reborn had fewer than 100 preset heads.
 > This was a reasonable assumption in 1999.
 **CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble
 **COLORS (13)**: `[8 bytes: color_data]` (new-world / v6.037) or `[5 bytes]` (classic) - Player colors. The reborn stack targets v6.037, so **8 bytes** here. Each byte is a palette index (+32 encoded).
@@ -722,22 +730,30 @@ These packets are used by NC (NPC Control) clients for NPC/content management.
 ### PLI_UPDATEGANI (157) - Update GANI Animation
 **Trigger**: Client requests GANI bytecode update
 ```
-[GUINT5: checksum]   // Local GANI checksum
-[STRING: gani_name]  // GANI name (without .gani extension)
+[GUINT5: checksum]   // CRC32 of client's cached gani bytecode (0 forces a resend)
+[STRING: gani_name]  // GANI name (without .gani extension), to end of packet
 ```
+Server replies with `PLO_GANISCRIPT (134)` only if the CRC differs, then **always**
+`PLO_LOADGANI (195)` (`msgPLI_UPDATEGANI`, `PlayerClientPackets.cpp:1460-1483`).
 
 ### PLI_UPDATESCRIPT (158) - Update Weapon Script
 **Trigger**: Client requests weapon bytecode
 ```
-[STRING: weapon_name] // Weapon name
+[STRING: weapon_name] // Weapon name, to end of packet (no checksum field)
 ```
+Server replies with `PLO_NPCWEAPONSCRIPT (140)`
+(`msgPLI_UPDATESCRIPT`, `PlayerClientPackets.cpp:1485-1493`).
 
 ### PLI_UPDATECLASS (161) - Update NPC Class
 **Trigger**: Client requests class bytecode
 ```
-[GINT5: checksum]    // Local class checksum
-[STRING: class_name] // Class name
+[GINT5: checksum]    // CRC32 of client's cached class bytecode (0 forces a resend)
+[STRING: class_name] // Class name, to end of packet
 ```
+Server replies with `PLO_LOADSCRIPT (197)` form 2 (RAWDATA-framed) when the CRC differs;
+unknown classes get a header-only `PLO_NPCWEAPONSCRIPT (140)` instead
+(`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:1495-1530`). Requires an NPC server
+(`hasNPCServer()`); ignored otherwise.
 
 ### PLI_UPDATEPACKAGEREQUESTFILE (159) - Update Package Request
 **Trigger**: Client requests update package files
@@ -883,7 +899,7 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
 ```
 [GCHAR: tile_x]      // Sign X coordinate (WHOLE tiles, 0-63)
 [GCHAR: tile_y]      // Sign Y coordinate (WHOLE tiles, 0-63)
-[ENCODED_TEXT...]    // Graal sign-encoded text, to end of packet (NOT plain ASCII!)
+[ENCODED_TEXT...]    // Reborn sign-encoded text, to end of packet (NOT plain ASCII!)
 ```
 
 > ⚠️ **The sign text is NOT plain ASCII.** It is encoded with a custom alphabet + a
@@ -916,14 +932,45 @@ ctab        = {91,92,93,94,77,78,79,80,74,75,71,72,73,86,86,87,88,67}
 ```
 
 ### PLO_BOARDMODIFY (7) - Board Modification
-**Trigger**: Another player modifies tiles
+**Trigger**: Another player modifies tiles, or a script/server-initiated board change is
+replayed to a player entering a non-gmap level (see
+[Version-Gated Behavior](version-gated-behavior.md#level-entry-replay-path-sublevel-sendboardchangestoplayer-version-check-is-live)).
 ```
-[GCHAR: start_x]     // Starting X coordinate
-[GCHAR: start_y]     // Starting Y coordinate
+[GCHAR: start_x]     // Starting X coordinate (0-63)
+[GCHAR: start_y]     // Starting Y coordinate (0-63)
 [GCHAR: width]       // Modification width
 [GCHAR: height]      // Modification height
-[TILE_DATA...]       // New tile data
+[GSHORT: tile]...    // width*height tiles, one GSHORT each (row-major)
 ```
+**Layer-prefixed variant**: script/server board changes (not plain client tile edits) may
+prefix the packet with a 5th leading byte: if the first byte read is **>= 64**, it encodes
+`layer + 64` and everything above shifts one field later. `LevelBoardChange::
+getPropsForSingleLevel` (`LevelBoardChange.cpp:72-80`) is the server-side builder for both
+the plain-edit relay (`msgPLI_BOARDMODIFY`'s echo to other players) and the layered form; a
+plain player edit never sets the layer prefix.
+
+**Source**: `LevelBoardChange.cpp:72-80` (build), `Level::alterBoard` (`Level.cpp:1476`,
+tiles read via `readGShort()`).
+
+### PLO_BOARDMODIFY2 (186) - Board Modification (GMAP / Map-Position Form)
+**Trigger**: Board change broadcast on a gmap, or replayed to a player entering a level
+whose version puts it in the "classic" replay style (see
+[Version-Gated Behavior](version-gated-behavior.md#board-changes-two-different-code-paths-only-one-is-live)).
+```
+[GCHAR: mapX]        // GMAP segment column (0,0 for non-gmap levels)
+[GCHAR: mapY]        // GMAP segment row
+[GCHAR: start_x]     // Starting X coordinate (0-63)
+[GCHAR: start_y]     // Starting Y coordinate (0-63)
+[GCHAR: width]       // Modification width
+[GCHAR: height]      // Modification height
+[GSHORT: tile]...    // width*height tiles, one GSHORT each (row-major)
+```
+**Source**: `LevelBoardChange::getPropsForMapClassic` (`LevelBoardChange.cpp:82-94`) —
+`mapX`/`mapY` are always present, even for non-gmap levels (where they resolve to `0,0`),
+because `LevelBoardChange` objects always carry an explicit `MapPosition`. A commented-out
+`getPropsForMapNewMain()` sibling (`LevelBoardChange.cpp:97-104`) exists in source but is
+**dead code** — never called, never compiled into the live send path. Do not implement
+against it.
 
 ### PLO_OTHERPLPROPS (8) - Other Player Properties
 **Trigger**: Other player's properties change
@@ -1063,11 +1110,23 @@ ctab        = {91,92,93,94,77,78,79,80,74,75,71,72,73,86,86,87,88,67}
 [GCHAR: tile_y]      // Y position
 ```
 
-### PLO_NPCMOVED (24) - NPC Moved
-**Trigger**: NPC changes position (hides NPC during level transitions)
+### PLO_NPCMOVED (24) - NPC Moved (Level Change)
+**Trigger**: An NPC's `CURLEVEL` property changes (the NPC warps to a different level)
 ```
-[GUINT: npc_id]      // NPC identifier
+[GINT3: npc_id]      // NPC identifier (3 bytes)
+[GCHAR: x / 8]        // NPC's OLD position in the level it's leaving, in half-tiles
+[GCHAR: y / 8]        // (captured BEFORE removal from the old level)
+[STRING: new_level]   // The NEW level name being warped to, to end of packet
 ```
+> The previous version of this doc claimed a bare `[GUINT: npc_id]` — **that was wrong**. The
+> packet actually carries the NPC's old position plus the destination level name.
+
+**Source**: `NPC::setPropWith`, case `NPCProp::CURLEVEL` (`object/NPC.cpp:1337-1355`):
+```cpp
+>> (int)id >> (char)(localPosition.x()/8) >> (char)(localPosition.y()/8) << strProp->value
+```
+where `localPosition` is the position in the level being left (captured before removal), and
+`strProp->value` is the new level name being assigned.
 
 ### PLO_SIGNATURE (25) - Player Signature
 **Trigger**: Player requests signature verification
@@ -1158,11 +1217,11 @@ ctab        = {91,92,93,94,77,78,79,80,74,75,71,72,73,86,86,87,88,67}
 ### PLO_PRIVATEMESSAGE (37) - Private Message
 **Trigger**: Player receives PM
 ```
-[GSHORT: from_id]    // Sender player ID (graal short — ((b1-32)<<7)|(b2-32), NOT raw big-endian)
+[GSHORT: from_id]    // Sender player ID (reborn short — ((b1-32)<<7)|(b2-32), NOT raw big-endian)
 [CSV body...]        // toCSV: "","Private message:",<msg>   (or "Mass message:")
 ```
 
-> Two gotchas: (1) `from_id` is a **GSHORT** (graal-encoded), not a raw 16-bit big-endian
+> Two gotchas: (1) `from_id` is a **GSHORT** (reborn-encoded), not a raw 16-bit big-endian
 > value — decoding it as `(b0<<8)|b1` gives wildly wrong ids. (2) The body is a quoted-CSV
 > structure (`"<sender>","Private message:",<msg>`), not a bare message string.
 
@@ -1357,6 +1416,14 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 > **Pre-2.1 client variant:** no `modtime` field — `[GCHAR name_len][name][data]`, no
 > trailing newline, and the RAWDATA length is correspondingly smaller.
 
+> **Historical parser trap** (found and fixed during this audit): the `modtime` field is a
+> **7-bit-per-byte GINT5** (`CString::writeGInt5`), not five 8-bit bytes. An earlier
+> pyReborn `parse_file` decoded it with an 8-bit shift (`mod_time = (mod_time << 8) | b`),
+> producing garbage timestamps while leaving filename/data offsets intact — byte
+> consumption is 5 bytes either way, so the bug was invisible except in the decoded value.
+> Fixed in the current `parse_file` (`pyReborn/pyreborn/packets.py:2717`, which now carries
+> its own warning comment). GINT5 is always 7-bit-per-byte; C++ is ground truth.
+
 ### PLO_UPDATEPACKAGESIZE (105) - Update Package Size
 **Trigger**: Update package download size
 ```
@@ -1379,24 +1446,57 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 ```
 
 ### PLO_NPCBYTECODE (131) - NPC Bytecode
-**Trigger**: Compiled NPC script transfer
+**Trigger**: Sent automatically alongside `PLO_NPCPROPS` on level entry for clients
+`>= CLVER_4_0211` when the NPC has compiled GS2 bytecode. Wrapped in raw-data framing: a
+`PLO_RAWDATA (100)` announcing the byte count precedes it.
 ```
-[GINT3: npc_id]      // NPC identifier
-[BYTECODE_DATA...]   // Compiled script bytecode
+[GINT3: npc_id]      // NPC identifier (3 bytes)
+[BYTECODE...]        // Raw compiled GS2 bytecode, to end of packet
 ```
+**Source**: `Level::sendNPCsToPlayer` (`level/Level.cpp:1352-1358`):
+```cpp
+if (player->getVersion() >= CLVER_4_0211 && !npc->getScript().getClientByteCode().empty())
+{
+    CString byteCodePacket = CString() >> (char)PLO_NPCBYTECODE >> (int)npc->id;
+    byteCodePacket.write(/* raw bytecode */);
+    player->sendPacket(CString() >> (char)PLO_RAWDATA >> (int)byteCodePacket.length());
+    player->sendPacket(byteCodePacket);
+}
+```
+(`>> (int)` is `writeGInt` — a **3-byte** GINT3, `CString.cpp:1671`.) Byte-validated by
+pyReborn `parse_npc_bytecode` (`packets.py`) and
+`game_tester/tier5_tests.py:test_npc_bytecode_synthetic`.
 
-### PLO_GANISCRIPT (134) - GANI Script
-**Trigger**: GANI animation bytecode
+### PLO_GANISCRIPT (134) - GANI Bytecode
+**Trigger**: Response to `PLI_UPDATEGANI (157)` when the client's CRC32 differs from the
+server's current gani bytecode. Wrapped in `PLO_RAWDATA` framing.
 ```
-[GANI_BYTECODE...]   // Compiled GANI script
+[GCHAR: name_len]    // Gani name length
+[gani_name]          // WITHOUT the .gani suffix
+[BYTECODE...]        // Compiled gani-script bytecode, to end of packet
 ```
+**Source**: `GameAni::getBytecodePacket` (`animation/GameAni.cpp:107-122`) — the server
+strips a trailing `.gani` from the stored name before sending. Always followed by a
+`PLO_LOADGANI (195)` load command (sent regardless of whether the bytecode itself was
+re-sent — `msgPLI_UPDATEGANI`, `PlayerClientPackets.cpp:1460-1483`).
 
-### PLO_NPCWEAPONSCRIPT (140) - NPC Weapon Script
-**Trigger**: Weapon script transfer
+### PLO_NPCWEAPONSCRIPT (140) - Weapon Bytecode
+**Trigger**: Response to `PLI_UPDATESCRIPT (158)` (on-demand weapon-bytecode fetch), and
+also the server's fallback answer to a `PLI_UPDATECLASS` for a **nonexistent** class
+(header-only, empty bytecode — a deliberate workaround, see below).
 ```
-[GUSHORT: info_len]  // Script info length
-[SCRIPT_DATA...]     // Weapon script data
+[GSHORT: header_len] // Length of the header CSV
+[header CSV]         // "weapon,<name>,1,<desKey>"  (quoted-CSV; no CRC in THIS header)
+[BYTECODE...]        // Compiled GS2 bytecode, to end of packet (MAY be empty)
 ```
+**Source**: `Weapon::sendByteCodeToPlayer` (`object/Weapon.cpp:299-308`). The header CSV is
+Reborn quoted-CSV (`toCSV`): `weapon,<name>,1,<desKey>` where `<desKey>` is a 64-bit script
+hash packed as two GINT5s (`Weapon.cpp:230-252`); note this is `m_header` **without** the
+CRC32 — the CRC-bearing variant (`m_headerWithCRC`) goes out in `PLO_LOADSCRIPT (197)`
+instead. The unknown-class fallback (`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:
+1515-1528`) sends a `class,<name>,1,...` header with **empty bytecode** — the code comments
+it "should technically be PLO_LOADSCRIPT" but the client breaks `player.join()` scripts if
+a missing class arrives that way. Parsers must accept an empty bytecode tail.
 
 ### PLO_NPCDEL2 (150) - NPC Delete v2
 **Trigger**: NPC removed from specific level
@@ -1436,10 +1536,15 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 [STRING: level_name] // Active level name
 ```
 
-### PLO_MOVE (165) - Move Command
-**Trigger**: Server-initiated movement
+### PLO_MOVE (165) - NPC Move Command (v1, < CLVER_2_3)
+**Trigger**: Server-driven NPC movement, for clients below `CLVER_2_3` — see
+[Version-Gated Behavior](version-gated-behavior.md#npc-movement-plo_move-vs-plo_move2) and
+its `PLO_MOVE2 (189)` counterpart above. Built from `NPC.cpp:441` (`move1`, the legacy
+sibling of `getMoveQueuePacketData`'s `result.second`/`move2` form) — exact `move1` field
+layout not independently re-derived here; format not documented, only the version gate and
+send site are confirmed. `IEnums.h` carries a maintainer comment: `// Unhandled by 6.037.`
 ```
-[MOVEMENT_DATA...]   // Movement command data
+[MOVEMENT_DATA...]   // Format not documented here (see note above)
 ```
 
 ### PLO_GHOSTMODE (170) - Ghost Mode
@@ -1468,10 +1573,15 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 [GCHAR: icon_state]  // 1=show icon, 0=hide icon
 ```
 
-### PLO_SHOOT (175) - Shoot Projectile (Server)
-**Trigger**: Server-initiated projectile
+### PLO_SHOOT (175) - Shoot Projectile (v1, < CLVER_5_07)
+**Trigger**: Projectile broadcast to clients below `CLVER_5_07` — see
+[Version-Gated Behavior](version-gated-behavior.md#projectiles-plo_shoot-vs-plo_shoot2).
+Built via `newPacket.constructShootV1()` (`Server.cpp:2283-2292`); prefixed with
+`[GSHORT: owner_id]`. Exact `constructShootV1()` field layout not independently
+re-derived here. `IEnums.h` comment: `// Unhandled by 6.037.`
 ```
-[SHOOT_DATA...]      // Projectile data
+[GSHORT: owner_id]
+[SHOOT_DATA...]      // constructShootV1() body — format not documented here
 ```
 
 ### PLO_FULLSTOP (176) - Full Stop
@@ -1504,23 +1614,60 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 // No additional data - client responds with process list
 ```
 
+### PLO_BOARDHEIGHTS (185) - Board Height Layer
+**Trigger**: Sent when a level with a height layer is delivered to a player.
+```
+[GCHAR: mapX]         // GMAP segment column (0 for non-gmap)
+[GCHAR: mapY]         // GMAP segment row (0 for non-gmap)
+[GCHAR: blockX]       // Height-block origin X (server always sends 0)
+[GCHAR: blockY]       // Height-block origin Y (server always sends 0)
+[GCHAR: blockW]       // Height-block width (server always sends 8)
+[GCHAR: blockH]       // Height-block height (server always sends 8)
+[(blockW+1)*(blockH+1) entries, row-major (index = y*9+x for the default 8x8 block):]
+  [GCHAR: whole + 50]  // Integer height part, biased by +50
+  [GCHAR: frac * 128]  // Fractional height part, scaled by 128
+```
+**Source**: `SubLevel::sendBoardHeightsToPlayer` (`level/Level.cpp:437-474`) — the block
+size is currently always the fixed `0,0` origin / `8,8` extent (a 9×9 grid of height
+samples), giving `(8+1)*(8+1) = 81` height-value pairs after the 6-byte header.
+
 ### PLO_UPDATEPACKAGEISUPDATED (187) - Package Updated
 **Trigger**: Notify client of package update
 ```
 [STRING: filename]   // Updated file name
 ```
 
-### PLO_MOVE2 (189) - Move v2
-**Trigger**: Enhanced movement command
+### PLO_MOVE2 (189) - NPC Move Command (v2, >= CLVER_2_3)
+**Trigger**: Server-driven NPC movement (`move`/`movexy` GS scripting), for clients at or
+above `CLVER_2_3` — see [Version-Gated Behavior](version-gated-behavior.md#npc-movement-plo_move-vs-plo_move2)
+for the `PLO_MOVE`/`PLO_MOVE2` version split.
 ```
-[GUINT: player_id]   // Player to move
-[MOVEMENT_DATA...]   // Enhanced movement data
+[GINT3: npc_id]      // NPC identifier (3 bytes, NOT GUINT)
+[GSHORT: pos_x]       // Target X, X2/Y2-style pixel-coord encoding (see below)
+[GSHORT: pos_y]       // Target Y, same encoding
+[GSHORT: dx]           // X delta, same encoding
+[GSHORT: dy]           // Y delta, same encoding
+[GSHORT: time_50ms]   // Duration of the move, in 0.05s ticks
+[GCHAR: options]      // Movement option flags
 ```
+Each `GSHORT` coordinate/delta field uses the same encoding as player `X2`/`Y2` properties
+(`PropertyPixelCoordinate::serialize`, `PropertySerializers.cpp:375-381`):
+`value = (abs(pixels) << 1) | (negative ? 1 : 0)`. See
+[Data Types: X2/Y2 Encoding](data-types.md#x2y2-encoding-the-weird-one) for the decode.
 
-### PLO_SHOOT2 (191) - Shoot v2
-**Trigger**: Enhanced projectile (v5.07+)
+**Source**: `NPC::getMoveQueuePacketData` (`object/NPC.cpp:381-429`, the `result.second`
+form), sent via `NPC::sendMoveQueueToLevel`/`sendMoveQueueToPlayer` (`NPC.cpp:443,460`).
+
+### PLO_SHOOT2 (191) - Shoot Projectile (v2, >= CLVER_5_07)
+**Trigger**: Projectile broadcast to clients at/above `CLVER_5_07` — see
+[Version-Gated Behavior](version-gated-behavior.md#projectiles-plo_shoot-vs-plo_shoot2).
+Built via `newPacket.constructShootV2()` (`Server.cpp:2283-2292`); prefixed with
+`[GSHORT: owner_id]`. Exact `constructShootV2()` field layout not independently
+re-derived here. `IEnums.h` comment: "Valid message in 5.07 and 6.037. The code it uses is
+unique."
 ```
-[ENHANCED_SHOOT...]  // Enhanced projectile data
+[GSHORT: owner_id]
+[SHOOT_DATA...]      // constructShootV2() body — format not documented here
 ```
 
 ### PLO_CLEARWEAPONS (194) - Clear Weapons
@@ -1529,13 +1676,46 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 // No additional data - clears weapon list
 ```
 
-### PLO_LOADGANI (253) - Load GANI
-**Trigger**: Load GANI animation
+### PLO_LOADGANI (195) - Load GANI
+**Trigger**: Always sent in response to `PLI_UPDATEGANI (157)` (after the optional
+`PLO_GANISCRIPT` bytecode refresh), telling the client to activate the gani.
 ```
 [GCHAR: name_len]    // GANI name length
-[STRING: gani_name]  // GANI name
-[STRING: setbackto]  // SETBACKTO parameter
+[gani_name]          // GANI name (no .gani suffix)
+[stringlist]         // Reborn quoted-CSV, e.g. "SETBACKTO idle" — to end of packet
 ```
+> The packet ID is **195**, not 253 as an earlier revision of this page claimed
+> (`IEnums.h:316`). The trailing stringlist currently carries only the `SETBACKTO`
+> directive but is a general quoted-CSV list.
+
+**Source**: `msgPLI_UPDATEGANI` (`PlayerClientPackets.cpp:1481`):
+```cpp
+sendPacket(CString() >> (char)PLO_LOADGANI >> (char)gani.length() << gani << "\"SETBACKTO " << findAni->getSetBackTo() << "\"");
+```
+
+### PLO_LOADSCRIPT (197) - Load Script (TWO payload forms)
+**Trigger**: (a) weapon-header announcement during weapon registration; (b) class-bytecode
+delivery in response to `PLI_UPDATECLASS (161)` (via `PLO_RAWDATA` framing).
+
+**Form 1 — weapon announcement** (`Weapon::registerWeaponWithPlayer`, `object/Weapon.cpp:295`):
+```
+[header CSV]         // RAW, no length prefix, no bytecode — to end of packet
+                     // "weapon,<name>,1,<desKey>,<crc32>"  (m_headerWithCRC)
+```
+
+**Form 2 — class bytecode** (`ScriptClass::getClassPacket`, `scripting/ScriptClass.cpp:66-77`):
+```
+[GCHAR: header_len]  // Length of the header CSV
+[header CSV]         // "class,<name>,1,<desKey>,<crc32>"
+[BYTECODE...]        // Compiled GS2 bytecode, to end of packet
+```
+
+**Disambiguation** (as implemented in pyReborn `parse_loadscript`): form 1 is pure CSV text
+whose payload starts with a known script-type name (`weapon,`/`npc,`/`class,`/`gani,`);
+form 2's first byte is a small GCHAR length. Check for a leading known-type prefix first,
+fall back to the length-prefixed read. Header fields: `type,name,saveToDisk[0/1],desKey
+(two GINT5s = 64-bit hash),crc32 (GINT5)` per the `IEnums.h:317` comment and
+`Weapon.cpp:242-257` / `ScriptClass.cpp:44-54` header construction.
 
 ## Encryption Implementation Details
 

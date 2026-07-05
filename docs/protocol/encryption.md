@@ -2,6 +2,14 @@
 
 This section covers how packets are encrypted, compressed, and bundled in the Reborn protocol. The word "encryption" is used loosely here—this is obfuscation, not cryptographic security.
 
+> **Which generation does a given client use?** That's not a property of the client version
+> string — it's selected by the `PLTYPE_*` login-type byte, with a couple of version-string
+> based downgrades/fallbacks along the way. See
+> [Client Versions & Encryption](versions-encryption.md) for the full client/RC/NC version
+> table, the PLTYPE → generation selection logic, the login packet field order, and the
+> per-generation bundle framing (GEN_1 through the unimplemented GEN_6). This page focuses
+> on the GEN_5 cipher internals themselves.
+
 ## The Packet Lifecycle
 
 Understanding the full journey of a packet is crucial. Here's what happens:
