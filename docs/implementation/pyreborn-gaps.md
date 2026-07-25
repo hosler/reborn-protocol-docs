@@ -9,7 +9,7 @@ packet set.
 > base suite **16/16**, tier1 **2/2** (board modify, large files), tier2 **4/4**
 > (bomb/arrow/horse/flagdel relay), tier3 **4/4** (freeze/say2 cycle,
 > triggeraction relay, serverwarp round-trip, synthetic parsers), tier5 **5/5**
-> (GS2 bytecode transport), GMAP suite **6/6**, and the packet-coverage
+> (GS2 bytecode transport and execution), GMAP suite **6/6**, and the packet-coverage
 > harnesses (`--coverage`, `--coverage-rc`, `--coverage-nc`) report **100%** of
 > emitted types parsed for base/RC/NC sessions. The version probe
 > (`game_tester/version_probe.py`) passes with **live 1.411, 2.17, and 2.21
@@ -19,7 +19,7 @@ packet set.
 > (`reborn-protocol/reborn_protocol/codec.py` `Gen3Codec`/`Gen4Codec` — wire
 > details in [Client Versions & Encryption](../protocol/versions-encryption.md#gen_3s-single-byte-insertion-precisely)),
 > server-control packets (freeze/say2/serverwarp/inbound triggeraction/profile,
-> `game_tester/tier3_tests.py`), GS2 bytecode **transport** (parse + store of
+> `game_tester/tier3_tests.py`), GS2 bytecode **transport and execution** (parse + store of
 > NPCBYTECODE/GANISCRIPT/NPCWEAPONSCRIPT/LOADGANI/LOADSCRIPT — layouts in
 > [Version-Gated Behavior](../protocol/version-gated-behavior.md#bytecode-packet-family)),
 > and the RC write-side builders (protocol parity tier 6, `packets.py`).
@@ -54,12 +54,12 @@ props. See [Packet Structures](../protocol/packet-structures.md) for the table.
 
 ## Remaining genuine gaps
 
-### GS2 bytecode execution — no VM
+### GS2 bytecode execution
 
-GS2 bytecode is now fully **transported** (requested, parsed, stored — tier5 suite), but
-nothing in the Python stack **executes** it: there is no GS2 VM. Weapons/NPCs whose
-behavior exists only as compiled GS2 will render but not run. (GS1 source scripts run fine
-via the shared GS1 interpreter.)
+GS2 bytecode is requested, parsed, stored, and executed by the Python client.
+The VM implements cooperative event execution and reports opcode and host-call
+coverage. See [GS2 bytecode and client runtime](gs2-engine.md) for the
+container, verified semantics, host surface, and deliberately inert calls.
 
 ### GEN_6 / v6-native encryption
 

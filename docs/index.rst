@@ -32,6 +32,7 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
    implementation/pyreborn-analysis
    implementation/pyreborn-gaps
    implementation/conformance
+   implementation/gs2-engine
    examples/usage
 
 About This Documentation
@@ -48,6 +49,7 @@ This documentation is derived from deep analysis of the GServer-v2 codebase and 
 * The RC and NC admin sub-protocols, including the NC GEN_2 login handshake
 * The GMAP coordinate system and the local-vs-world coordinate quirk
 * PyReborn library conformance analysis
+* GS2 bytecode container, VM semantics, and client host reference
 * Implementation examples in Python, JavaScript, and C++
 
 The documentation is maintained as part of the OpenReborn2 project and is designed to enable developers to create compatible Reborn clients and servers in any programming language.
@@ -72,6 +74,7 @@ For existing developers:
 * :doc:`protocol/rc-nc-protocols` - RC/NC admin sub-protocols and the GEN_2 login
 * :doc:`protocol/gmap` - GMAP coordinate frames and the local/world quirk
 * :doc:`implementation/pyreborn-analysis` - Conformance issues and fixes
+* :doc:`implementation/gs2-engine` - GS2 bytecode, runtime semantics, and host policy
 
 Contributing
 ============

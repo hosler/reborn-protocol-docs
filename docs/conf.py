@@ -59,7 +59,6 @@ myst_heading_anchors = 4
 html_theme_options = {
     'analytics_id': '',
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
     'collapse_navigation': True,

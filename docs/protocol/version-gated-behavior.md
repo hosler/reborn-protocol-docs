@@ -320,5 +320,6 @@ end); `PLI_UPDATEGANI (157)` = `{GINT5 crc32}{gani_name}`; `PLI_UPDATECLASS (161
 `UPDATECLASS` only when the client's CRC32 differs from the current bytecode's; send
 checksum 0 to force a fresh copy.
 
-This family is bytecode-*transport* only — parsing/storing the blob needs no GS2 VM;
-executing it does, and no GS2 VM exists in this project's Python stack.
+The Python client parses, stores, and executes this bytecode. See
+[GS2 bytecode and client runtime](../implementation/gs2-engine.md) for the
+container, VM semantics, host integration, and coverage reporting.
