@@ -550,3 +550,54 @@ field only lands on the control if `has()` claims the name
 - Whether `resizewidth`/`resizeheight`/`edgesnap` drive edge-drag resizing: the
   fields `m_resizeEdge`, `m_resizeMargin`, `m_mouseResizeWidth/Height` are
   initialised (`GuiWindowCtrl.cpp:59-63`) and never read in the recovered file.
+
+## 8. 2026-07-26 implementation round (text family + engine events)
+
+- **`onTextChanged` (§4.1 step 3) is implemented** on `GuiTextCtrl`'s text
+  setter (pyReborn `gs2_gui/basic_controls.py`): unchanged-text early-out,
+  clip first, then the event with the clipped text — one path for script
+  `.text =`, `settext()` and typed input, matching the virtual dispatch
+  (C5). Corpus weight was under-counted by the §5 construction-block
+  method: `catchevent(..., "onTextChanged", ...)` routes ~15 fields in the
+  staff sprite editor (`weapon-Staff_GraalShop.txt:519` ff.) and Login's
+  events pane hangs a dotted handler
+  (`gbf/bytecode/login/_Serverlist_Events.gs2bc.gs2:1190`,
+  `Serverlist_EventOptions_Teams.onTextChanged(newtext)`).
+- **C7 implemented**: the `text` PROPERTY setter zeroes both selection
+  anchors on `GuiTextEditCtrl`; the inherited `settext()` method does not.
+- **`onResize` is real; only the canvas-level dispatch is routed.**
+  `GuiControl::resize` fires `onResize("ii", newW, newH)` on every control
+  whose extent changed (`src/gui/GuiControl.cpp:2615-2618`; `onMove(x, y)`
+  at `:2611` likewise). Login hangs the chat-bar resize off the canvas's
+  fixed names (`function GraalControl.onResize(newwidth, newheight)`,
+  `weapon-Rescripted_Serverlist.txt:2634`, `GraalControl3D` `:2735`) —
+  dispatched across the weapon VMs on canvas resize. The PER-CONTROL event
+  is deliberately NOT fired: the reference fires it from every resize path
+  (script width/height writes included), and Login's `Serverlist_*Window.
+  onResize` handlers (`:3027-3059`) resize each other — firing them from
+  only the canvas-sizing sweep (a state the reference never sees) was
+  live-tested on 2026-07-26 and collapsed `Serverlist_Map`. All-or-nothing;
+  see the `_apply_sizing` comment in `gs2_gui/manager.py`.
+- **Engine handlers checked against the six corpora**: `onReceiveText` was
+  already routed (gs2_client PLO_SERVERTEXT); `onLogMessage` exists in one
+  weapon (`weapon-Rescripted_-F2LogWindow.txt:92`) but is NOT routed — the
+  headless client has no engine log channel to feed it; deliberate gap.
+  `onInitServerWarp` / `onHandleServerWarp`: **zero corpus hits** — a
+  census claim refuted by grep; nothing to route.
+- **`makevar` is NOT a builtin.** `makevar("temp.creds." @ x)` compiles to
+  `OP_CONV_TO_STRING; OP_MAKEVAR` with no Call op (gs2test-verified). The
+  gap was dotted-name deref: the VM's `_lookup` now walks `a.b.c` (head
+  through the scope chain, rest through members) when the flat name
+  resolves nothing. Read-only, matching the corpus use
+  (`weapon-LoginScreen.txt:341`).
+- **Mobile-corpus builtins**: `_(s)` (localization wrapper,
+  `weapon-Mobile_Login.txt:176`) answers identity; `char(n)` answers the
+  chr (`weapon-LoginScreen.txt:341`); both are Era/mobile names absent from
+  FourPlay — semantics from usage, flagged as such in the handlers.
+  `des_decrypt` and `initializeiphonedisplay` joined the POLICY-INERT stub
+  set (`gs2_client.py stubbed`): the mobile credential cache round-trips
+  account+password through `des_encrypt`/`des_decrypt`
+  (`weapon-Mobile_Login.txt:325-336`), and this client keeps that whole
+  surface inert. `Quattro::DebugTools::*` calls (bomber
+  `weapon-System.txt:49-52`) were already covered by the
+  `quattro::debugtools::` prefix stub.

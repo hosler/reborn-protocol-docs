@@ -471,3 +471,36 @@ worth recording, since they have no `TObjectCreator` and no corpus reference:
 5. `availablefilters` returns whatever `propfun_drawingpanel_availablefilters_r`
    builds; that body lives in a `TDrawingPanel` unit I did not open. Type `'o'`,
    read-only — that much is from the table (`:188`).
+
+---
+
+## 2026-07-26 implementation round (context menu + drawing panel)
+
+- **`GuiContextMenuCtrl` aliasing implemented** (pyReborn
+  `gs2_gui/popup_controls.py`): `profile`/`scrollprofile` are one slot
+  (pointer-identical table entries, `GuiContextMenuCtrlProperties.cpp:157`
+  vs `:159`) styling the frame; `textprofile` styles the rows (the popup
+  row painter resolves it separately); the `width` setter clamps to >= 1
+  (`:74-78`). Deliberately NOT modelled, recorded in the class docstring:
+  the asymmetric `width` read (text-list extent vs scroll write, one
+  control here so ours round-trips) and the RO `rows` forward (0 corpus
+  reads — and claiming it with an invented shape would be guessing).
+- **`GuiDrawingPanel` completed** (`gs2_gui/collection_controls.py`): all
+  14 funcDefs answered and all 6 propDefs claimed. New bodies read while
+  implementing: `drawcurve`'s invalidation rect spans p1..p3 padded by
+  width (`GuiDrawingPanelProperties.cpp:87-96`), so p1/p3 are endpoints and
+  p2 the shape point — rendered as a flattened quadratic bezier;
+  `maskimage`'s `"iiss"` 4th arg is a MODE string, not a second image
+  (`:172-176` forwards to `maskImage_Impl(x, y, image, mode)`);
+  `setdrawpalette` is `(palette, alpha)` (`:178-181`). `saveimage`'s
+  sandbox gate (call dropped when the filename rewrite returns empty,
+  `:152-157`) is modelled as basename+image-extension; a passing name
+  snapshots the op list — this client never writes script-named files.
+  `partx/party/partw/parth` answer 0 (RO, backing-field meaning
+  unrecovered) and `availablefilters` answers an empty array
+  (`'o'` RO, body unrecovered — typed so the read is not Number 0.0);
+  `filterrectangle` stays the doc's unverifiable-return entry, answered as
+  a typed no-op.
+- The per-class diff table above is now stale where it says MISSING for
+  these two classes; the remaining WRONG/MISSING rows (`GuiShowImgCtrl` as
+  a TShowImg host, `GuiProgressCtrl` default extent) are untouched.

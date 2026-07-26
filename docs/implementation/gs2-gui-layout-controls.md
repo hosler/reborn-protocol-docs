@@ -958,3 +958,53 @@ Then, by value:
    corpora, so schedule only if a live capture shows an RC/log window.
 10. Everything else in §2-§7 with a corpus count of 0 — leave
     registered-but-inert. `GuiArrayCtrl` in particular: do not implement (§7).
+
+## 10. 2026-07-26 implementation round: `copyfrom` and the own-profile copy
+
+The two profile-copy open items from §1.10/§1.11 are implemented; three
+new oracle facts were established doing it, all body-read:
+
+**(a) `copyfrom` is script-reachable on EVERY object, and two classes opt
+in.** The registration is on the root object class
+(`src/TGraalVarProperties.cpp:278-285`, `'v'` params `"o"`, raw address —
+the body is `TGraalVar::copyFrom`, §1.10). The gate (`:2208-2214`) passes
+for exactly two tables: `GuiControlProfile`
+(`GuiControlProfileProperties.cpp:618`, §1.11) **and `TStaticVar`
+(`TStaticVarProperties.cpp:16`)** — the second was not previously recorded,
+and it is what makes `new TStaticVar()` script objects copyable. The live
+`weapon-Scripted_RC` bytecode calls `.copyfrom(` six times (control-flow
+graph `Preagonal/gbf/bytecode/weapon-Scripted_RC.svg`, method-call shape
+`PushVariable copyfrom; AccessMember; Call`).
+
+*Implemented:* `GS2Object.copy_from` + VM dispatch as a root-object method
+(`reborn_protocol/gs2/values.py`, `vm.py _root_object_method`/
+`_list_method`); the gate lives host-side — `GuiControl.copy_from` is the
+reference's silent no-op, `GuiControlProfile.copy_from` re-enables it
+(members copied with arrays cloned, plus our chain-root, which reproduces
+the reference's all-49 registered copy under the chain model).
+
+**(b) `useownprofile` IS a profile copyFrom.** `setUseOwnProfile(true)`
+allocates an anonymous `GuiControlProfile`, `copyFrom`s the control's
+current profile into it and makes it the effective profile — idempotent
+while one exists; `false` destroys it and reverts
+(`src/gui/GuiControl.cpp:1746-1806`). The getter is the derived read
+`ownProfile != nullptr` (`GuiControlProperties.cpp:559-561`). This is what
+the corpus' `useownprofile = true; profile.<field> = ...;` idiom relies on
+for per-control styling — the recently-added mobile corpus writes it in 3
+scripts (e.g. `graal-loginserver-mobile/weapons/weapon-Mobile_Login.txt:118`),
+and it was previously UNCLAIMED, so the write (and the isolation) was
+silently dropped.
+
+**(c) Assigning `profile` drops an active own profile.**
+`GuiControl::setProfile`'s own-profile branch destroys it and nulls the
+slot before installing the new profile (`GuiControl.cpp:1706-1709`).
+
+*Implemented:* `GuiControl.own_profile` +
+`_set_use_own_profile` (pyReborn `gs2_gui/base.py`); the `profile` getter
+now also resolves a NAME to the registered/vivified profile object (the
+`AcceptStringProperty` getter always returns an object, §"How a control
+reaches its profile"), so `ctrl.profile.<field> = ...` writes land on the
+shared profile exactly as the reference does when no own profile exists.
+Also claimed from the same table: `clipchildren` (`:660`) and
+`cliptobounds` (`:662`) — store-only, 3+2 mobile-corpus scripts write them
+bare.
