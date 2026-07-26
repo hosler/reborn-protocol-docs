@@ -31,15 +31,17 @@ Comprehensive documentation for the Reborn protocol, providing detailed packet s
 
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+/usr/bin/python3.13 -m pip install -r requirements.txt
 
 # Build docs
-cd docs
-make html
+/usr/bin/python3.13 -m sphinx -b html docs _build/html
 
 # View docs
 open _build/html/index.html
 ```
+
+Use `/usr/bin/python3.13` for repository tests and documentation tooling. The
+system `python3` is 3.14 and does not have Hypothesis installed.
 
 ## Online Documentation
 

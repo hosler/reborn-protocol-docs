@@ -55,7 +55,7 @@ When implementing level links in GMAP mode:
 
 ## GServer Source Code References
 
-From `PlayerClient.cpp` (current source, ~line 1450):
+From `GServer-v2/server/src/player/PlayerClient.cpp:1481-1489`:
 ```cpp
 // Send clientside links/signs only when there is NO NPC server
 // (or when explicitly forced, or on a bigmap segment).
@@ -74,7 +74,8 @@ if (!m_server->hasNPCServer() || m_server->cached.forceClientsideSigns.getValue(
 > the bigmap case). Older docs quoted a `getBool("serverside", false)` check that no
 > longer exists in source.
 
-From `LevelLink.cpp` (handling special values):
+From `GServer-v2/server/src/level/LevelLink.cpp:53-64` (handling special
+values):
 ```cpp
 if (m_destinationX == "-1")
 {
@@ -83,9 +84,75 @@ if (m_destinationX == "-1")
 }
 ```
 
-## PyReborn Implementation
+## Event Audience and Visibility
 
-PyReborn handles this by:
+The reference server uses more than one audience rule. Implementers should not
+collapse them into a generic notion of "nearby."
+
+### In-range delivery is an inclusive box
+
+`Level::findInRangePlayers` compares each axis independently:
+`abs(dx) <= syncx && abs(dy) <= syncy`. The audience is therefore an
+axis-aligned **box**, not a radius or circle. A player at `(syncx, syncy)` from
+the event is included even though its Euclidean distance exceeds either
+individual limit. The comparison is inclusive at both boundaries
+(`GServer-v2/server/src/level/Level.cpp:2988-3035`).
+
+Inclusive versus strict comparison is an observable hitbox difference. A
+recipient exactly `syncx` tiles away receives the event; changing `<=` to `<`
+drops that recipient. It is not a rounding detail.
+
+The search iterates the level's own `m_players` set, not a server-wide player
+list. Level-part delivery preserves that membership rule:
+`Server::sendPacketToOneLevelPart` delegates to
+`Level::findPlayersInLevelPart`, which filters the same `m_players` set by map
+cell (`GServer-v2/server/src/Server.cpp:2676-2689`,
+`GServer-v2/server/src/level/Level.cpp:3077-3095`).
+
+### Explosion damage uses a plus, and only targets NPCs
+
+`Level::addExplosion` does **not** use either audience shape. It constructs a
+one-tile-wide vertical rectangle of height `1 + 2r` tiles and a one-tile-high
+horizontal rectangle of width `1 + 2r` tiles. Their union is a **plus/cross**,
+and NPCs intersecting either strip receive `hurtAndPush`
+(`GServer-v2/server/src/level/Level.cpp:2131-2144`).
+
+That code only searches NPC collision results. The reference server applies no
+server-side explosion damage there to players or baddies; it relies on client
+reports through `PLI_HURTPLAYER` and `PLI_BADDYHURT`. Consequently, a server
+that wants authoritative blast damage has no reference player/baddy shape to
+copy. It must define and document its own shape, boundary comparison,
+occlusion, and de-duplication policy.
+
+## NPC Ownership and Client Mutation
+
+When an NPC server is present, the reference server refuses all three
+client-originated NPC mutation operations before parsing their payload:
+
+| Handler | Early-return source |
+|---------|---------------------|
+| `msgPLI_NPCPROPS` | `GServer-v2/server/src/player/packets/PlayerClientPackets.cpp:189-196` |
+| `msgPLI_PUTNPC` | `GServer-v2/server/src/player/packets/PlayerClientPackets.cpp:753-761` |
+| `msgPLI_NPCDEL` | `GServer-v2/server/src/player/packets/PlayerClientPackets.cpp:782-790` |
+
+The packets return `Handled`, but no mutation occurs. Treating that return as
+authorization would let the client and NPC server disagree about ownership.
+
+## Chat Change Semantics
+
+The current chat value is compared before assignment. An unchanged value exits
+without firing the player-chat event; a change to the empty string continues
+through `processChat` and can queue `PLAYERCHATS`
+(`GServer-v2/server/src/player/PlayerProps.cpp:348-367`).
+
+Implementations must therefore distinguish **empty** from **absent**. Empty is
+a present chat property that clears a previous value and fires the change
+event. Absent means no chat update. Repeating the already-current value,
+including repeating empty after it was cleared, does not fire the event.
+
+## Reborn Client Implementation
+
+The Reborn client handles this by:
 1. Checking level links on every movement (`client.py` edge-link detection + `game/actions.py`)
 2. Performing a client-side warp when a non-edge link is touched
 3. Treating GMAP edge links as automatic segment transitions rather than warps

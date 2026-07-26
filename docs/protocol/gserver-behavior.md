@@ -297,6 +297,12 @@ corrupt by one byte until the flag wiring is fixed upstream.
 Several client packet handlers branch on `Server::hasNPCServer()` (true when
 `serverside = true` with the built-in NPC server). Two that surprise client implementers:
 
+- **Client NPC mutation is refused when the server owns NPCs.**
+  `msgPLI_NPCPROPS` and `msgPLI_NPCDEL` immediately return without applying the
+  request when `hasNPCServer()` is true
+  (`GServer-v2/server/src/player/packets/PlayerClientPackets.cpp:189-193` and
+  `:782-786`). A client must treat server-owned NPC state as authoritative.
+
 - **`PLI_BOMBADD` is not relayed between clients.** Without an NPC server the handler
   relays `PLO_BOMBADD` to the rest of the level part; with one, the bomb is handed to the
   server-side bomb engine (`level->addBombFromClient(...)`) and **no `PLO_BOMBADD` is
@@ -310,6 +316,15 @@ Several client packet handlers branch on `Server::hasNPCServer()` (true when
   `server.foo=bar` falls through and is stored as an ordinary *player* flag instead —
   silently, with no error. (`serverr.*` and `clientr.*` are rejected read-only in all
   configurations.)
+
+## Chat Change Events Include Clearing
+
+`Player::setProp` compares `CURCHAT` with the stored message before doing
+anything. An unchanged value exits immediately; a changed value is stored and,
+when chat command processing does not consume it, queues `PLAYERCHATS`
+(`GServer-v2/server/src/player/PlayerProps.cpp:354-368`). Consequently, changing
+non-empty chat to the empty string is still a change and fires the player-chat
+event. Re-sending the already-empty value does not.
 
 ## Known Upstream Crash: Weapon Bytecode at Login
 

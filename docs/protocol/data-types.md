@@ -275,6 +275,12 @@ local = world % 64
 `X2/Y2/Z2` use the signed pixel packing above. The NPC equivalents use the same GSHORT
 encoding.
 
+The one-byte player/NPC `X` and `Y` properties are signed half-tile coordinates, not
+ordinary unsigned GCHARs. After removing the +32 wire bias, values `216..255` are
+interpreted as signed 8-bit values (`-40..-1`) before division by two. This is the
+`PropertyTileCoordinate::deserialize` contract
+(`GServer-v2/server/src/utilities/PropertySerializers.cpp:420-429`).
+
 ## Player Property Data Types
 
 ### Colors (5 or 8 bytes)
@@ -287,10 +293,16 @@ Player colors are consecutive GCHARs:
 Each byte: color index (+ 32 for encoding)
 ```
 
-> The count is **generation-dependent, not version-string dependent**: the server emits
-> 8 colour bytes in new-world mode (`isNewWorldMode()`) and 5 in classic mode. The reborn
-> stack targets v6.037 (new-world) → **8 bytes**. A parser hard-coded to 5 will desync the
-> rest of the property block against a modern server.
+> The count is **server-policy-dependent, not client-version-dependent**. The reference
+> server's `PropertyColors::getColorCount()` asks `Server::isNewWorldMode()` and returns
+> either 8 or 5 (`GServer-v2/server/src/utilities/PropertySerializers.cpp:628-632`).
+> Consequently a receiver cannot derive the width from the handshake, and no particular
+> default is normative. A configurable server chooses one width for the world.
+>
+> A client that does not know the policy can parse with its preferred width, require the
+> property stream to consume cleanly in ascending-ID order, and retry once with the other
+> width if the first interpretation overruns, leaves bytes, or produces an invalid/decreasing
+> next ID. Never merge partial results from the failed attempt.
 
 ### Status Flags (Bitfield)
 
@@ -318,7 +330,7 @@ Values: 0 = evil, 20 = neutral, 100 = good
 | Field | Encoding | Notes |
 |-------|----------|-------|
 | `STATUS` | GCHAR bitfield | `PAUSED`, `HIDDEN`, `MALE`, `DEAD`, `ALLOWWEAPONS`, `HIDESWORD`, `HASSPIN` |
-| `COLORS` | 5 or 8 GCHARs | Classic mode uses 5 bytes; new-world/v6.037 uses 8 |
+| `COLORS` | 5 or 8 GCHARs | Width is selected by server-wide new-world mode, not handshake version |
 | `X2`, `Y2`, `Z2` | GSHORT | Signed pixel values packed with the low-bit sign flag |
 | `ONLINESECS` | GINT3 | 3-byte online time counter |
 | `ONLINESECS2` | GINT5 | 5-byte online time counter |
@@ -339,7 +351,8 @@ wire widths.
 | 4 | POWER | GCHAR | Hit points in half-hearts |
 | 5 | RUPEES | GINT3 | 3-byte value, not a direction byte |
 | 6-7 | ARROWS/BOMBS | GCHAR | Single-byte counts |
-| 8-11 | SWORD/SHIELD/POWER IMAGE | Variable | Same power+image rules as player props |
+| 8-9 | GLOVEPOWER/BOMBPOWER | GCHAR | Single-byte powers |
+| 10-11 | SWORDIMAGE/SHIELDIMAGE | Variable | Power+image forms, **not plain strings** |
 | 12 | GANI | GCHAR length + string | Animation name |
 | 13-14 | VISFLAGS/BLOCKFLAGS | GCHAR bitfields | Packed flags |
 | 15 | MESSAGE | GCHAR length + string | Chat text |

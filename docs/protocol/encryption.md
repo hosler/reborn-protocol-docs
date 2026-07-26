@@ -217,6 +217,33 @@ Why these specific limits? The theory is that compressing data makes the first b
 
 Why 0x02, 0x04, 0x06 instead of 0, 1, 2? Probably to avoid having 0x00 bytes in the stream, maintaining the protocol's allergy to low-value bytes.
 
+### Outbound Compression Is a Session Contract
+
+GEN_5 does not have one universal size policy. Reborn uses these outbound
+policies:
+
+| Uncompressed payload size | Game session | List-server session |
+|---|---|---|
+| `0..55` bytes | uncompressed, type `0x02` | uncompressed, type `0x02` |
+| `56..8192` bytes | zlib, type `0x04` | zlib, type `0x04` |
+| `>8192` (`0x2000`) bytes | bzip2, type `0x06` | zlib, type `0x04` |
+
+Thus the policies agree for every size through 8192 bytes and diverge only
+above it. This is a wire contract, not merely a compression optimization: the
+receiver consumes the type byte and `limitFromType`/`limit_from_type` derives
+the partial-XOR limit from it. Reborn records the distinction in
+`reborn_protocol.encryption.CompressionPolicy`, `GAME_COMPRESSION`, and
+`LIST_SERVER_COMPRESSION`.
+
+The two-tier list-server rule describes the client's historical behavior
+against the closed production list server; it is **not** a demonstrated
+server-side prohibition. The open reference list server accepts `0x06`, calls
+`limitFromType`, decrypts, and bzip2-decompresses it
+(`graal-serverlist/server/src/PlayerConnection.cpp:137-153`). A compatible
+client nevertheless should emit only uncompressed or zlib bundles for a
+production list-server session unless it has separately established bzip2
+support.
+
 ## The Magic Constants
 
 ### Iterator Starting Values

@@ -198,7 +198,24 @@ There are **two separate mechanisms** here, easy to conflate into one:
    how many distinct color *values* are legal, not how many *bytes* are on the wire.
 
 Don't gate wire-format parsing on `enableexbodycolors` — gate it on the server's new-world
-mode instead.
+mode instead. This mode is server-wide and is not encoded in the client
+handshake, so a client cannot derive the five-versus-eight-byte width from its
+own version. It needs server configuration, an out-of-band session profile, or
+a cautious parser policy. See [Packet Structures](packet-structures.md) for the
+property stream rather than treating the handshake as a width discriminator.
+
+## Sword and Shield Bias Forms Are Server-Generation Gates
+
+Sword and shield properties have a compact preset form and a biased custom-image
+form. Sword custom form stores `power + 30`; shield custom form stores
+`power + 10`, followed by a GUCHAR image length and image bytes
+(`GServer-v2/server/src/utilities/PropertySerializers.cpp:77-164`).
+
+For the compact preset form, the server synthesizes default filenames according
+to its generation: classic mode uses `swordN.gif`/`shieldN.gif`, while modern
+mode uses `swordN.png`/`shieldN.png`. Like `COLORS`, this is server behavior,
+not a value derivable solely from the connecting client's version. Detailed
+property layouts belong in [Packet Structures](packet-structures.md).
 
 ## Login-Time Gates in `sendLogin`
 

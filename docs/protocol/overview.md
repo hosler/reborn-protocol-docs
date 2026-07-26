@@ -34,7 +34,7 @@ The Reborn protocol supports multiple connection types:
 | **RC (Remote Control)** | Server administration | GEN_5 (RC2) / GEN_2 (legacy RC) | Admin access |
 | **NC (NPC Control)** | Content management | **GEN_2** | NPC scripting; no key byte |
 | **NPC-Server** | Dedicated NPC server | Varies | GS1/GS2 (V8 optional) |
-| **Listserver** | Server discovery | GEN_2 | Login/server list |
+| **Listserver** | Server discovery | GEN_2 init → GEN_5 session | First request switches codecs |
 
 See [RC & NC Protocols](rc-nc-protocols.md) for the admin sub-protocol login handshakes.
 
@@ -93,6 +93,11 @@ The protocol has evolved through multiple "generations" of encryption:
 GEN_5 is recommended. "Weak XOR" means it's obfuscation, not cryptographic security.
 
 See [Encryption Details](encryption.md) for implementation specifics.
+
+GEN_5 compression selection is session-specific. Game sessions use
+uncompressed/zlib/bzip2 tiers at 55 and 8192 bytes; list-server sessions use
+only uncompressed/zlib with the 55-byte boundary. See
+[Outbound Compression Is a Session Contract](encryption.md#outbound-compression-is-a-session-contract).
 
 ## Data Encoding
 

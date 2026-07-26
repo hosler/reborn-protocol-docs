@@ -91,6 +91,61 @@ uint16_t encodeGShort(uint16_t value) {
 
 ## Testing Requirements
 
+Commands below use `$REPO_ROOT` for the directory holding the sibling
+checkouts (`pyReborn/`, `reborn-protocol/`, `GServer-v2/`, …); set it to your
+own working copy first.
+
+### GS2 compiler baseline
+
+The compiler baseline is the upstream `gs2-parser` harness, not pytest.
+`ctest` does not discover the cached `gs2test` executable. Run the harness
+with `/usr/bin/python3.13`, copying its test tree to a temporary project and
+providing the Reborn compiler adapter at the path the harness searches:
+
+```bash
+cd $REPO_ROOT/GServer-v2/build/dependencies/fc/gs2parser-src
+test_root="$(mktemp -d)"
+cp -a tests "$test_root/tests"
+mkdir -p "$test_root/bin"
+ln -s $REPO_ROOT/reborn-protocol/tests/tools/gs2test \
+  "$test_root/bin/gs2test"
+/usr/bin/python3.13 tests/tools/run_tests.py --project-root "$test_root"
+```
+
+The accepted baseline is **178 total, 175 passed, 0 failed, 3 expected
+failures, and 0 regressions**. Never adjust a baseline fixture to match new
+output: that is the one change that destroys the suite's value. Diagnose and
+correct either the compiler or the intended behavior instead.
+
+The invocation follows `tests/tools/run_tests.py`, `GS2TestRunner._find_compiler()`
+and `main()`, in the cached upstream checkout. Copying `tests/` is important:
+the runner creates reports and transient compiler output, while the
+third-party checkout is a read-only oracle.
+
+### Live GS2 execution
+
+From `$REPO_ROOT/pyReborn`, run:
+
+```bash
+/usr/bin/python3.13 -m game_tester --gs2
+```
+
+The accepted result is **6/6**, over **175 scripts**, with **crashes=0**,
+**ops seen=95**, and **unimplemented=0**. This check must target
+GServer-v2's `gs2emu`, not `pygserver`. Its `qa_gs2vm` weapon fixture exists
+only under GServer-v2, at
+`GServer-v2/bin/servers/default/weapons/weaponqa%095gs2vm.txt`; pointing the
+test at `pygserver` produces the misleading result
+`1/6 - no weapon vm`, which is an environment error rather than a VM result.
+
+### Required Python interpreter
+
+Run these suites with `/usr/bin/python3.13`. The system `python3` is 3.14 and
+lacks Hypothesis. Under it, the `reborn-protocol` property suite fails during
+collection; treating the remaining collected tests as green gives a false
+conformance result. Always inspect collection errors and the collected test
+count, not only the final pass count.
+
 ### Unit Tests
 ```python
 def test_gshort_encoding():

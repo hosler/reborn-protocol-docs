@@ -1,8 +1,9 @@
 # NPC Properties
 
-NPCs are serialized with their **own property enum** (`NPCProp`, from GServer-v2
-`server/include/object/NPC.h`'s `FOR_LIST_OF_NPC_PROPS` X-macro), with byte widths defined
-in `PropertySerializers.cpp`. The authoritative wire-width table now lives in
+NPCs are serialized with their **own property enum**, IDs **0 through 77**
+(`GServer-v2/server/include/object/NPC.h:52-147`), whose serializers are bound by
+`FOR_LIST_OF_NPC_PROPS` (`GServer-v2/server/include/object/NPC.h:580-659`). The
+authoritative wire-width table lives in
 [Data Types](data-types.md#npc-property-data-types). This enum is **not** the same as the
 player property enum — sharing assumptions between them is the single biggest source of
 garbled NPC parsing.
@@ -46,8 +47,8 @@ For the canonical wire-width and encoding notes, see
 | 7 | BOMBS | `[GCHAR]` |
 | 8 | GLOVEPOWER | `[GCHAR]` |
 | 9 | BOMBPOWER | `[GCHAR]` |
-| 10 | SWORDIMAGE | `PropertySwordPower` — same variable format as player prop 8 (`+30` for custom image) |
-| 11 | SHIELDIMAGE | `PropertyShieldPower` — same as player prop 9 (`+10` for custom image) |
+| 10 | SWORDIMAGE | `PropertySwordPower`: bare power or `power+30` then length-prefixed image; **not a plain string** |
+| 11 | SHIELDIMAGE | `PropertyShieldPower`: bare power or `power+10` then length-prefixed image; **not a plain string** |
 | 12 | GANI | `[GCHAR len][string]` (modern); gen-0 BOWGIF preset rule |
 | 13 | VISFLAGS | `[GCHAR]` bitfield: VISIBLE=1, DRAWOVER=2, DRAWUNDER=4, TIMERSHOW=8, CREATED=16, MALE=64 |
 | 14 | BLOCKFLAGS | `[GCHAR]` bitfield: NOBLOCK=1, CANBECARRIED=2, CANBEPULLED=4, CANBEPUSHED=8 |
@@ -83,6 +84,17 @@ For the canonical wire-width and encoding notes, see
 
 The non-`PropertyString` string-ish props each have their own length scheme. The wire
 formats are summarized in [Data Types](data-types.md#npc-property-data-types).
+In particular, the NPC macro binds IDs 10 and 11 to the same power serializers as player
+gear (`GServer-v2/server/include/object/NPC.h:591-592`). Reading either as a plain string
+makes its power byte become a bogus length and corrupts the remainder of the NPC stream.
+HEADIMAGE 22 is likewise the 100-offset preset/name form, not a plain string
+(`GServer-v2/server/include/object/NPC.h:603`).
+
+NPC property pairs follow the same ascending-ID emission requirement as player
+properties. This is especially important for a full appearance record: insertion-order
+output can make a strict receiver stop after IMAGE/X/Y and silently discard GANI,
+NICKNAME, COLORS, SWORDIMAGE, SHIELDIMAGE, HEADIMAGE, IMAGEPART, and GATTRIBs. Sort the
+pairs numerically before writing them.
 
 ### Server-internal props (48-52)
 

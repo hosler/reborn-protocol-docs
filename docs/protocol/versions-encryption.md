@@ -356,6 +356,39 @@ detailed algorithm); the per-compression-type block limits from `CEncryption.cpp
 GEN_3, GEN_4, and GEN_5 all seed the same LCG constant (the leading zero digit on GEN_3's
 entry is not numerically significant).
 
+### Production list-server GEN_5 transition
+
+A modern list-server exchange is:
+
+1. Connect with the reference server initially configured for GEN_2
+   (`graal-serverlist/server/src/PlayerConnection.cpp:42-43`).
+2. Send `PLI_V2ENCRYPTKEYCL` as a GEN_2 frame: plain zlib, no type byte.
+3. The server parses the key, eight-byte version string, and client type, then
+   switches both directions to GEN_5
+   (`graal-serverlist/server/src/PlayerConnection.cpp:312-323`).
+4. Send the credential/server-list request as GEN_5. Production's first
+   response bundle is already GEN_5 and begins with type `0x04`.
+
+Reborn retains a plain-zlib first-response fallback because an implementation
+may queue output before processing the initialization packet: at connection
+creation the open reference server's output queue and input codec are still
+GEN_2. The recorded production session does not take this fallback; accepting
+it is interoperability with the open implementation, not evidence that
+production sends a GEN_2 first response.
+
+List-server response text uses **cp1252**, whereas game-session text uses
+**latin-1**. The distinction is observable for bytes such as `0x92` (a right
+single quotation mark in cp1252).
+
+The version field is parsed and stored but does not select the returned server
+set. Client type does: exactly `newmain` selects `Version3`; every other value
+selects `AllServers` (`graal-serverlist/server/src/PlayerConnection.cpp:315-322`).
+`sendServerList` filters by that bucket and suppresses an `offline`-named entry
+only outside `AllServers`
+(`graal-serverlist/server/src/PlayerConnection.cpp:195-218`);
+`AllServers` bypasses the allowed-version mask
+(`graal-serverlist/server/src/ServerConnection.cpp:252-257`).
+
 ### PLI_SET_ENC_KEY (252) / PLI_BUNDLE (253): declared, unimplemented
 
 Both packet IDs exist in `IEnums.h:163-164` (`PLI_SET_ENC_KEY` — "Set AES / RC4 encryption

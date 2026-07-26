@@ -196,23 +196,58 @@ Avoid just saying "gstring" without context.
 
 ## Character Encoding
 
-All strings in the Reborn protocol use **Latin-1** (ISO-8859-1) encoding. Not UTF-8. Not ASCII. Latin-1.
+Text encoding is selected by session type; there is no single protocol-wide
+decoder:
 
-This matters because:
+| Session | Text encoding |
+| --- | --- |
+| Game server | Latin-1 (ISO-8859-1) |
+| List server | Windows-1252 (`cp1252`) |
+
+This is an intentional per-session-type difference, not a bug. Both are
+single-byte encodings, but they disagree in the `0x80`–`0x9f` range. For
+example, byte `0x92` is the right single quotation mark `’` in a list-server
+response, while Latin-1 preserves it as the control character U+0092.
+Reborn exposes the selection through `reborn_protocol/codec.py`,
+`PacketReader.__init__()` and `PacketReader.read_string()`;
+`pyReborn/tests/unit/test_listserver_codec.py`,
+`test_list_server_text_is_cp1252_not_latin1()`, pins the `0x92` behavior.
+
+For game-session strings, Latin-1 means:
 - Bytes 128-255 are valid characters
 - One byte = one character (no multi-byte sequences)
 - You can safely treat string length as byte length
 
 ```python
-# Correct
-text = data.decode('latin-1')
+# Game session
+game_text = data.decode('latin-1')
 
-# Incorrect (will fail on bytes > 127)
-text = data.decode('ascii')
-
-# Incorrect (will misinterpret high bytes)
-text = data.decode('utf-8')
+# List-server session
+list_text = data.decode('cp1252')
 ```
+
+---
+
+## Script case-insensitive comparison
+
+Text decoding and script case folding are separate policies. GS2
+case-insensitive operations fold ASCII `A` through `Z` only. The official
+interpreter's `TString::startsIgnoreCase()` and `endsIgnoreCase()` call
+`TString::strncasecmp()`, which is a direct wrapper around C
+`::strncasecmp`
+(`Preagonal/FourPlay/quattroplay/src/TString.cpp:27-30,961-972,987-998`).
+Independent GS2 implementations should use an ASCII-only fold for equality,
+prefix/suffix operations, and list string sorting.
+
+Do not use Unicode `casefold()`. It maps `"ß"` to `"ss"` and changes the
+length: Unicode folding therefore says `"ßabc"` starts with `"SS"`, while
+the real client says false. Reborn centralizes the GS2 rule in
+`reborn_protocol/gs2/values.py`, `casefold()` and `casecmp()`.
+
+GS1 must remain separate. Reborn's GS1 `strequals`, `strcontains`, and
+`startswith` builtins use Python `.lower()` and consequently over-fold some
+non-ASCII text. That behavior is internally consistent and deliberately
+unchanged; it must not be used to redefine GS2 semantics.
 
 ---
 
@@ -226,4 +261,8 @@ text = data.decode('utf-8')
 
 4. **Length-prefixed max is 223** — GCHAR encoding limits the length byte to 223.
 
-5. **Use Latin-1, not UTF-8** — The protocol predates widespread UTF-8 adoption.
+5. **Choose encoding by session** — Game text is Latin-1; list-server text is
+   cp1252. Neither is UTF-8.
+
+6. **Do not Unicode-fold GS2 text** — Case-insensitive GS2 operations are
+   ASCII-only; GS1 has its own deliberately different policy.

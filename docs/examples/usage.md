@@ -7,87 +7,28 @@ This section provides practical examples of implementing the Reborn protocol in 
 ### Python Example
 
 ```python
-import socket
-import struct
-import zlib
+from pyreborn.client import Client
 
-class RebornClient:
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.socket = None
-        self.encryption_key = 123  # Set during login
-        self.iterator = 0x4A80B38   # GEN_5 initial value
-        
-    def connect(self):
-        """Connect to Reborn server"""
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((self.host, self.port))
-        
-    def send_packet(self, packet_id, data=b''):
-        """Send a packet with GEN_5 encryption"""
-        # Build packet
-        packet = bytes([packet_id + 32]) + data + b'\n'
-        
-        # Compress (use zlib for packets > 55 bytes). The encrypt limit is an
-        # ITERATION count (each iteration covers 4 bytes), not a byte count.
-        if len(packet) > 55:
-            compression_type = 0x04  # ZLIB
-            compressed = zlib.compress(packet)
-            encrypt_limit = 0x04     # 4 iterations = 16 bytes
-        else:
-            compression_type = 0x02  # UNCOMPRESSED
-            compressed = packet
-            encrypt_limit = 0x0C     # 12 iterations = 48 bytes
-            
-        # Encrypt the first `limit` 4-byte blocks
-        encrypted = self.encrypt(compressed, encrypt_limit)
-        
-        # Send with 2-byte BIG-ENDIAN length prefix
-        bundle = bytes([compression_type]) + encrypted
-        length_data = struct.pack('>H', len(bundle))
-        self.socket.send(length_data + bundle)
-        
-    def encrypt(self, data, limit):
-        """GEN_5 encryption: XOR with the LCG keystream, advancing the 32-bit
-        iterator every 4 bytes. limit = number of 4-byte iterations (-1 = all)."""
-        result = bytearray(data)
-        for i in range(len(data)):
-            if i % 4 == 0:
-                if limit == 0:
-                    break
-                self.iterator = (self.iterator * 0x8088405 + self.encryption_key) & 0xFFFFFFFF
-                if limit > 0:
-                    limit -= 1
-            result[i] ^= struct.pack('<I', self.iterator)[i % 4]
-        return bytes(result)
-        
-    def send_login(self, username, password):
-        """Send login packet"""
-        login_data = f"{username}\n{password}\n"
-        self.send_packet(0, login_data.encode('latin-1'))  # PLI_LEVELWARP for login
-        
-    def send_chat(self, message):
-        """Send chat message"""
-        self.send_packet(6, message.encode('latin-1'))  # PLI_TOALL
-        
-    def send_movement(self, x, y):
-        """Send player movement"""
-        # Build player props packet with position
-        props = bytearray()
-        props.append(15 + 32)  # PLPROP_X
-        props.append(int(x/2) + 32)  # Half-pixel coordinates
-        props.append(16 + 32)  # PLPROP_Y  
-        props.append(int(y/2) + 32)
-        
-        self.send_packet(2, bytes(props))  # PLI_PLAYERPROPS
+client = Client("localhost", 14900, version="6.037")
+if client.connect() and client.login("username", "password"):
+    client.send_chat("Hello, world!")
+    # Historical Client attributes remain supported property aliases after the
+    # client_state refactor.
+    print(client.level_name, client.player_x, client.player_y)
+client.disconnect()
+```
 
-# Usage
-client = RebornClient("localhost", 14900)
-client.connect()
-client.send_login("username", "password")
-client.send_chat("Hello, world!")
-client.send_movement(32, 48)  # Move to tile (2, 3)
+For list-server framing without a socket, use the transport-neutral session:
+
+```python
+from pyreborn.listserver import ListServerSession
+
+session = ListServerSession(
+    version="G3D0311C", client_type="pyreborn", encryption_key=42
+)
+init_frame = session.build_init_packet()       # GEN_2 initialization frame
+login_frame = session.build_login_packet("username", "password")  # GEN_5
+assert init_frame and login_frame
 ```
 
 ### JavaScript Example
@@ -122,7 +63,10 @@ class RebornClient {
         // Compress and encrypt. The encrypt limit is an ITERATION count
         // (4 bytes per iteration), not a byte count.
         let bundle;
-        if (packet.length > 55) {
+        if (packet.length > 0x2000) {
+            // Game sessions use bzip2 here (library call omitted).
+            throw new Error("bzip2 compressor required for bundles >8192 bytes");
+        } else if (packet.length > 55) {
             // Use zlib compression (would need pako library)
             const compressed = pako.deflate(packet);
             const encrypted = this.encrypt(compressed, 0x04); // 4 iterations
@@ -177,6 +121,7 @@ class RebornClient {
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <stdexcept>
 
 class RebornClient {
 private:
@@ -196,14 +141,19 @@ public:
         int encryptLimit;
         std::vector<uint8_t> compressed;
         
-        if (packet.size() > 55) {
+        if (packet.size() > 0x2000) {
+            compressionType = 0x06; // BZIP2
+            encryptLimit = 0x04;    // 4 iterations
+            // compressed = bzip2Compress(packet);
+            throw std::runtime_error("bzip2 compressor required");
+        } else if (packet.size() > 55) {
             compressionType = 0x04; // ZLIB
-            encryptLimit = 4096;
-            // Would use zlib here: compressed = zlibCompress(packet);
-            compressed = packet; // Simplified
+            encryptLimit = 0x04;    // 4 iterations
+            // compressed = zlibCompress(packet);
+            throw std::runtime_error("zlib compressor required");
         } else {
             compressionType = 0x02; // UNCOMPRESSED
-            encryptLimit = 40;
+            encryptLimit = 0x0C;    // 12 iterations
             compressed = packet;
         }
         

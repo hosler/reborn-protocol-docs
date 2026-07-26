@@ -476,6 +476,22 @@ Player properties use the following format:
 >
 > Yes, the format changes based on the value. Yes, the power byte precedes the length.
 > Yes, sword and shield use different biases.
+>
+> On receipt, branch on the **raw decoded power byte**: sword raw `< 30` is bare;
+> raw `>= 30` means `power = raw - 30` followed by a length-prefixed image. Shield
+> uses `< 10` and `>= 10` the same way. In particular, testing `power > 4` for sword
+> is wrong: it attempts to read an image string that is absent from the bare form and
+> desynchronizes every following property. The serializer/deserializer definitions are
+> at `GServer-v2/server/src/utilities/PropertySerializers.cpp:68-163`.
+>
+> For a bare nonzero power, the receiver synthesizes `sword{N}.png` or
+> `shield{N}.png`; classic generation uses `.gif`. The reference shield implementation
+> is intentionally asymmetric: serialization permits the bare form only through power
+> 3, while deserialization synthesizes a default through power 4. Its deserializer also
+> returns early when no bytes remain after a biased power, an explicit 1.41-client quirk.
+> A custom sword name without an extension gains `.gif`; a custom shield name gains
+> `.gif` only for classic generation
+> (`GServer-v2/server/src/utilities/PropertySerializers.cpp:89-182`).
 **GANI (10)**: `[GCHAR: length][string]` - Animation file
 **HEADIMAGE (11)**: Variable format (see below) — *also called HEADGIF in some older docs*
 
@@ -488,16 +504,25 @@ Player properties use the following format:
 > Example: Byte value 105 means "read 5 bytes of string data for the head image filename."
 > Byte value 5 means "use preset head #5, no string follows."
 >
-> The magic number 100 was chosen because early Reborn had fewer than 100 preset heads.
-> This was a reasonable assumption in 1999.
+> This is a 100-offset preset/name union, **not** a normal length-prefixed string.
+> Treating a preset byte as a string length consumes bytes belonging to the next
+> property (`GServer-v2/server/src/utilities/PropertySerializers.cpp:261-290`).
 **CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble
-**COLORS (13)**: `[8 bytes: color_data]` (new-world / v6.037) or `[5 bytes]` (classic) - Player colors. The reborn stack targets v6.037, so **8 bytes** here. Each byte is a palette index (+32 encoded).
+**COLORS (13)**: `[8 bytes: color_data]` (server new-world mode) or `[5 bytes]`
+(other mode). This is server-wide configurable policy, not a width implied by the
+client version or handshake. Each byte is a palette index (+32 encoded); see
+[Colors](data-types.md#colors-5-or-8-bytes) for safe width retry.
 **ID (14)**: `[GSHORT: player_id]` (2 bytes)
-**X (15)**: `[GCHAR: x * 2]` - X position in **half-tiles** (tile = value/2). *Not* pixels/2.
-**Y (16)**: `[GCHAR: y * 2]` - Y position in **half-tiles** (tile = value/2)
+**X (15)**: `[GCHAR: x * 2]` - signed half-tiles; decoded values `>=216` are
+negative signed bytes before division by 2. *Not* pixels/2.
+**Y (16)**: same signed half-tile encoding as X
 **SPRITE (17)**: `[GCHAR: (sprite << 2) | direction]` - direction = low 2 bits, sprite/frame = rest
 **STATUS (18)**: `[GCHAR: status_flags]` - Player status bits
-**CARRYSPRITE (19)**: `[GCHAR: carry_sprite]` - Carried object sprite
+**CARRYSPRITE (19)**: one unsafe GCHAR byte. The oracle maps it to
+`PropertyUnsafeByte`, whose writer adds 32 without the ordinary G-byte clamp; values
+above 223 therefore differ from a clamped-byte writer
+(`GServer-v2/server/include/object/Player.h:633`,
+`GServer-v2/server/include/utilities/PropertySerializers.h:220-231`).
 **CURLEVEL (20)**: `[GCHAR: length][string]` - Current level name
 **HORSEGIF (21)**: `[GCHAR: length][string]` - Horse image
 **HORSEBUSHES (22)**: `[GCHAR: bush_count]` - Bushes eaten by horse
@@ -508,7 +533,10 @@ Player properties use the following format:
 **KILLSCOUNT (27)**: `[GINT3: kill_count]` (**3 bytes**) - Player kills
 **DEATHSCOUNT (28)**: `[GINT3: death_count]` (**3 bytes**) - Player deaths
 **ONLINESECS (29)**: `[GINT3: online_time]` (**3 bytes**) - Online time in seconds
-**IPADDR (30)**: `[GINT5: ip_address]` (**5 bytes**) - IP as a packed gint5 integer, *not* 5 raw octets
+**IPADDR (30)**: `[GINT5: ip_address]` (**5 bytes**) - IP as a packed gint5
+integer, not one byte or five raw octets. The independent list-server reader calls
+`readGInt5()` for this property
+(`graal-serverlist/server/src/ServerPlayer.cpp:59-62`).
 **UDPPORT (31)**: `[GINT3: udp_port]` (**3 bytes** — not GSHORT) - UDP port
 **ALIGNMENT (32)**: `[GCHAR: ap_value]` - Alignment Points
 **ADDITFLAGS (33)**: `[GCHAR: flags]` - Additional player flags
@@ -541,11 +569,57 @@ Player properties use the following format:
 | 80 | Z2 | `[GSHORT]` (2 bytes) high-precision Z pixel coord |
 | 81 | PLAYERLISTCATEGORY | `[GCHAR]` (1 byte) |
 | 82 | COMMUNITYNAME | `[GCHAR: length][string]` |
-| 83 | UNKNOWN83 | `[GINT5]` (client reads 5 bytes) |
+| 83 | *(unspecified)* | Absent from the oracle property-list macro; width and meaning are not specified |
 
 A parser that treats 37-74 as one flat GATTRIB block will misalign every subsequent
 property. Likewise, props **51** (void) and **53** (1 byte, not a string) are the two that
 most often desync a naive parser.
+
+### Property-stream ordering and failure handling
+
+Server-emitted player and NPC property pairs must be in strictly ascending property-ID
+order. The reference full-list and modified-player builders iterate IDs upward
+(`GServer-v2/server/src/player/PlayerProps.cpp:1291-1317`,
+`GServer-v2/server/src/player/PlayerProps.cpp:1357-1380`), while its shared change
+collector sorts by ID because a client stops processing when it encounters a property it
+does not understand (`GServer-v2/server/src/utilities/PropertySerializers.cpp:668-689`).
+
+This makes disorder a silent truncation hazard, not necessarily a reported protocol
+error: a strict parser can stop early and retain only the prefix. An NPC builder that
+emits dictionary-insertion order can therefore produce an NPC with only image/X/Y while
+silently losing later gani, nickname, colors, gear, head image, image part, and GATTRIB
+properties. Sort pairs by numeric ID before serialization. The list-server player-property
+subset is an exception: its switch consumes each explicitly present property one by one,
+so that subset does not require ascending order
+(`graal-serverlist/server/src/ServerPlayer.cpp:31-77`).
+
+Robust stream walkers must also obey these rules:
+
+- An unknown property is not safely skippable without its real declared payload width.
+  Blindly skipping one byte after the ID desynchronizes any multi-byte or variable-width
+  value. Stop cleanly if the width is unknown.
+- A property ID at end-of-packet with zero payload is truncation for every non-void
+  property, not successful full consumption.
+- Do not infer a shape for player prop 83: it is absent from
+  `FOR_LIST_OF_PLAYER_PROPS` (`GServer-v2/server/include/object/Player.h:613-696`).
+
+### Packet-context policy is intentional
+
+The shared wire descriptor table does not make every packet context semantically
+identical. Reborn's `StreamPolicy`, `parse_player_props`, and `parse_other_player`
+symbols deliberately preserve these distinctions:
+
+- `PLO_OTHERPLPROPS` has a leading GSHORT player ID; `PLO_PLAYERPROPS` does not.
+- An empty other-player `CURCHAT` surfaces as `""` to clear a chat bubble, while an
+  empty self-property text may remain absent. Other text fields likewise surface or
+  disappear according to the packet handler's contract.
+- Account-name precedence is context-specific: some accumulators keep the first
+  authoritative name, while rename/update contexts let the last occurrence win.
+- `JOINLEAVELVL` is meaningful in other-player roster traffic, including the standalone
+  join/leave prefix, but is not ordinary self-state.
+
+These are application semantics layered over one wire codec. A future implementation
+should not “unify” them merely because their payload descriptors are shared.
 
 **X2/Y2/Z2 (78/79/80)** are the high-precision pixel coordinates used on GMAPs and for
 sub-tile positions. Each is a GSHORT carrying `value = (abs(pixels) << 1) | (negative ? 1 : 0)`.

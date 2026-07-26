@@ -1,6 +1,8 @@
 # Level Link Implementation Guide
 
-This document provides comprehensive guidance for implementing level links in Reborn clients, based on real-world implementation experience with PyReborn.
+This document provides comprehensive guidance for implementing level links in
+Reborn clients, based on real-world implementation experience with the Reborn
+client.
 
 ## Overview
 
@@ -31,6 +33,27 @@ destlevel x y width height destx desty
 - **destx, desty**: Destination coordinates (see special values below)
 
 Multiple links are sent as a single string with newline separators.
+
+### Coordinate Frame of a Link
+
+Every link field is in the **local tile frame** of a single 64×64 level:
+
+- `x` and `y` are the local top-left corner of the trigger rectangle.
+- `width` and `height` are local tile spans, not an ending coordinate and not
+  a world-space distance.
+- Numeric `destx` and `desty` are local coordinates in `destlevel`.
+
+This remains true when the source or destination is a GMAP segment. Do not add
+the source segment origin to `x`/`y`, and do not serialize stored world
+coordinates directly into `PLI_LEVELWARP`. Convert the player's world position
+to target-local coordinates first. Segment/grid coordinates are separate
+metadata; screen coordinates are only for rendering.
+
+For collision, the rectangle is half-open:
+`x <= player_local_x < x + width` and
+`y <= player_local_y < y + height`. For example, `x=62 width=2` covers local
+X values from 62 through just below 64; it does not describe a world span
+starting at tile 62 of the whole GMAP.
 
 ## Special Coordinate Values
 
@@ -79,7 +102,8 @@ def should_process_link(link, current_level, gmap_manager):
 def is_edge_link(link):
     """Check if a link sits against a level edge.
 
-    This mirrors pyReborn's actual heuristic (client.py / game/actions.py):
+    This mirrors the Reborn client's actual heuristic
+    (Client._is_edge_link / GameActions._is_edge_link):
     a link is treated as an edge link if its rectangle touches any of the
     four borders of the 64-tile level. The thresholds are <=1 / >=63 (not
     an exact x==0 && width==1 match), so links one tile in from the border
@@ -159,9 +183,10 @@ When a player touches a link, send PLI_LEVELWARP:
 ```python
 def send_warp_request(connection, link, current_player):
     # Calculate destination coordinates
-    dest_x, dest_y = calculate_destination_coords(link, 
-                                                  current_player.x, 
-                                                  current_player.y)
+    # current_player.local_x/local_y must be local in the destination segment.
+    # Do not substitute stored GMAP world coordinates here.
+    dest_x, dest_y = calculate_destination_coords(
+        link, current_player.local_x, current_player.local_y)
     
     # Create PLI_LEVELWARP packet
     packet = PacketBuilder()
@@ -176,7 +201,8 @@ def send_warp_request(connection, link, current_player):
 ## Common Implementation Pitfalls
 
 1. **Parsing Error**: Treating PLO_LEVELLINK as GSTRING instead of raw string
-2. **Coordinate Confusion**: Links use tile coordinates (0-63), not pixel coordinates
+2. **Coordinate Confusion**: Link positions, spans, and destinations use
+   level-local tiles, not world tiles, segment coordinates, or screen pixels
 3. **GMAP Edge Links**: Not filtering edge links causes unwanted warps
 4. **Special Values**: Not handling "playerx"/"playery" correctly
 5. **Timing**: Links are sent after PLO_BOARDPACKET - ensure proper packet ordering
@@ -194,12 +220,17 @@ def send_warp_request(connection, link, current_player):
 Consider implementing visual indicators for links during development:
 
 ```python
-def render_links(surface, links, camera_offset):
+def render_links(surface, links, camera_offset,
+                 segment_origin_x, segment_origin_y):
     """Render link areas for debugging"""
     for link in links:
         # Convert to screen coordinates
-        screen_x = link.x * 16 - camera_offset.x
-        screen_y = link.y * 16 - camera_offset.y
+        # Convert the owning segment's local link position to world tiles
+        # before applying the world-to-screen camera transform.
+        world_x = segment_origin_x + link.x
+        world_y = segment_origin_y + link.y
+        screen_x = world_x * 16 - camera_offset.x
+        screen_y = world_y * 16 - camera_offset.y
         
         # Choose color based on link type
         if is_edge_link(link):

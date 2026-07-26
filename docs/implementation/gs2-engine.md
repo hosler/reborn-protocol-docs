@@ -122,15 +122,93 @@ Evidence:
 - `reborn_protocol/gs2/vm.py`, `array_index()`, `array_size()`,
   `MAX_ARRAY_SIZE`, `_op_array_multidim()`, and
   `_op_array_multidim_assign()`
+- `reborn_protocol/gs2/values.py`, `array_index()`, `array_size()`,
+  `ARRAY_INDEX_EPSILON`, and `MAX_ARRAY_SIZE`
+- `Preagonal/FourPlay/quattroplay/src/TScriptMachine.cpp:60-67`,
+  `floorScriptIndex()`
 - `tests/test_gs2_array_semantics.py`,
   `test_array_index_is_epsilon_floor_not_truncation()`,
   `test_array_size_clamps_to_the_official_ceiling()`, and
   `test_op_array_multidim_pops_exactly_two_indices()`
 
+## GS1 and GS2 value policies
+
+GS1 and GS2 are different engines with deliberately different coercion
+rules. An implementation **must not unify them**, even when two constants
+happen to have the same numeric value.
+
+| Aspect | GS1 | GS2 |
+| --- | --- | --- |
+| Number to string | Shortest decimal that round-trips to the same double | Demote to float32 for the near-zero test; otherwise format the original double with `%.9f` and remove trailing zeroes and the trailing decimal point |
+| Comparisons | `0.0001` tolerance for numeric `==` and `!=` only; relational operators are exact | Universal `0.0001` three-way comparison tolerance |
+| Integer conversion | `gs1_int()` truncates toward zero; `gs1_index()` floors directly, with no epsilon | `to_int32()` truncates and produces the signed-int32 overflow value; `wrap_int32()` wraps bitwise results |
+| Array index and size | Direct floor for indexing | `array_index()` computes `floor(value + 0.0001)`; `array_size()` additionally clamps to 0 through `MAX_ARRAY_SIZE` (10,000) |
+| Case-insensitive text | Python `.lower()` in Reborn's `strequals`, `strcontains`, and `startswith` builtins | ASCII-only folding through `casefold()` and `casecmp()` |
+
+The GS1 policy home is `reborn_protocol/gs1/values.py`:
+`COMPARE_EPSILON`, `doubles_are_same()`, `gs1_int()`, and `gs1_index()`.
+The server oracle calls `DoublesAreSame()` only from equality and inequality,
+while its relational visitor uses the native operators directly
+(`GServer-v2/server/include/utilities/CommonTypes.h:315-320` and
+`GServer-v2/server/src/scripting/gs1/GS1Visitor.cpp:1284-1292,1311-1322`).
+The much smaller `2.220446049250313e-16` constant is the separate
+`DoubleIsZero()` threshold used by unary zero testing; it is not the GS1
+comparison epsilon (`GServer-v2/server/include/utilities/CommonTypes.h:310-318`).
+
+The GS2 policy home is `reborn_protocol/gs2/values.py`: `casefold()`,
+`casecmp()`, `array_index()`, `array_size()`, `to_int32()`, `wrap_int32()`,
+`MAX_ARRAY_SIZE`, and `ARRAY_INDEX_EPSILON`. The decompiled interpreter's
+`compareNumberValues()` returns equality unless one operand exceeds the other
+by more than `DOUBLE_00402440`, so the tolerance affects ordering as well as
+equality. Consequently, `0.99999 < 1.0` is false
+(`Preagonal/FourPlay/quattroplay/src/TScriptMachine.cpp:37-44`).
+
+`SCRIPT_EPSILON` is the machine's comparison and numeric-string settling
+constant. `ARRAY_INDEX_EPSILON` is a separately named policy for index
+conversion. They currently have the same value, `0.0001`, but they describe
+different operations and should remain distinct at call sites.
+
+Number-to-string conversion controls visible script output, including numbers
+interpolated into `showtext`. GS1 uses its shortest round-trip representation.
+GS2 first converts the number to float32 solely for the absolute-value
+comparison against `0.0001`; a value inside that interval becomes `"0"`.
+Otherwise the original double is rendered with nine fractional digits and
+settled by stripping trailing zeroes and a final decimal point. Thus `2/3`
+appears as `0.666666667` in GS2, rather than GS1's
+`0.6666666666666666`. The oracle performs the float32 zero check in
+`Preagonal/FourPlay/quattroplay/src/TScriptStackEntry.cpp:362-382`; formatting
+passes the double through `TString::operator<<(double)` and
+`TString::adddouble()` in
+`Preagonal/FourPlay/quattroplay/src/TString.cpp:1138-1174,1496-1501`.
+
 ## Strings, scope, and writes
 
-`starts` and `ends` compare without regard to case. Thus
-`"Login".starts("login")` is true.
+`starts` and `ends` compare without regard to ASCII case. Thus
+`"Login".starts("login")` is true, but this is not Unicode case folding.
+The oracle's `TString::startsIgnoreCase()` and `endsIgnoreCase()` call
+`TString::strncasecmp()`, which delegates directly to C `::strncasecmp`
+(`Preagonal/FourPlay/quattroplay/src/TString.cpp:27-30,961-972,987-998`).
+The interpreter's general string comparison likewise uses
+`TString::compareIgnoreCase()` and C `strcasecmp`
+(`Preagonal/FourPlay/quattroplay/src/TString.cpp:1001-1011`).
+
+This is a high-risk conformance trap because Python's `str.casefold()` can
+change string length. It maps German sharp s, `"ß"`, to `"ss"`, so a
+Unicode-folding implementation reports `"ßabc".starts("SS")` as true. The
+real client compares two bytes against the one-byte prefix position and
+reports false. Reborn previously made this mistake in `starts`, `ends`, and
+list string sorting. Those paths now use `reborn_protocol/gs2/values.py`,
+`casefold()` and `casecmp()`; the regression is covered by
+`tests/test_gs2_coercion_policy.py`,
+`test_casefold_is_ascii_only()`,
+`test_op_starts_is_ascii_only_case_insensitive()`, and
+`test_op_ends_is_ascii_only_case_insensitive()`.
+
+GS1 is intentionally different. Its Reborn builtins `strequals`,
+`strcontains`, and `startswith` still call Python `.lower()`, which can
+over-fold non-ASCII text. GS1 is internally consistent about that policy and
+was deliberately left unchanged; do not infer that the two engines have a
+shared, settled case-folding rule.
 
 Inside nested `with` blocks, `this` resolves to the innermost target that is
 not the player object. A player target is skipped while searching outward.
