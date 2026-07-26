@@ -33,6 +33,7 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
    implementation/pyreborn-gaps
    implementation/conformance
    implementation/gs2-engine
+   implementation/gs2-name-surface
    examples/usage
 
 About This Documentation
