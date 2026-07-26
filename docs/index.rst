@@ -34,6 +34,9 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
    implementation/conformance
    implementation/gs2-engine
    implementation/gs2-name-surface
+   implementation/gs2-gui-core-controls
+   implementation/gs2-gui-layout-controls
+   implementation/gs2-gui-remaining-controls
    examples/usage
 
 About This Documentation

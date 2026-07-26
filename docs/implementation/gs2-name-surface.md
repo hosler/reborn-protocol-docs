@@ -44,11 +44,19 @@ landed.
 
 **Still open:**
 
-- The **GUI control tables are still sampled, not audited** — see the caveat
-  under "Honest coverage statement" and the GUI subsection of T3. Only
-  `GuiControl`, `GuiTextListCtrl` and `GuiPopUpMenuCtrl` have been read
-  entry-by-entry. The other 21 control classes plus `GuiControlProfile` have
-  not.
+- The GUI control tables are **no longer sampled** — the remaining 21 classes
+  plus `GuiControlProfile` were audited entry-by-entry and are written up in
+  {doc}`gs2-gui-core-controls`, {doc}`gs2-gui-layout-controls` and
+  {doc}`gs2-gui-remaining-controls`. The per-class caveats now live there; the
+  counts in the table below predate that audit and undercount.
+
+  That audit also established that **this oracle is not the whole client**:
+  `FourPlay/libqplay_symbols.txt` carries 24 `Gui*` classes while the Era
+  build's `graal-revlib-osx/docs/symbol_dump.log` carries 43. Absence from
+  FourPlay is therefore not evidence that a name does not exist —
+  `GuiTabCtrl`, `GuiTreeViewCtrl`, `GuiAccountPasswordCtrl` and
+  `GuiMLTextEditCtrl` are all real, all used by Login content, and all absent
+  here.
 - The **T2 runners-up** list below is untouched: `getkeycode`/`keyname`,
   `findlevel`, `findnpcbyid`, `findani`, `format2`, `getascii`, `strcmp`,
   `getnearestplayer`, `trace`, `aindexof`, `randomstring`,
@@ -161,10 +169,11 @@ each declared size matched the entry count).
 
 - Global functions/properties, and the `player` / other-player / NPC / `level`
   property and method chains, are covered **exhaustively**.
-- The GUI control tables (`src/gui/*Properties.cpp`, 362 entries across 24
-  control classes and `GuiControlProfile`) are **sampled**, not audited. Only
-  `GuiControl`'s own table was read entry-by-entry. Do not treat the GUI
-  section as a completeness claim.
+- The GUI control tables (`src/gui/*Properties.cpp`) were **sampled** when this
+  page was written — only `GuiControl`'s own table had been read
+  entry-by-entry, so the GUI counts below are not a completeness claim. The
+  remaining classes were audited separately afterwards; see the three
+  `gs2-gui-*-controls` pages, which supersede the GUI rows here.
 - Roughly 20 % of property entries and 9 % of function entries carry a **raw
   address** (`(void*)0x27f150`) instead of a named function, because the
   decompilation did not recover those bodies and no symbol map exists in
