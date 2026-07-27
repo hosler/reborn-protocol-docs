@@ -32,6 +32,9 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
    implementation/pyreborn-analysis
    implementation/pyreborn-gaps
    implementation/conformance
+   implementation/gs1-language
+   implementation/gs1-client-host
+   implementation/tile-type-tables
    implementation/gs2-engine
    implementation/gs2-name-surface
    implementation/gs2-gui-core-controls
@@ -78,6 +81,9 @@ For existing developers:
 * :doc:`protocol/rc-nc-protocols` - RC/NC admin sub-protocols and the GEN_2 login
 * :doc:`protocol/gmap` - GMAP coordinate frames and the local/world quirk
 * :doc:`implementation/pyreborn-analysis` - Conformance issues and fixes
+* :doc:`implementation/gs1-language` - GS1 language dialect and recovery policy
+* :doc:`implementation/gs1-client-host` - Client-side GS1 host behavior and verification
+* :doc:`implementation/tile-type-tables` - Classic and new-world tile-type selection
 * :doc:`implementation/gs2-engine` - GS2 bytecode, runtime semantics, and host policy
 
 Contributing
