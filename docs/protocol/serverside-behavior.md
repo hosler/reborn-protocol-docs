@@ -1,10 +1,12 @@
 # Server-Side Behavior and Level Links
 
-This document explains how the GServer `serverside` setting affects level link handling and client-server interactions.
+This document explains how the GServer `serverside` setting changes level link handling
+and client-server interactions.
 
 ## The `serverside` Setting
 
-The `serverside` option in `serveroptions.txt` controls whether the server automatically handles certain game mechanics:
+The `serverside` option in `serveroptions.txt` controls whether the server automatically
+handles some game mechanics:
 
 ```ini
 # Determines whether the server handles certain things like signs and links.
@@ -13,8 +15,9 @@ serverside = true
 ```
 
 **Default Value**: `true` (`Server.cpp` reads `serverside` with `.value_or(true)`, and the
-shipped `serveroptions.txt` sets it to `true`). Enabling it loads the NPC server, which in
-turn changes whether links/signs are sent clientside — see the source reference below.
+shipped `serveroptions.txt` sets it to `true`). This value loads the NPC server. The NPC
+server changes whether the server sends links and signs clientside. See the source
+reference below.
 
 ## How It Affects Level Links
 
@@ -33,7 +36,7 @@ turn changes whether links/signs are sent clientside — see the source referenc
 
 ## Client Implementation Requirements
 
-When connecting to a server with `serverside = false`, clients must:
+If `serverside = false`, clients must do these tasks:
 
 1. **Parse PLO_LEVELLINK packets** to track level links
    - Sent immediately after PLO_BOARDPACKET when entering a level
@@ -48,9 +51,9 @@ When connecting to a server with `serverside = false`, clients must:
 
 ## GMAP Considerations
 
-When implementing level links in GMAP mode:
-- **Edge links between GMAP segments** should typically be ignored (automatic GMAP transitions handle these)
-- **Indoor/dungeon links** should be honored (transition to single-level mode)
+When you implement level links in GMAP mode:
+- **Edge links between GMAP segments**: typically ignore these (automatic GMAP transitions handle them)
+- **Indoor/dungeon links**: honor these (transition to single-level mode)
 - Client should track whether current level is part of the GMAP to make this distinction
 
 ## GServer Source Code References
@@ -67,12 +70,12 @@ if (!m_server->hasNPCServer() || m_server->cached.forceClientsideSigns.getValue(
     staticLevelData->sendSignsToPlayer(self);
 ```
 
-> **Note**: The real gate is **whether an NPC server is loaded** (`hasNPCServer()`),
-> not the `serverside` config bool directly. They are correlated because enabling
-> `serverside` is what loads the NPC server — but the precise condition checked at
-> send time is `hasNPCServer()` (plus the `forceClientsideLinks/Signs` overrides and
-> the bigmap case). Older docs quoted a `getBool("serverside", false)` check that no
-> longer exists in source.
+> **Note**: The real gate is **whether the server has loaded an NPC server**
+> (`hasNPCServer()`), not the `serverside` config bool directly. Enabling
+> `serverside` loads the NPC server, so the two track together. But the precise
+> condition checked at send time is `hasNPCServer()` (plus the
+> `forceClientsideLinks/Signs` overrides and the bigmap case). Older docs quoted
+> a `getBool("serverside", false)` check that no longer exists in source.
 
 From `GServer-v2/server/src/level/LevelLink.cpp:53-64` (handling special
 values):
@@ -91,15 +94,24 @@ collapse them into a generic notion of "nearby."
 
 ### In-range delivery is an inclusive box
 
-`Level::findInRangePlayers` compares each axis independently:
-`abs(dx) <= syncx && abs(dy) <= syncy`. The audience is therefore an
+**The box only applies to gmaps by default.** `Level::findInRangePlayers` opens
+with a fast path: `if (isInsideLevel && !syncInside) { yield every player in
+m_players; return; }`, where `isInsideLevel` is `!isGmap()` and `syncInside` is
+the `syncbydistanceinside` setting, which defaults to **false**
+(`GServer-v2/server/src/level/Level.cpp:2989-2998`, `Server.h:119`). So on an
+ordinary non-gmap level the stock server delivers to every player in the level,
+unfiltered, and never reaches the distance comparison at all. Box-filtering a
+non-gmap level hides events the reference server shows.
+
+When the function does reach the comparison — on a gmap, or on a non-gmap level
+where an operator enabled `syncbydistanceinside` — it compares each axis
+independently: `abs(dx) <= syncx && abs(dy) <= syncy`. The audience is then an
 axis-aligned **box**, not a radius or circle. A player at `(syncx, syncy)` from
-the event is included even though its Euclidean distance exceeds either
-individual limit. The comparison is inclusive at both boundaries
-(`GServer-v2/server/src/level/Level.cpp:2988-3035`).
+the event still counts, even though its Euclidean distance exceeds either
+individual limit. The comparison is inclusive at both boundaries.
 
 Inclusive versus strict comparison is an observable hitbox difference. A
-recipient exactly `syncx` tiles away receives the event; changing `<=` to `<`
+recipient exactly `syncx` tiles away receives the event. Changing `<=` to `<`
 drops that recipient. It is not a rounding detail.
 
 The search iterates the level's own `m_players` set, not a server-wide player
@@ -111,6 +123,13 @@ cell (`GServer-v2/server/src/Server.cpp:2676-2689`,
 
 ### Explosion damage uses a plus, and only targets NPCs
 
+**`Level::addExplosion` returns immediately when there is no NPC server.** The
+guard `if (!m_server->hasNPCServer()) return;` is the first statement of the
+function (`GServer-v2/server/src/level/Level.cpp:2111-2112`), and the informing
+overload carries the same guard (`:2099-2101`). A server without an NPC server
+therefore does no server-side explosion handling for any target type, and sends
+no `PLO_EXPLOSION`. Everything below describes the NPC-server case only.
+
 `Level::addExplosion` does **not** use either audience shape. It constructs a
 one-tile-wide vertical rectangle of height `1 + 2r` tiles and a one-tile-high
 horizontal rectangle of width `1 + 2r` tiles. Their union is a **plus/cross**,
@@ -118,7 +137,7 @@ and NPCs intersecting either strip receive `hurtAndPush`
 (`GServer-v2/server/src/level/Level.cpp:2131-2144`).
 
 That code only searches NPC collision results. The reference server applies no
-server-side explosion damage there to players or baddies; it relies on client
+server-side explosion damage there to players or baddies. It relies on client
 reports through `PLI_HURTPLAYER` and `PLI_BADDYHURT`. Consequently, a server
 that wants authoritative blast damage has no reference player/baddy shape to
 copy. It must define and document its own shape, boundary comparison,
@@ -140,21 +159,21 @@ authorization would let the client and NPC server disagree about ownership.
 
 ## Chat Change Semantics
 
-The current chat value is compared before assignment. An unchanged value exits
-without firing the player-chat event; a change to the empty string continues
-through `processChat` and can queue `PLAYERCHATS`
+The server compares the current chat value before assignment. An unchanged
+value exits without firing the player-chat event. A change to the empty
+string continues through `processChat` and can queue `PLAYERCHATS`
 (`GServer-v2/server/src/player/PlayerProps.cpp:348-367`).
 
 Implementations must therefore distinguish **empty** from **absent**. Empty is
 a present chat property that clears a previous value and fires the change
 event. Absent means no chat update. Repeating the already-current value,
-including repeating empty after it was cleared, does not fire the event.
+including repeating empty after clearing it, does not fire the event.
 
 ## Reborn Client Implementation
 
 The Reborn client handles this by:
 1. Checking level links on every movement (`client.py` edge-link detection + `game/actions.py`)
-2. Performing a client-side warp when a non-edge link is touched
+2. Performing a client-side warp when the player touches a non-edge link
 3. Treating GMAP edge links as automatic segment transitions rather than warps
 
 ## Recommendations

@@ -1,6 +1,6 @@
 # String Types: A Tragedy in Three Acts
 
-The Reborn protocol has three different ways to encode strings. They are not interchangeable. They are sometimes given the same name. This has caused pain.
+The Reborn protocol has three methods to encode strings. The methods are not interchangeable. Some code uses the same name for different methods. This causes errors.
 
 ## The Three Types at a Glance
 
@@ -12,13 +12,13 @@ The Reborn protocol has three different ways to encode strings. They are not int
 
 ## Type 1: Regular String (Read Until You Can't)
 
-The simplest and most chaotic option. No length prefix, no terminator—just read bytes until the packet ends.
+This type has no length prefix or terminator. Read the bytes until the packet ends.
 
 **Characteristics**:
 - Reads ALL remaining bytes in the packet
 - No length indicator
 - Packet boundary is the only delimiter
-- Server *sometimes* adds a null byte at the end (for fun, presumably)
+- The server sometimes adds a null byte at the end
 
 **Used in**:
 - PLI_LEVELWARP (level name after X, Y coordinates)
@@ -38,7 +38,7 @@ level_name = packet.readString("")  # Empty delimiter = read to end
 
 **The Null Byte Situation**:
 
-The server often (but not always) appends a null byte (0x00) to these strings. This is inconsistent enough to be annoying but consistent enough that you need to handle it:
+The server often appends a null byte (0x00) to these strings, but it does not always do so. A reader must accept both forms.
 
 ```python
 # Strip trailing nulls when reading
@@ -47,7 +47,7 @@ level_name = packet[pos:].rstrip(b'\x00').decode('latin-1')
 
 ## Type 2: GSTRING (The Polite One)
 
-A well-behaved, length-prefixed string. The first byte (GCHAR-encoded) tells you exactly how many bytes follow.
+A length-prefixed string starts with a GCHAR-encoded byte. This byte specifies the exact number of bytes that follow.
 
 **Format**:
 ```
@@ -58,7 +58,7 @@ A well-behaved, length-prefixed string. The first byte (GCHAR-encoded) tells you
 - First byte is length, encoded as GCHAR (so subtract 32)
 - Maximum length: 223 characters (GCHAR max value)
 - No terminator needed
-- Actually predictable
+- The length makes the field predictable
 
 **Used in**:
 - Player properties (nickname, gani, headimage, etc.)
@@ -82,7 +82,7 @@ def write_gstring(string_data):
 
 ## Type 3: Newline-Terminated (The Impostor)
 
-Reads bytes until it hits a newline character (0x0A). The newline is consumed but not included in the result.
+The reader reads bytes until it finds a newline character (0x0A). The reader consumes the newline but does not include it in the result.
 
 **Format**:
 ```
@@ -113,7 +113,7 @@ def read_until_newline(packet, pos):
 
 ## The PLO_LEVELLINK Trap 🪤
 
-This deserves its own section because multiple client implementations have gotten it wrong.
+Multiple client implementations parse this field incorrectly.
 
 **The Trap**: PLO_LEVELLINK (packet ID 1) looks like it should use a length-prefixed GSTRING. It does not. It uses a raw newline-terminated string.
 
@@ -134,7 +134,7 @@ This deserves its own section because multiple client implementations have gotte
 
 **What Goes Wrong**:
 
-If you try to read the first byte after the packet ID as a length, you'll read 'l' (ASCII 108) minus 32 = 76. Then you'll try to read 76 bytes of "string data" and your parser will consume half the next packet.
+If the parser treats the first byte after the packet ID as a length, it reads 'l' (ASCII 108) minus 32 = 76. The parser then reads 76 bytes of "string data" and consumes part of the next packet.
 
 **The Fix**:
 
@@ -154,7 +154,7 @@ def handle_levellink(packet):
 
 **Why This Happens**:
 
-Level link data is stored in `.nw` level files as plain text lines. The server reads these lines and sends them with minimal processing. Adding a length prefix would require extra work, and apparently that was a bridge too far in the late 90s.
+`.nw` level files store level link data as plain text lines. The server reads these lines and sends them with minimal processing. The original design did not add a length prefix.
 
 ---
 
@@ -175,7 +175,7 @@ The term "gstring" is used inconsistently across codebases:
 - "Newline-terminated string"
 - "Read-to-end string" or "regular string"
 
-Avoid just saying "gstring" without context.
+Do not use only "gstring" without context.
 
 ---
 
@@ -196,7 +196,7 @@ Avoid just saying "gstring" without context.
 
 ## Character Encoding
 
-Text encoding is selected by session type; there is no single protocol-wide
+The session type selects the text encoding. There is no single protocol-wide
 decoder:
 
 | Session | Text encoding |
@@ -204,12 +204,12 @@ decoder:
 | Game server | Latin-1 (ISO-8859-1) |
 | List server | Windows-1252 (`cp1252`) |
 
-This is an intentional per-session-type difference, not a bug. Both are
+This is an intentional difference between session types. Both are
 single-byte encodings, but they disagree in the `0x80`–`0x9f` range. For
 example, byte `0x92` is the right single quotation mark `’` in a list-server
 response, while Latin-1 preserves it as the control character U+0092.
 Reborn exposes the selection through `reborn_protocol/codec.py`,
-`PacketReader.__init__()` and `PacketReader.read_string()`;
+`PacketReader.__init__()` and `PacketReader.read_string()`.
 `pyReborn/tests/unit/test_listserver_codec.py`,
 `test_list_server_text_is_cp1252_not_latin1()`, pins the `0x92` behavior.
 
@@ -247,22 +247,22 @@ the real client says false. Reborn centralizes the GS2 rule in
 GS1 must remain separate. Reborn's GS1 `strequals`, `strcontains`, and
 `startswith` builtins use Python `.lower()` and consequently over-fold some
 non-ASCII text. That behavior is internally consistent and deliberately
-unchanged; it must not be used to redefine GS2 semantics.
+unchanged. Do not use it to redefine GS2 semantics.
 
 ---
 
 ## Common Pitfalls Summary
 
-1. **PLO_LEVELLINK is NOT length-prefixed** — It's newline-terminated. Multiple implementations have made this mistake.
+1. **PLO_LEVELLINK is NOT length-prefixed**. It is newline-terminated. Multiple implementations have made this mistake.
 
-2. **"gstring" means different things** — Always check the specific packet documentation.
+2. **"gstring" means different things**. Always check the specific packet documentation.
 
-3. **Read-to-end strings may have null bytes** — The server inconsistently appends them. Handle gracefully.
+3. **Read-to-end strings may have null bytes**. The server does not append them consistently. Accept both forms.
 
-4. **Length-prefixed max is 223** — GCHAR encoding limits the length byte to 223.
+4. **Length-prefixed max is 223**. GCHAR encoding limits the length byte to 223.
 
-5. **Choose encoding by session** — Game text is Latin-1; list-server text is
+5. **Choose encoding by session**. Game text is Latin-1. List-server text is
    cp1252. Neither is UTF-8.
 
-6. **Do not Unicode-fold GS2 text** — Case-insensitive GS2 operations are
-   ASCII-only; GS1 has its own deliberately different policy.
+6. **Do not Unicode-fold GS2 text**. Case-insensitive GS2 operations are
+   ASCII-only. GS1 has its own deliberately different policy.

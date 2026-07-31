@@ -2,10 +2,10 @@
 
 ## Overview
 
-PyReborn implements the game, list-server, RC, and NC protocol families on top
-of the shared `reborn-protocol` package. This page describes the current
-architecture; detailed packet and property layouts remain in the protocol
-reference.
+PyReborn uses the shared `reborn-protocol` package to implement the game,
+list-server, RC, and NC protocol families. This page describes the current
+architecture. The protocol reference contains the detailed packet and
+property layouts.
 
 ## Overall conformance: high
 
@@ -21,7 +21,7 @@ of these wire primitives.
 ### Packet dispatch
 
 `Client._handle_packet` is a registry lookup, not the former 1,279-line
-90-branch dispatcher. The `pyreborn.handlers` package registers **92 handlers**
+90-branch dispatcher. The `pyreborn.handlers` package registers **93 handlers**
 across seven domain modules:
 
 - `chat`, `combat`, `entities`, `files`, `level`, `scripts`, and `session`
@@ -38,7 +38,8 @@ The former flat `Client.__init__` state is divided among components in
 file, and warp state. `client.py` installs a property-alias table for **150 of
 the 156** historical attributes, preserving source compatibility for callers
 such as `client.level_name` while component code uses explicit ownership.
-`client.py` is now about 2,500 lines rather than the former 4,111.
+`client.py` is now 675 lines rather than the former 4,111. A later refactor
+split the facade into mixins, which carry most of the former body.
 
 ### Properties and coordinates
 
@@ -46,8 +47,9 @@ Six independent client/server property walkers were replaced by
 `reborn_protocol.props`. Its `PLAYER_PROPS`, `NPC_PROPS`, and `BADDY_PROPS`
 descriptor tables drive parsing and encoding in both PyReborn and pygserver.
 This closes the duplicate-parser gap and makes widths such as `COLORS` a stream
-policy rather than an ad-hoc branch. See [Packet Structures](../protocol/packet-structures.md)
-and [NPC Properties](../protocol/npc-properties.md) for field layouts.
+policy rather than an ad-hoc branch. See
+[Packet Structures](../protocol/packet-structures.md) and
+[NPC Properties](../protocol/npc-properties.md) for field layouts.
 
 `reborn_protocol.coords` now names and converts level-local tiles, GMAP/world
 tiles, local pixels, global pixels, and camera coordinates. See
@@ -55,12 +57,13 @@ tiles, local pixels, global pixels, and camera coordinates. See
 
 ### List-server session
 
-`pyreborn.listserver.ListServerSession` is transport-neutral: it owns framing,
-the GEN_2 initialization fallback, the GEN_5 codec, and packet parsing.
+`pyreborn.listserver.ListServerSession` does not depend on a transport. It owns
+framing, the GEN_2 initialization fallback, the GEN_5 codec, and packet
+parsing.
 `ListServerClient` and `WebSocketListServerClient` are adapters that only move
 bytes. The module imports `Gen2Codec`, `Gen5Codec`, `PacketBuffer`,
-`PacketReader`, and `LIST_SERVER_COMPRESSION` from the shared library; its old
-private encryption, codec, and G-type implementations are gone.
+`PacketReader`, and `LIST_SERVER_COMPRESSION` from the shared library. The
+module no longer has private encryption, codec, and G-type implementations.
 
 ### Script hosts
 
@@ -68,14 +71,16 @@ Client-side GS1 builtin dispatch uses the `_GS1_PLAYER_BUILTINS`,
 `_GS1_NPC_BUILTINS`, and `_GS1_BUILTINS` registries rather than a long
 conditional. The client host surface contains **414 names**.
 
-Approximately **57 builtin names remain implemented independently in both the
-client host and pygserver's server host**. This duplication is deliberate:
-the two implementations sometimes embody different live behavior, and merging
-them requires a human compatibility decision rather than a mechanical move.
+The client host and the pygserver server host each have independent
+implementations of approximately **57 builtin names**. This duplication is
+deliberate. The two implementations sometimes have different live behavior.
+A person must make a compatibility decision before the project merges each
+implementation.
 
 ## Server-side architecture relevant to the client
 
-pygserver's `Player` has fallen from 1,702 lines to about 571 and now acts as a
+The pygserver `Player` class has decreased from 1,702 lines to about 571. It
+now acts as a
 façade over login, session, movement, entity, combat, and other services.
 `pygserver.audience.AudienceService` centralizes visibility and recipient
 selection. This closes the prior risk that different handlers independently
@@ -97,7 +102,7 @@ implemented “nearby players” with subtly different rules.
 The remaining issues are not core framing failures:
 
 - GEN_6 is not implemented by either PyReborn or the reference server.
-- A few GS1 drawing commands and the ground-item sprite table remain incomplete.
+- The GS1 command `hidepoly` and the ground-item sprite table remain incomplete.
 - Corrupt level-board data falls back to an empty board without surfacing a
   diagnostic to the caller.
 - List-server server-entry strings decode as cp1252, but top-level

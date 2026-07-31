@@ -1,18 +1,18 @@
 # PyReborn Implementation Gaps
 
-This page distinguishes current gaps from refactoring work that is now closed.
+This page separates current gaps from completed refactoring work.
 
 ## Closed architecture gaps
 
 | Former stale claim | Current state |
 |---|---|
-| Packet dispatch is a 1,279-line, 90-branch method | Closed: a registry dispatches 92 handlers from seven `pyreborn.handlers` domain modules. |
-| `Client` owns about 156 flat attributes | Closed: components in `client_state.py` own the state; 150 historical names remain property aliases. |
-| `client.py` is 4,111 lines | Closed: it is now about 2,500 lines. |
-| List-server code has private encryption, codec, and G-type readers | Closed: it imports the shared implementations and uses `ListServerSession` plus socket/WebSocket adapters. |
+| Packet dispatch is a 1,279-line, 90-branch method | Closed: a registry dispatches 93 handlers from seven `pyreborn.handlers` domain modules. |
+| `Client` owns about 156 flat attributes | Closed: components in `client_state.py` own the state. A total of 150 historical names remain property aliases. |
+| `client.py` is 4,111 lines | Closed: it is now 675 lines. A later refactor split the facade into mixins (`client_actions.py`, `client_appearance.py`, `client_combat.py`, `client_files.py`, `client_gmap.py`, `client_movement.py`, `client_warp.py`). |
+| List-server code has private encryption, codec, and G-type readers | Closed: the code imports the shared implementations. It uses `ListServerSession` plus socket/WebSocket adapters. |
 | Property parsing is duplicated across six client/server paths | Closed: all use the declarative tables and stream policy in `reborn_protocol.props`. |
 | Coordinate terminology is scattered | Closed: `reborn_protocol.coords` owns the level/GMAP/pixel/camera vocabulary. |
-| Script-host builtin dispatch is a long conditional | Closed: client and server hosts use registry tables; the client exposes 414 names. |
+| Script-host builtin dispatch is a long conditional | Closed: client and server hosts use registry tables. The client exposes 414 names. |
 | pygserver `Player` is a 1,702-line monolith | Closed: the roughly 571-line façade delegates to services and handler mixins. |
 | Visibility recipients are selected ad hoc | Closed: `pygserver.audience.AudienceService` owns audience selection. |
 | List-server `PacketReader` is duplicated | Closed: the compatibility adapter wraps the shared `reborn_protocol.codec.PacketReader`. |
@@ -24,17 +24,17 @@ This page distinguishes current gaps from refactoring work that is now closed.
 
 ### List-server top-level text codepage
 
-Server-list entry fields use the correct cp1252 reader. However,
+Server-list entry fields use the correct cp1252 reader. But
 `pyreborn.listserver.build_response` still decodes `PLO_STATUS`, `PLO_SITEURL`,
 `PLO_UPGURL`, and `PLO_ERROR` bodies as latin-1. This is a live mismatch for
-bytes such as `0x92`; those four paths should use cp1252 too.
+bytes such as `0x92`. Those four paths should use cp1252 too.
 
 ### Duplicated live builtin behavior
 
 Approximately 57 builtin names exist in both the client host and pygserver's
 server host. They were deliberately not unified during the registry refactor.
-For some names, both implementations are live and differ; choosing one requires
-human compatibility decisions and targeted oracle tests.
+For some names, both implementations are live and differ. A person must make
+compatibility decisions and run targeted oracle tests.
 
 ### GEN_6
 
@@ -44,8 +44,13 @@ than a PyReborn-only regression.
 
 ### GS1 visual commands
 
-The GS1 interpreter still lacks `changeimgpart`, `showpoly`, `hidepoly`,
-`drawoverplayer`, and `drawunderplayer`. These affect rendering, not framing.
+The GS1 interpreter still lacks `hidepoly`. This affects rendering, not framing.
+
+`changeimgpart`, `showpoly`, `drawoverplayer` and `drawunderplayer` all landed
+with the Bomber Arena lobby work. They live in
+`pyreborn/gs1_client/host_commands_layer.py` and
+`pyreborn/gs1_client/host_commands_npc.py`, and
+`game_tester/gs1_client_conformance.py` pins them.
 
 ### Ground-item art
 
@@ -54,19 +59,19 @@ but some drops use placeholder art.
 
 ### Corrupt board diagnostics
 
-Level-board decompression failure intentionally returns an empty 64×64 board.
-The fallback is safe, but callers receive no structured error and can mistake
-corrupt input for a genuinely empty level.
+If level-board decompression fails, the code intentionally returns an empty
+64×64 board. The fallback is safe. But callers receive no structured error
+and can mistake corrupt input for a genuinely empty level.
 
 ### Byte-level projectile oracle
 
-Both `PLO_SHOOT` and `PLO_SHOOT2` are handled, but their complete field layouts
-still need an independent byte-for-byte oracle pass. This is a documentation
-confidence gap, not a missing dispatch path.
+The code handles both `PLO_SHOOT` and `PLO_SHOOT2`. But an independent
+byte-for-byte oracle pass must still check their complete field layouts. This
+is a documentation confidence gap, not a missing dispatch path.
 
 ## Verification guidance
 
-Use `/usr/bin/python3.13` for the test suites; the system `python3` is 3.14 and
+Use `/usr/bin/python3.13` for the test suites. The system `python3` is 3.14 and
 does not have Hypothesis installed.
 
 ```bash

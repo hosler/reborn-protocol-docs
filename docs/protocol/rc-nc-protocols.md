@@ -1,14 +1,14 @@
 # RC & NC Admin Sub-Protocols
 
-Beyond the game client, GServer-v2 speaks two administrative sub-protocols over the same
-TCP transport:
+In addition to the game-client protocol, GServer-v2 uses two administrative sub-protocols
+over the same TCP transport:
 
-- **RC (Remote Control)** — server administration: accounts, server options, flags, player
-  rights, file browser, kick/warp/ban.
-- **NC (NPC Control)** — content management: NPCs, classes, weapons, level scripts.
+- **RC (Remote Control)** handles server administration: accounts, server options, flags,
+  player rights, file browser, kick/warp/ban.
+- **NC (NPC Control)** handles content management: NPCs, classes, weapons, level scripts.
 
-Both reuse the G-type encoding and bundle framing, but they differ in **login type byte**
-and, critically, in **encryption generation**.
+Both sub-protocols use the G-type encoding and bundle framing. They use different **login
+type bytes** and **encryption generations**.
 
 ## Login Type Byte Is a Bit Index
 
@@ -22,26 +22,33 @@ computes `m_type = (1 << readGChar())`:
 | NC | 3 | `PLTYPE_NC` (1<<3) | **GEN_2** |
 | RC2 (modern) | 6 | `PLTYPE_RC2` (1<<6) | GEN_5 |
 
-pyReborn's `RCClient` sends type **6** (RC2 → GEN_5); `NCClient` sends type **3**
+pyReborn's `RCClient` sends type **6** (RC2 → GEN_5). `NCClient` sends type **3**
 (NC → GEN_2).
 
 ## NC Login: ENCRYPT_GEN_2
 
-This is the part most implementations get wrong. NC negotiates **ENCRYPT_GEN_2**, which is a
-different wire format than the client's GEN_5:
+Many implementations use the wrong format for this part. NC negotiates
+**ENCRYPT_GEN_2**. This wire format differs from the client's GEN_5 format:
 
 - **Framing**: `[uint16 big-endian length][zlib bundle]`. The zlib bundle holds one or more
   `\n`-terminated `[id+32][body]` packets.
-- **No per-packet encryption** — GEN_2's encrypt/decrypt is a no-op.
-- **No compression-type byte** — there is no `0x02/0x04/0x06` prefix; the whole bundle is
+- **No per-packet encryption**: GEN_2's encrypt/decrypt is a no-op.
+- **No compression-type byte**: there is no `0x02/0x04/0x06` prefix. The whole bundle is
   always zlib.
 - **The login packet OMITS the encryption-key byte.** The server reads the key byte only
-  when `gen > ENCRYPT_GEN_3`; GEN_2 < GEN_3, so it is skipped. The NC login body is:
+  when `gen > ENCRYPT_GEN_3`. GEN_2 < GEN_3, so the server skips it. The NC login body is:
   `gchar(type=3)` + 8-byte version + `gchar(len)+account` + `gchar(len)+password` + identity
-  string — **no key byte**.
+  string (**no key byte**).
 - NC logins never receive `PLO_PLAYERPROPS`. The first server packet is typically
-  `PLO_SIGNATURE (25)`; a client should latch "authenticated" on the first packet received.
-- NC eligibility is gated server-side on the `PLPERM_NPCCONTROL` right.
+  `PLO_SIGNATURE (25)`. A client should latch "authenticated" on the first packet received.
+- NC login, like RC login, is gated on the account being in the `staff` config list
+  **and** matching `adminIpRange`: `Player::sendLogin` rejects when
+  `!isStaff() || !isAdminIp()` (`GServer-v2/server/src/player/Player.cpp:661-668`).
+  `PLPERM_NPCCONTROL` does **not** gate the connection. That right decides only
+  whether an RC session is auto-offered the NPC-server address
+  (`NPCServer.cpp:116`) and whether an already-connected NC session is killed when
+  the right is revoked (`PlayerRCPackets.cpp:875-884`). An account holding the
+  right but absent from `staff` is still rejected.
 
 RC2, by contrast, stays on **GEN_5** (with the per-packet key byte and compression-type
 byte, exactly like a game client).
@@ -50,8 +57,8 @@ byte, exactly like a game client).
 
 | Scheme | Where | Mechanism |
 |--------|-------|-----------|
-| `\xa7` (0xA7) substitution | weapon **code** (RC/NC weapon add/get); admin-message header/body separator | newline ⇄ `\xa7` |
-| **gtokenize** (`CString::gtokenize`/`guntokenize`) | NPC and class **scripts** sent client→server | one source line per comma token; complex lines quoted with doubled `"`/`\` |
+| `\xa7` (0xA7) substitution | weapon **code** (RC/NC weapon add/get), admin-message header/body separator | newline ⇄ `\xa7` |
+| **gtokenize** (`CString::gtokenize`/`guntokenize`) | NPC and class **scripts** sent client→server | one source line per comma token, complex lines quoted with doubled `"`/`\` |
 | **Reborn quoted-CSV** (`toCSV`) | server→client lists (options, folders, rights folders, weapon/level lists, NPC var dumps) | comma-separated, each element optionally quoted |
 
 NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
@@ -102,7 +109,7 @@ NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 
 | Name | ID | Wire body |
 |------|----|-----------|
-| PLO_RC_ADMINMESSAGE | 35 | `"Admin <acct>"` + `\xa7` + message |
+| PLO_RC_ADMINMESSAGE | 35 | `"Admin <acct>:"` + `\xa7` + message (note the colon) |
 | PLO_ADDPLAYER | 55 | `gshort(id)` + `gstring(account)` + raw prop tail |
 | PLO_DELPLAYER | 56 | `gshort(id)` |
 | PLO_RC_SERVERFLAGSGET | 61 | `gshort(count)` then ×count `gstring(flag)` |
@@ -124,7 +131,7 @@ NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 
 1. `gchar(len) + account name`
 2. `gchar(4) + "main"` (world name, hardcoded)
-3. `gstring(propsBlob)` — `gchar(len)` then a standard player-props packet
+3. `gstring(propsBlob)`: `gchar(len)` then a standard player-props packet
 4. `gshort(flagCount)` then ×count `gchar(len)+flag`
 5. `gshort(chestCount)` then ×count `gchar(level.len + 2) + gchar(chestX) + gchar(chestY) + levelName`
 6. `gchar(weaponCount)` then ×count `gchar(len)+weaponName`
@@ -134,8 +141,14 @@ NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 `PLO_CLEARWEAPONS (194)` → `PLO_RC_CHAT (74)` motd lines → server-list-connected →
 "New RC" broadcast → `PLO_STAFFGUILDS (47)` → `PLO_STATUSLIST (180)` →
 `PLO_RC_MAXUPLOADFILESIZE (103)` → player-prop exchange for everyone online →
-"Currently online" chat. (If the account has `PLPERM_NPCCONTROL` and an npc-server is up,
-`PLO_NPCSERVERADDR (79)` is also sent.)
+"Currently online" chat.
+
+`PLO_NPCSERVERADDR (79)` is **not** part of this sequence. `PlayerRC::sendLogin`
+never calls `sendNCLoginToPlayer`. To get the address, the client sends
+`PLI_NPCSERVERQUERY` with message `"location"` and receives the reply
+(`PlayerRCPackets.cpp:1569`). The server also pushes it unsolicited after
+`PLI_RC_SERVEROPTIONSSET` (`:127`) and after a rights change affecting
+`PLPERM_NPCCONTROL` (`:884`). A client that waits for it at login waits forever.
 
 ---
 
@@ -173,7 +186,7 @@ NPC ids are GINT3 everywhere.
 | PLO_NPCWEAPONADD | 33 | legacy weapon reply (< NCVER_2_1): `gchar(len)+name` + `gchar(0)` + `gchar(imgLen)+image` + `gchar(1)` + `gshort(scriptLen)` + script (`\n`→`\xa7`) |
 | PLO_NC_LEVELLIST | 80 | gtokenized level list (parse as quoted-CSV) |
 | PLO_NC_NPCATTRIBUTES | 157 | `toCSV` NPC variable dump |
-| PLO_NC_NPCADD | 158 | `gint3(id)` + repeated `[gchar(propId)][gchar(len)][str]`; propId 50=NAME, 51=TYPE, 52=CURLEVEL |
+| PLO_NC_NPCADD | 158 | `gint3(id)` + repeated `[gchar(propId)][gchar(len)][str]`, propId 50=NAME, 51=TYPE, 52=CURLEVEL |
 | PLO_NC_NPCDELETE | 159 | `gint3(id)` |
 | PLO_NC_NPCSCRIPT | 160 | `gint3(id)` + `toCSV(script, "\n")` |
 | PLO_NC_NPCFLAGS | 161 | `gint3(id)` + `toCSV(flagList)` |
@@ -184,8 +197,8 @@ NPC ids are GINT3 everywhere.
 | PLO_NC_CLASSDELETE | 188 | raw class name |
 | PLO_NC_WEAPONGET | 192 | (≥ NCVER_2_1) `gchar(len)+name` + `gchar(len)+image` + script (`\n`→`\xa7`) |
 
-> **Note on "Unhandled by 5.07+":** several RC/NC PLO ids are flagged that way in
-> `IEnums.h`. That comment refers to the stock *client*; gserver still emits them and
+> **Note on "Unhandled by 5.07+":** `IEnums.h` flags several RC/NC PLO ids that way.
+> That comment refers to the stock *client*. gserver still emits them and
 > pyReborn's RC/NC clients parse them. They are live on 6.037.
 
 ---

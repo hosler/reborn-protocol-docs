@@ -1,10 +1,10 @@
 # Encryption and Packet Processing
 
-This section covers how packets are encrypted, compressed, and bundled in the Reborn protocol. The word "encryption" is used loosely here—this is obfuscation, not cryptographic security.
+This section explains how the Reborn protocol encrypts, compresses, and bundles packets. Here, "encryption" means obfuscation, not cryptographic security.
 
-> **Which generation does a given client use?** That's not a property of the client version
-> string — it's selected by the `PLTYPE_*` login-type byte, with a couple of version-string
-> based downgrades/fallbacks along the way. See
+> **Which generation does a given client use?** The client version string does not directly
+> select the generation. The `PLTYPE_*` login-type byte selects it, with some version-string
+> downgrades and fallbacks. See
 > [Client Versions & Encryption](versions-encryption.md) for the full client/RC/NC version
 > table, the PLTYPE → generation selection logic, the login packet field order, and the
 > per-generation bundle framing (GEN_1 through the unimplemented GEN_6). This page focuses
@@ -12,7 +12,7 @@ This section covers how packets are encrypted, compressed, and bundled in the Re
 
 ## The Packet Lifecycle
 
-Understanding the full journey of a packet is crucial. Here's what happens:
+A packet passes through the following stages:
 
 ### Sending (Client → Server)
 
@@ -102,7 +102,7 @@ Understanding the full journey of a packet is crucial. Here's what happens:
 
 ## Encryption Generations
 
-The protocol supports multiple "generations" of encryption. Each subsequent generation was presumably meant to be more secure. The results are... mixed.
+The protocol supports multiple encryption "generations." Each later generation changes the encryption or compression method.
 
 | Generation | Encryption | Compression | Status |
 |------------|------------|-------------|--------|
@@ -114,7 +114,7 @@ The protocol supports multiple "generations" of encryption. Each subsequent gene
 
 ### GEN_3 vs GEN_5: Order of Operations
 
-This is a critical difference that has confused implementers:
+Implementations must apply these operations in the specified order:
 
 **GEN_5 (Current)**:
 ```
@@ -128,11 +128,11 @@ Send: Compress → Send
 Recv: Decompress → Decrypt individual packets → Parse
 ```
 
-GEN_5 encrypts the *compressed bundle*. GEN_3 encrypts the *decompressed packets*. Getting this wrong means nothing works.
+GEN_5 encrypts the *compressed bundle*. GEN_3 encrypts the *decompressed packets*. An incorrect order prevents communication.
 
 ## ENCRYPT_GEN_2: The NC / Listserver Format
 
-GEN_2 is not just "ancient history" — it is the **live** encryption for two current
+GEN_2 is the **live** encryption for two current
 connection types: **NC (NPC Control)** clients and **listserver** communication. If you
 implement an NC client, you implement GEN_2.
 
@@ -163,7 +163,7 @@ This is why an NC client cannot share the GEN_5 codec path: it must swap to a GE
 
 ### The Algorithm
 
-GEN_5 uses a Linear Congruential Generator (LCG) to produce a key stream, then XORs each byte. It's not cryptographically secure—it's obfuscation to discourage casual packet sniffing.
+GEN_5 uses a Linear Congruential Generator (LCG) to produce a key stream. It then XORs each byte. This method provides obfuscation, not cryptographic security.
 
 ```cpp
 class Encryption {
@@ -187,11 +187,11 @@ void decrypt(uint8_t* data, size_t length) {
 }
 ```
 
-The iterator is advanced using an LCG with multiplier `0x8088405` every 4 bytes. Each of the 4 bytes of the 32-bit iterator is used to XOR one byte of data.
+The algorithm advances the iterator with an LCG multiplier of `0x8088405` every 4 bytes. It uses each iterator byte to XOR one data byte.
 
 ### Encryption Limits
 
-Here's the quirk: encryption is only applied to the first N iterations. Each iteration processes 4 bytes. Beyond that, it's plaintext.
+The algorithm encrypts only the first N iterations. Each iteration processes 4 bytes. Data after those iterations remains plaintext.
 
 | Compression Type | Byte Value | Limit (iterations) | Bytes Encrypted |
 |------------------|------------|-------------------|-----------------|
@@ -205,7 +205,7 @@ static int limits[] = { 0x02, 0x0C, 0x04, 0x04, 0x06, 0x04 };
 // { type, limit, type, limit, ... }
 ```
 
-Why these specific limits? The theory is that compressing data makes the first bytes more "random" and thus harder to analyze, so you don't need to encrypt the whole thing. In practice, this means if your packet is larger than the limit, part of it is unencrypted.
+The design assumes that compression makes the first bytes less predictable and more difficult to analyze. Therefore, it does not encrypt the complete packet. If a packet exceeds the limit, part of it remains unencrypted.
 
 ### Compression Types
 
@@ -215,7 +215,7 @@ Why these specific limits? The theory is that compressing data makes the first b
 #define COMPRESS_BZ2           0x06  // Bzip2
 ```
 
-Why 0x02, 0x04, 0x06 instead of 0, 1, 2? Probably to avoid having 0x00 bytes in the stream, maintaining the protocol's allergy to low-value bytes.
+The likely reason for values 0x02, 0x04, and 0x06 is to prevent 0x00 bytes in the stream. This choice is consistent with other low-value-byte restrictions.
 
 ### Outbound Compression Is a Session Contract
 
@@ -228,8 +228,8 @@ policies:
 | `56..8192` bytes | zlib, type `0x04` | zlib, type `0x04` |
 | `>8192` (`0x2000`) bytes | bzip2, type `0x06` | zlib, type `0x04` |
 
-Thus the policies agree for every size through 8192 bytes and diverge only
-above it. This is a wire contract, not merely a compression optimization: the
+The policies agree for every size through 8192 bytes. They differ only above
+this size. This is a wire contract, not only a compression optimization. The
 receiver consumes the type byte and `limitFromType`/`limit_from_type` derives
 the partial-XOR limit from it. Reborn records the distinction in
 `reborn_protocol.encryption.CompressionPolicy`, `GAME_COMPRESSION`, and
@@ -248,7 +248,7 @@ support.
 
 ### Iterator Starting Values
 
-Each encryption generation has a starting value for the iterator. These values are not cryptographically significant—they're just arbitrary starting points.
+Each encryption generation has an iterator start value. These arbitrary values have no cryptographic significance.
 
 From GServer-v2's `CEncryption.cpp`:
 ```cpp
@@ -263,13 +263,13 @@ const uint32_t CEncryption::ITERATOR_START[6] = {0, 0, 0x04A80B38, 0x4A80B38, 0x
 | GEN_4 | 3 | 78,061,368 | 0x4A80B38 | Same as GEN_3 |
 | **GEN_5** | 4 | **78,061,368** | **0x4A80B38** | **Same as GEN_3/4** |
 
-Note: GEN_3, GEN_4, and GEN_5 all use the same iterator start value (0x4A80B38). The difference is in the algorithm—GEN_3 uses single-byte insertion, while GEN_4/5 use the LCG-based XOR method.
+GEN_3, GEN_4, and GEN_5 all use the same iterator start value (0x4A80B38). Their algorithms differ. GEN_3 inserts one byte, while GEN_4 and GEN_5 use the LCG-based XOR method.
 
-These values were presumably chosen by someone in the early 2000s. The rationale is lost. If you get them wrong, your packets are garbage. Get them right, and don't ask questions.
+Someone selected these values in the early 2000s, but the reason is unknown. Incorrect values produce invalid packets. Use the specified values.
 
 ### The Key
 
-The encryption key is typically set during the login handshake. Both client and server must agree on the same key. The key is a single byte (0-255), which is... not a lot of key space.
+The login handshake usually sets the encryption key. The client and the server must use the same key. The key is one byte (0-255).
 
 ## Implementation Examples
 

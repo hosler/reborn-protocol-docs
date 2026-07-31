@@ -1,26 +1,32 @@
 # Protocol Overview
 
-The Reborn protocol is a binary packet-based protocol used for communication between Reborn clients and servers. It was designed in the late 1990s and carries the architectural decisions of that era with pride.
+Reborn clients and servers use the Reborn binary packet protocol to communicate. Its
+design comes from the late 1990s and contains the architectural decisions of that era.
 
 ## Before You Begin: The Philosophy
 
-Understanding *why* this protocol is the way it is will save you hours of confusion.
+An understanding of the protocol design helps you prevent confusion.
 
 ### Why Everything Adds 32
 
-Almost every numeric value in this protocol has 32 added to it before transmission. The goal was to ensure all bytes fall within the printable ASCII range (32-255), making packet dumps more readable and allegedly helping with certain network configurations of the era.
+The sender adds 32 to almost every numeric value before transmission. This operation puts
+all bytes in the printable ASCII range (32-255). It makes packet dumps easier to read. The
+designers also thought that it helped with some network configurations of the era.
 
-The result is a protocol that's *technically* binary but *kinda* looks like ASCII if you squint. The space character (32) becomes the new zero. Newlines (10) are packet separators. It's almost clever.
+The result is a binary protocol that can look like ASCII. The space character (32)
+represents zero. Newlines (10) separate packets.
 
 For details, see [Data Types: The +32 Obsession](data-types.md#the-32-obsession-why-everything-adds-32).
 
 ### Why Three String Types
 
-Because one wasn't confusing enough. See [String Types](strings.md) for the full tragedy.
+The protocol uses three string types. See [String Types](strings.md) for details.
 
 ### Why Partial Encryption
 
-The encryption only covers the first N bytes of each bundle because compressed data is "random-looking" and presumably hard to analyze. Also, encrypting everything would be work.
+The encryption covers only the first N bytes of each bundle. The designers assumed that
+compressed data looked random and was difficult to analyze. Full encryption also required
+more work.
 
 ## Protocol Architecture
 
@@ -40,7 +46,8 @@ See [RC & NC Protocols](rc-nc-protocols.md) for the admin sub-protocol login han
 
 ### The Bundle System
 
-All packets are sent within **bundles**. A bundle contains one or more packets and is processed as a unit.
+The sender puts all packets in **bundles**. A bundle contains one or more packets. The
+receiver processes each bundle as one unit.
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -80,7 +87,7 @@ See [Encryption: The Packet Lifecycle](encryption.md#the-packet-lifecycle) for d
 
 ## Encryption Generations
 
-The protocol has evolved through multiple "generations" of encryption:
+The protocol uses multiple encryption "generations":
 
 | Gen | Encryption | Compression | Use |
 |-----|------------|-------------|-----|
@@ -90,7 +97,7 @@ The protocol has evolved through multiple "generations" of encryption:
 | GEN_4 | Weak XOR | BZ2 | Legacy |
 | **GEN_5** | **Weak XOR** | **Multi** | **Current** |
 
-GEN_5 is recommended. "Weak XOR" means it's obfuscation, not cryptographic security.
+Use GEN_5. "Weak XOR" supplies obfuscation, not cryptographic security.
 
 See [Encryption Details](encryption.md) for implementation specifics.
 
@@ -101,14 +108,14 @@ only uncompressed/zlib with the 55-byte boundary. See
 
 ## Data Encoding
 
-The actual wire formats for numeric values, coordinates, and property widths live in
-[Data Types](data-types.md). String behavior is covered in [String Types](strings.md).
-The quick rule is simple: packet docs show the field layout, while `data-types.md`
-explains what each encoded width means.
+See [Data Types](data-types.md) for the wire formats of numeric values, coordinates, and
+property widths. See [String Types](strings.md) for string behavior. Packet documents show
+the field layout.
+`data-types.md` explains each encoded width.
 
 ## Quick Start: Minimal Client
 
-Here's the basic flow to connect and authenticate:
+Use this basic sequence to connect and authenticate:
 
 ```
 1. TCP connect to server:port
@@ -132,16 +139,21 @@ Here's the basic flow to connect and authenticate:
 
 ## Common Pitfalls
 
-1. **Forgetting the +32**: Every numeric value is offset by 32. Forgetting this means garbage data.
+1. **Forgetting the +32**: Every numeric value has an offset of 32. Without this offset,
+   the data is invalid.
 
-2. **Wrong string type**: PLO_LEVELLINK uses newline-terminated strings, not GSTRING. This has bitten multiple implementations.
+2. **Wrong string type**: PLO_LEVELLINK uses newline-terminated strings, not GSTRING.
+   Multiple implementations have used the wrong type.
 
 3. **GEN_5 order of operations**: Encrypt *after* compress. GEN_3 did it the other way around.
 
 4. **Partial encryption**: Only the first N bytes are encrypted (N depends on compression type).
 
-5. **Iterator constants**: Each encryption generation has a magic starting value. Get it wrong, everything breaks.
+5. **Iterator constants**: Each encryption generation has a special start value. An
+   incorrect value causes all operations to fail.
 
 ## Acknowledgments
 
-This documentation is based on analysis of the GServer-v2 codebase and years of implementation experience. The protocol's quirks are documented with affection—it's a product of its time, and it works.
+This documentation comes from an analysis of the GServer-v2 codebase and years of
+implementation experience. The protocol is a product of its time, and it operates
+correctly.

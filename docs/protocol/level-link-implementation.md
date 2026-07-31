@@ -1,24 +1,26 @@
 # Level Link Implementation Guide
 
-This document provides comprehensive guidance for implementing level links in
-Reborn clients, based on real-world implementation experience with the Reborn
-client.
+This document gives instructions to implement level links in Reborn clients. The
+instructions come from implementation experience with the Reborn client.
 
 ## Overview
 
-Level links are rectangular areas in a level that transport players to other levels when touched. They are a fundamental navigation mechanism in Reborn worlds.
+Level links are rectangular areas in a level. When a player touches a level link, the
+link moves the player to a different level. Reborn worlds use level links for navigation.
 
 ## Packet Structure
 
 ### PLO_LEVELLINK (1)
 
-When `serverside = false`, the server sends level link data to clients:
+If `serverside = false`, the server sends level link data to clients:
 
 ```
 [STRING: link_data] // Raw newline-terminated string
 ```
 
-**Critical Implementation Note**: This is NOT a GSTRING (length-prefixed string). The server sends raw string data that continues until a newline character (0x0A). This has been a common source of parsing errors.
+**Critical Implementation Note**: This data is NOT a GSTRING (length-prefixed string).
+The server sends raw string data until a newline character (0x0A). This difference has
+caused many parsing errors.
 
 ### Link Data Format
 
@@ -32,7 +34,7 @@ destlevel x y width height destx desty
 - **width, height**: Link area size in tiles
 - **destx, desty**: Destination coordinates (see special values below)
 
-Multiple links are sent as a single string with newline separators.
+The server sends multiple links as one string with newline separators.
 
 ### Coordinate Frame of a Link
 
@@ -43,39 +45,46 @@ Every link field is in the **local tile frame** of a single 64×64 level:
   a world-space distance.
 - Numeric `destx` and `desty` are local coordinates in `destlevel`.
 
-This remains true when the source or destination is a GMAP segment. Do not add
+This rule also applies when the source or destination is a GMAP segment. Do not add
 the source segment origin to `x`/`y`, and do not serialize stored world
 coordinates directly into `PLI_LEVELWARP`. Convert the player's world position
 to target-local coordinates first. Segment/grid coordinates are separate
 metadata; screen coordinates are only for rendering.
 
-For collision, the rectangle is half-open:
-`x <= player_local_x < x + width` and
-`y <= player_local_y < y + height`. For example, `x=62 width=2` covers local
-X values from 62 through just below 64; it does not describe a world span
-starting at tile 62 of the whole GMAP.
+For collision, the rectangle is **inclusive on both ends**:
+`x <= player_local_x <= x + width` and
+`y <= player_local_y <= y + height`. For example, `x=62 width=2` covers local
+X values 62, 63 and 64. It does not describe a world span starting at tile 62
+of the whole GMAP.
+
+The server test is `Level.cpp:2417`, which uses `>=` and `<=` on both axes.
+`pyreborn/client_warp.py` matches it. A half-open test misses the far edge tile
+of every link, so a player who steps onto the last row of a door triggers
+nothing.
 
 ## Special Coordinate Values
 
-The destination coordinates support special values:
+The destination coordinates accept special values:
 
 - **"playerx"**: Keep player's current X coordinate
 - **"playery"**: Keep player's current Y coordinate
 - **"-1"**: Server converts to "playerx" or "playery" respectively
 
-Example: A link with `destx="playerx" desty="32"` will maintain the player's X position but place them at Y=32 in the destination level.
+Example: A link with `destx="playerx" desty="32"` keeps the player's X position. It puts
+the player at Y=32 in the destination level.
 
 ## GMAP Implementation
 
 ### Understanding GMAP Links
 
-In GMAP (Game Map) mode, levels are arranged in a grid. Each level can have links to:
+In GMAP (Game Map) mode, the system arranges levels in a grid. Each level can have links
+to:
 1. **Adjacent GMAP segments** (edge links)
 2. **Non-GMAP levels** (indoor/dungeon links)
 
 ### Edge Link Filtering
 
-When in GMAP mode, clients should typically ignore edge links between GMAP segments because:
+In GMAP mode, clients should usually ignore edge links between GMAP segments because:
 - GMAP system handles seamless transitions automatically
 - Edge links would interfere with smooth world navigation
 - Server still sends these for backward compatibility
@@ -103,7 +112,8 @@ def is_edge_link(link):
     """Check if a link sits against a level edge.
 
     This mirrors the Reborn client's actual heuristic
-    (Client._is_edge_link / GameActions._is_edge_link):
+    (ActionsMixin._is_edge_link, pyreborn/game/actions.py). It is a
+    GameClient-only filter, and the base Client does not apply it:
     a link is treated as an edge link if its rectangle touches any of the
     four borders of the 64-tile level. The thresholds are <=1 / >=63 (not
     an exact x==0 && width==1 match), so links one tile in from the border
@@ -162,8 +172,9 @@ class LevelLinkManager:
     def check_collision(self, player_x, player_y):
         """Check if player is touching any link"""
         for link in self.current_links:
-            if (player_x >= link.x and player_x < link.x + link.width and
-                player_y >= link.y and player_y < link.y + link.height):
+            # Inclusive on both ends, matching Level.cpp:2417.
+            if (link.x <= player_x <= link.x + link.width and
+                link.y <= player_y <= link.y + link.height):
                 return link
         return None
     
@@ -191,8 +202,11 @@ def send_warp_request(connection, link, current_player):
     # Create PLI_LEVELWARP packet
     packet = PacketBuilder()
     packet.add_byte(PLI_LEVELWARP)
-    packet.add_gchar(int(dest_x))  # Convert to tiles
-    packet.add_gchar(int(dest_y))  # Convert to tiles
+    # Half-tile units on the wire. The server reads this back as gchar * 8
+    # pixels, so sending the bare tile number lands the player at half the
+    # intended coordinate.
+    packet.add_gchar(int(dest_x * 2))
+    packet.add_gchar(int(dest_y * 2))
     packet.add_string(link.destination)  # Level name
     
     connection.send(packet.build())
@@ -200,24 +214,29 @@ def send_warp_request(connection, link, current_player):
 
 ## Common Implementation Pitfalls
 
-1. **Parsing Error**: Treating PLO_LEVELLINK as GSTRING instead of raw string
+1. **Parsing Error**: The parser treats PLO_LEVELLINK as GSTRING instead of a raw string
 2. **Coordinate Confusion**: Link positions, spans, and destinations use
    level-local tiles, not world tiles, segment coordinates, or screen pixels
 3. **GMAP Edge Links**: Not filtering edge links causes unwanted warps
 4. **Special Values**: Not handling "playerx"/"playery" correctly
-5. **Timing**: Links are sent after PLO_BOARDPACKET - ensure proper packet ordering
+5. **Half-open collision**: Using `<` on the far edge. The test is inclusive on
+   both ends, so a half-open test drops the last row and column of every link
+6. **Tile units in the warp packet**: `PLI_LEVELWARP` carries half-tiles.
+   Sending the bare tile number halves the destination
+5. **Timing**: The server sends links after PLO_BOARDPACKET. Make sure that packets stay
+   in the correct order.
 
 ## Testing Recommendations
 
-1. **Test with serverside=false** to ensure links are received
+1. **Test with serverside=false** to make sure that the client receives links
 2. **Verify special coordinates** work correctly
 3. **Test GMAP transitions** don't trigger edge links
 4. **Test indoor transitions** work from GMAP levels
-5. **Monitor packet flow** to ensure correct parsing
+5. **Monitor packet flow** to make sure that the parser operates correctly
 
 ## Visual Debugging
 
-Consider implementing visual indicators for links during development:
+During development, you can show visual indicators for links:
 
 ```python
 def render_links(surface, links, camera_offset,
@@ -246,4 +265,5 @@ def render_links(surface, links, camera_offset,
                          link.width * 16, link.height * 16))
 ```
 
-This visual feedback helps verify link parsing and filtering logic during development.
+This visual feedback helps you verify the link parsing and filtering logic during
+development.

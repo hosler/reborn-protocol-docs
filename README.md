@@ -2,7 +2,9 @@
 
 [![Documentation Status](https://readthedocs.org/projects/reborn-protocol-docs/badge/?version=latest)](https://reborn-protocol-docs.readthedocs.io/en/latest/?badge=latest)
 
-Comprehensive documentation for the Reborn protocol, providing detailed packet structure specifications, encoding formats, and implementation guidelines for developers working with Reborn servers and clients.
+This documentation gives developers detailed packet structure specifications
+and encoding formats for the Reborn protocol. It also gives implementation
+guidelines for Reborn servers and clients.
 
 ## Documentation Contents
 
@@ -45,11 +47,13 @@ system `python3` is 3.14 and does not have Hypothesis installed.
 
 ## Online Documentation
 
-The documentation is automatically built and hosted at: **https://reborn-protocol-docs.readthedocs.io/**
+The build system automatically builds and hosts the documentation at
+**https://reborn-protocol-docs.readthedocs.io/**.
 
 ## Contributing
 
-This documentation is part of the OpenReborn2 project. Contributions are welcome!
+This documentation is part of the OpenReborn2 project. The project welcomes
+contributions.
 
 1. Fork the repository
 2. Create a feature branch
@@ -58,7 +62,8 @@ This documentation is part of the OpenReborn2 project. Contributions are welcome
 
 ## License
 
-This documentation is open source and available under the same license as the OpenReborn2 project.
+The OpenReborn2 project makes this documentation available under the same
+open-source license as the project.
 
 ## Related Projects
 

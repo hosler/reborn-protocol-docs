@@ -1,11 +1,16 @@
 Reborn Protocol Reference Documentation
 ========================================
 
-Welcome to the comprehensive reference documentation for the Reborn protocol. This documentation provides detailed packet structure specifications, encoding formats, and implementation guidelines for developers working with Reborn servers and clients.
+This reference documentation describes the Reborn protocol. It gives
+developers detailed packet structure specifications, encoding formats, and
+implementation guidelines for Reborn servers and clients.
 
 .. note::
 
-   New to the protocol? Start with :doc:`protocol/overview` to understand why everything adds 32, why there are three string types, and other architectural decisions from the late 1990s.
+   If the protocol is new to you, start with :doc:`protocol/overview`. This
+   document explains why everything adds 32 and why the protocol has three
+   string types. It also explains other architectural decisions from the late
+   1990s.
 
 .. toctree::
    :maxdepth: 2
@@ -45,7 +50,8 @@ Welcome to the comprehensive reference documentation for the Reborn protocol. Th
 About This Documentation
 ========================
 
-This documentation is derived from deep analysis of the GServer-v2 codebase and provides:
+The authors analyzed the GServer-v2 codebase to produce this documentation.
+The documentation contains:
 
 * Complete packet structure specifications (100+ packets documented)
 * Primitive-level encoding details for cross-language implementation
@@ -59,7 +65,8 @@ This documentation is derived from deep analysis of the GServer-v2 codebase and 
 * GS2 bytecode container, VM semantics, and client host reference
 * Implementation examples in Python, JavaScript, and C++
 
-The documentation is maintained as part of the OpenReborn2 project and is designed to enable developers to create compatible Reborn clients and servers in any programming language.
+The OpenReborn2 project maintains this documentation. Developers can use it
+to make compatible Reborn clients and servers in any programming language.
 
 Reading Order
 =============
@@ -89,7 +96,8 @@ For existing developers:
 Contributing
 ============
 
-This documentation is open source and contributions are welcome. The source is available on GitHub as part of the OpenReborn2 project.
+The OpenReborn2 project makes this documentation open source and welcomes
+contributions. The project source is available on GitHub.
 
 Indices and tables
 ==================

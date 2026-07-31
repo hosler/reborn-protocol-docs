@@ -1,23 +1,23 @@
 # Data Types Reference
 
-This section provides detailed specifications for all data types used in the Reborn protocol—and explains *why* they are the way they are.
+This section specifies all data types that the Reborn protocol uses. It also explains the reasons for their design.
 
 ## The +32 Obsession: Why Everything Adds 32
 
-Before we dive in, let's address the elephant in the room: almost every value in this protocol has 32 added to it before transmission. Why?
+Almost every value in this protocol has 32 added to it before transmission. The following history explains this design.
 
 The Reborn protocol was designed in the late 1990s, when:
 - Binary protocols made some network administrators nervous
 - Debug logs looked nicer with printable characters
 - Certain naive firewalls were suspicious of bytes below 32
 
-Adding 32 to every byte ensures the result is in the printable ASCII range (32-255). This means packet dumps are *almost* human-readable if you squint. The space character (32) becomes the new zero.
+Adding 32 to every byte puts the result in the printable ASCII range (32-255). As a result, packet dumps contain mostly readable characters. The space character (32) becomes the new zero.
 
-Is this still necessary in 2025? No. Is it baked into every implementation? Yes. Welcome to legacy protocols.
+This design was not necessary in 2025. However, every implementation uses it as part of the legacy protocol.
 
 ## Primitive Types (The Normal Ones)
 
-These are the basic types that behave like you'd expect:
+These basic types have the expected behavior:
 
 | Type | Size | Range | Description |
 |------|------|-------|-------------|
@@ -29,11 +29,11 @@ These are the basic types that behave like you'd expect:
 
 ## G-Types: The Reborn-Encoded Types
 
-All G-types add 32 to ensure "printable ASCII transmission." They're used everywhere.
+All G-types add 32 to keep transmitted values in the printable ASCII range. The protocol uses these types throughout.
 
 ### GCHAR: The Simple One
 
-The gateway drug of G-encoding. Just add 32.
+GCHAR uses the basic G-encoding rule. Add 32.
 
 ```
 Encoding: byte = value + 32
@@ -57,7 +57,7 @@ def decode_gchar(byte): return (byte - 32) & 0xFF
 
 ### GSHORT: Where It Gets Weird
 
-Here's where the protocol earns its reputation. A GSHORT is 2 bytes, but you can't just split a 16-bit number into two bytes and add 32 to each. That would be too simple.
+A GSHORT is 2 bytes. Do not split a 16-bit number into two bytes and add 32 to each.
 
 Instead, GSHORT uses **7-bit encoding**: each byte carries 7 bits of data (not 8), with the +32 bias applied.
 
@@ -87,7 +87,7 @@ val[1] += 32;
 return (byte1 << 7) + byte2 - 0x1020;
 ```
 
-**Why 0x1020?** It's `(32 << 7) + 32 = 4128`. This undoes the +32 on both bytes in one operation. Clever, but not documented anywhere until now.
+**Why 0x1020?** It is `(32 << 7) + 32 = 4128`. This operation removes the +32 bias from both bytes.
 
 **Why 28767?** The cap of 28767 (not 16383) comes from the encoding: `223 << 7 = 28544`, plus up to 223 in the second byte gives 28767.
 
@@ -107,8 +107,8 @@ def decode_gshort(data):
 
 ### GINT (GINT3): Three Bytes, Same Energy
 
-Extends the pattern to 3 bytes. Often called **GINT3** to disambiguate from GINT4/GINT5.
-This is what the GServer `CString` `operator>>(int)` / `readGInt()` produce — used for
+GINT extends the pattern to 3 bytes. Documentation often calls it **GINT3** to distinguish it from GINT4 and GINT5.
+This is what the GServer `CString` `operator>>(int)` / `readGInt()` produce. The protocol uses it for
 3-byte numeric props (RUPEES, CARRYNPC, KILLS, etc.), NPC ids, and the `PLO_RAWDATA`
 length field.
 
@@ -122,10 +122,10 @@ Bit layout (high byte carries the top of the value):
 ```
 
 > ⚠️ **Don't say "21 bits / max 2,097,151."** The reference `CString` does **not**
-> mask the top byte to 7 bits — it clamps it to **223** (`if (val[0] > 223) val[0] = 223`),
+> mask the top byte to 7 bits. It clamps it to **223** (`if (val[0] > 223) val[0] = 223`),
 > exactly like GSHORT. So the real encodable max is `223 << 14 + 223 << 7 + 223 = 3,682,399`,
 > not `2^21 − 1`. For values ≤ 2,097,151 the bytes are identical either way, which is why
-> the bug rarely bites — but a strict 7-bit-mask encoder will truncate large rupee/online
+> this error rarely occurs. However, a strict 7-bit-mask encoder truncates large rupee or online
 > counts.
 
 ```python
@@ -147,9 +147,9 @@ def encode_gint3(value):
 
 ### GINT4: Four Bytes
 
-A 4-byte G-type (`CString` `readGInt4`). Same byte-shift scheme, top byte clamped to 223.
-Encodable max `≈ 471,347,295`. Decode bias is `0x4081020`. Rare on the wire but part of
-the type system, so a complete codec should implement it.
+A 4-byte G-type (`CString` `readGInt4`) uses the same byte-shift scheme. The encoder clamps the top byte to 223.
+The maximum encodable value is `≈ 471,347,295`. The decode bias is `0x4081020`.
+The wire protocol rarely uses this type, but a complete codec should implement it.
 
 ### GINT5: For When You Need Bigger Numbers
 
@@ -199,7 +199,7 @@ def decode_gint5(data):
 
 ## Coordinates: A Field Guide
 
-The coordinate system is straightforward once you understand the units.
+The coordinate system uses the following units.
 
 ### The Unit Hierarchy
 
@@ -221,9 +221,9 @@ The coordinate system is straightforward once you understand the units.
 
 ### X2/Y2 Encoding: The Weird One
 
-Player properties 78 (X2) and 79 (Y2) encode pixel positions with support for negative values. Because negative positions are a thing in GMAPs.
+Player properties 78 (X2) and 79 (Y2) encode positive and negative pixel positions. GMAPs can contain negative positions.
 
-The encoding stuffs a sign bit into the least significant bit:
+The encoding puts a sign bit in the least significant bit:
 
 ```
 Encoding:
@@ -242,7 +242,7 @@ Decoding:
 | +0 | 0 | 0 |
 | -1 | 3 | 11 |
 
-Why not just use signed integers? Because every byte needs to be ≥32 after encoding, and signed representations would break that. See: The +32 Obsession.
+The protocol does not use signed integers because each encoded byte must be ≥32. Signed representations would violate this requirement.
 
 ```python
 def decode_x2y2(gshort_value):
@@ -288,15 +288,15 @@ interpreted as signed 8-bit values (`-40..-1`) before division by two. This is t
 Player colors are consecutive GCHARs:
 
 ```
-[coat][sleeves][shoes][belt][skin]   (classic / old-world: 5 bytes)
-+ [sword][shield][unused]            (new-world: 8 bytes total)
+[skin][coat][sleeves][shoes][belt]   (classic / old-world: 5 bytes)
++ [pullover][pants][border]          (new-world: 8 bytes total)
 Each byte: color index (+ 32 for encoding)
 ```
 
 > The count is **server-policy-dependent, not client-version-dependent**. The reference
 > server's `PropertyColors::getColorCount()` asks `Server::isNewWorldMode()` and returns
 > either 8 or 5 (`GServer-v2/server/src/utilities/PropertySerializers.cpp:628-632`).
-> Consequently a receiver cannot derive the width from the handshake, and no particular
+> Therefore, a receiver cannot derive the width from the handshake, and no particular
 > default is normative. A configurable server chooses one width for the world.
 >
 > A client that does not know the policy can parse with its preferred width, require the
@@ -340,7 +340,7 @@ Values: 0 = evil, 20 = neutral, 100 = good
 ## NPC Property Data Types
 
 NPCs use a separate property enum and several width quirks that are easy to misread. The
-full semantic table lives in [NPC Properties](npc-properties.md); this section covers the
+full semantic table is in [NPC Properties](npc-properties.md). This section gives the
 wire widths.
 
 | ID(s) | Field | Encoding | Notes |
@@ -368,7 +368,9 @@ wire widths.
 | 36-40 | GATTRIB1-5 | GCHAR length + string | Custom strings |
 | 41-43 | GMAPLEVELX/Y, Z | GCHAR | GMAP segment and Z offset |
 | 44-47 | GATTRIB6-9 | GCHAR length + string | Custom strings |
-| 48-52 | Server-internal | Various | Not sent to game clients |
+| 48 | UNKNOWN48 | (void) | No payload |
+| 49-51 | SCRIPTER, NAME, TYPE | GCHAR length + string | `canSendProp()` filters these from game clients |
+| 52 | CURLEVEL | GCHAR length + string | Sent to game clients. `NPC::warp()` sets it on every level change |
 | 53-73 | GATTRIB10-30 | GCHAR length + string | Custom strings |
 | 74 | CLASS | GSHORT length + string | Long string |
 | 75-77 | X2/Y2/Z2 | GSHORT | Signed pixel coordinates |
@@ -378,7 +380,7 @@ exceptions.
 
 ## Common Packet Field Patterns
 
-These patterns show up repeatedly in the packet docs and are defined here for reference.
+The packet documentation uses these patterns repeatedly.
 
 | Pattern | Meaning | Notes |
 |---------|---------|-------|
@@ -393,11 +395,11 @@ These patterns show up repeatedly in the packet docs and are defined here for re
 
 ### Modification Time (GINT5)
 
-Unix timestamp. 5 bytes because 32-bit timestamps are *so* 2038.
+A Unix timestamp uses 5 bytes to avoid the 32-bit timestamp limit in 2038.
 
 ### Online Time (GINT)
 
-Seconds spent online. 3 bytes gives ~24 days before overflow, which is probably fine.
+This type records seconds online. A 3-byte value gives approximately 24 days before overflow.
 
 ## Implementation Guidelines
 
@@ -410,7 +412,7 @@ Seconds spent online. 3 bytes gives ~24 days before overflow, which is probably 
 
 - Always validate ranges after decoding (especially GCHAR: 0-223)
 - Handle underflow gracefully (bytes < 32 are malformed)
-- Reject malformed packets silently—don't crash
+- Reject malformed packets silently. Do not stop the program.
 
 ### Cross-Language Reference
 

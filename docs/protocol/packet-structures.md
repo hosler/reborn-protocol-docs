@@ -2,9 +2,11 @@
 
 ## Overview
 
-This document provides comprehensive documentation of the Reborn protocol packet structures based on analysis of the GServer-v2 codebase. All packet structures are documented down to the primitive level for cross-language implementation.
+This document describes the Reborn protocol packet structures. The description comes from
+an analysis of the GServer-v2 codebase. Each packet structure includes primitive-level
+details for implementations in different languages.
 
-> **Prerequisites**: Before diving into packet structures, understand:
+> **Prerequisites**: Before you use the packet structures, understand these subjects:
 > - [Data Types](data-types.md) - G-type encoding (the +32 obsession)
 > - [String Types](strings.md) - The three different string formats (yes, three)
 > - [Encryption](encryption.md) - How packets are bundled and encrypted
@@ -13,7 +15,7 @@ This document provides comprehensive documentation of the Reborn protocol packet
 
 ### Packet Bundle Structure
 
-All packets are sent within bundles with the following structure:
+The sender puts all packets in bundles that have this structure:
 
 ```
 [UINT16: packet_size][PACKET_BUNDLE_DATA]
@@ -43,7 +45,7 @@ For ENCRYPT_GEN_5 protocol (recommended):
 
 ### Individual Packet Structure
 
-Within each bundle, packets are separated by newlines (`\n`) except for raw data packets:
+Newlines (`\n`) separate the packets in each bundle. Raw data packets are the exception:
 
 ```
 [UINT8: packet_id][PACKET_DATA]\n
@@ -58,8 +60,8 @@ Special case for raw data:
 ## Data Encoding Types
 
 The wire-format details for G-types, coordinate packing, and property widths live in
-[Data Types](data-types.md). This page stays focused on packet layouts; when a field width
-matters, follow the link rather than re-deriving it here.
+[Data Types](data-types.md). This page describes packet layouts. If a field width matters,
+use the information at the link.
 
 ## Client-to-Server Packets (PLI_*)
 
@@ -95,8 +97,8 @@ matters, follow the link rather than re-deriving it here.
 ```
 **Source**: `PlayerClient::msgPLI_BOARDMODIFY` (`PlayerClientPackets.cpp:109-134`) reads
 `x/y/w/h` via `readGUChar()` ×4, then the level applies the tiles (`Level::alterBoard`,
-`Level.cpp:1476`, `tileData.readGShort()` per tile — **not** a raw opaque string; each tile
-is a proper GSHORT). **Not echoed back to the sender** — see
+`Level.cpp:1476`, `tileData.readGShort()` per tile). The data is **not** a raw opaque
+string. Each tile is a proper GSHORT. The server does **not echo it to the sender**. See
 [GServer Behavior: PLI_BOARDMODIFY Is Not Echoed](gserver-behavior.md#pli_boardmodify-is-not-echoed-to-the-sender).
 
 ### PLI_PLAYERPROPS (2) - Player Property Update
@@ -170,9 +172,9 @@ Property format:
 ```
 [GUCHAR: (length << 3) | power]  // length = bits 3-7, power = low 3 bits
 ```
-**Source**: `msgPLI_FIRESPY` (`PlayerClientPackets.cpp:314-330`); the relayed
-`PLO_FIRESPY (20)` is `[GSHORT owner_id][GUCHAR: (length << 3) | power]` — same byte,
-prefixed with the sender's player id.
+**Source**: `msgPLI_FIRESPY` (`PlayerClientPackets.cpp:314-330`). The relayed
+`PLO_FIRESPY (20)` is `[GSHORT owner_id][GUCHAR: (length << 3) | power]`. It uses the same
+byte after the sender player ID.
 
 ### PLI_THROWCARRIED (11) - Throw Carried Object
 **Trigger**: Player throws carried item/NPC
@@ -443,8 +445,9 @@ Player properties use the following format:
 ### Property Encodings by Type:
 
 > **Width discipline:** the single most common parser bug is using the wrong width for a
-> numeric prop and desyncing every property after it. The canonical width table and the
-> cross-prop quirks are documented in [Data Types](data-types.md#player-property-data-types).
+> numeric prop. This error desynchronizes each property after it.
+> [Data Types](data-types.md#player-property-data-types) gives the canonical width table
+> and the cross-property exceptions.
 > **Do not assume "a count fits in a byte."**
 
 **NICKNAME (0)**: `[GCHAR: length][string]`
@@ -465,31 +468,32 @@ Player properties use the following format:
 > **SWORDPOWER** (`PropertySwordPower`):
 > - power `0` → `[GCHAR: 0]`
 > - power 1-4 with **no** custom image → `[GCHAR: power]` (1 byte)
-> - otherwise → `[GCHAR: power+30][GCHAR: img_len][STRING: image]` — the **power byte comes
->   first**, biased by **+30**, then the length-prefixed image name
+> - otherwise → `[GCHAR: power+30][GCHAR: img_len][STRING: image]`. The **power byte comes
+>   first** with a **+30** bias. The length-prefixed image name comes next.
 >
 > **SHIELDPOWER** (`PropertyShieldPower`):
 > - power `0` → `[GCHAR: 0]`
 > - power 1-3 with **no** custom image → `[GCHAR: power]` (1 byte)
-> - otherwise → `[GCHAR: power+10][GCHAR: img_len][STRING: image]` — note the bias is
->   **+10** here, not +30 like the sword
+> - otherwise → `[GCHAR: power+10][GCHAR: img_len][STRING: image]`. The bias is **+10**,
+>   not +30 as it is for the sword.
 >
 > Yes, the format changes based on the value. Yes, the power byte precedes the length.
 > Yes, sword and shield use different biases.
 >
-> On receipt, branch on the **raw decoded power byte**: sword raw `< 30` is bare;
-> raw `>= 30` means `power = raw - 30` followed by a length-prefixed image. Shield
+> When you receive the data, branch on the **raw decoded power byte**. A sword raw value
+> `< 30` is bare. A raw value `>= 30` means `power = raw - 30`, followed by a
+> length-prefixed image. Shield
 > uses `< 10` and `>= 10` the same way. In particular, testing `power > 4` for sword
-> is wrong: it attempts to read an image string that is absent from the bare form and
+> is wrong. It attempts to read an image string that is absent from the bare form and
 > desynchronizes every following property. The serializer/deserializer definitions are
 > at `GServer-v2/server/src/utilities/PropertySerializers.cpp:68-163`.
 >
 > For a bare nonzero power, the receiver synthesizes `sword{N}.png` or
-> `shield{N}.png`; classic generation uses `.gif`. The reference shield implementation
+> `shield{N}.png`. Classic generation uses `.gif`. The reference shield implementation
 > is intentionally asymmetric: serialization permits the bare form only through power
 > 3, while deserialization synthesizes a default through power 4. Its deserializer also
 > returns early when no bytes remain after a biased power, an explicit 1.41-client quirk.
-> A custom sword name without an extension gains `.gif`; a custom shield name gains
+> A custom sword name without an extension gains `.gif`. A custom shield name gains
 > `.gif` only for classic generation
 > (`GServer-v2/server/src/utilities/PropertySerializers.cpp:89-182`).
 **GANI (10)**: `[GCHAR: length][string]` - Animation file
@@ -498,7 +502,7 @@ Player properties use the following format:
 > ⚠️ **MAGIC NUMBER ALERT** - HEADIMAGE
 >
 > The first byte has a dual interpretation:
-> - If byte < 100: It's a **preset head ID** (no string follows, just the ID byte)
+> - If byte < 100: It is a **preset head ID** (no string follows, only the ID byte)
 > - If byte ≥ 100: **Subtract 100** to get the actual string length, then read that many bytes
 >
 > Example: Byte value 105 means "read 5 bytes of string data for the head image filename."
@@ -510,7 +514,7 @@ Player properties use the following format:
 **CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble
 **COLORS (13)**: `[8 bytes: color_data]` (server new-world mode) or `[5 bytes]`
 (other mode). This is server-wide configurable policy, not a width implied by the
-client version or handshake. Each byte is a palette index (+32 encoded); see
+client version or handshake. Each byte is a palette index (+32 encoded). See
 [Colors](data-types.md#colors-5-or-8-bytes) for safe width retry.
 **ID (14)**: `[GSHORT: player_id]` (2 bytes)
 **X (15)**: `[GCHAR: x * 2]` - signed half-tiles; decoded values `>=216` are
@@ -519,14 +523,16 @@ negative signed bytes before division by 2. *Not* pixels/2.
 **SPRITE (17)**: `[GCHAR: (sprite << 2) | direction]` - direction = low 2 bits, sprite/frame = rest
 **STATUS (18)**: `[GCHAR: status_flags]` - Player status bits
 **CARRYSPRITE (19)**: one unsafe GCHAR byte. The oracle maps it to
-`PropertyUnsafeByte`, whose writer adds 32 without the ordinary G-byte clamp; values
+`PropertyUnsafeByte`. Its writer adds 32 without the ordinary G-byte clamp. Values
 above 223 therefore differ from a clamped-byte writer
 (`GServer-v2/server/include/object/Player.h:633`,
 `GServer-v2/server/include/utilities/PropertySerializers.h:220-231`).
 **CURLEVEL (20)**: `[GCHAR: length][string]` - Current level name
 **HORSEGIF (21)**: `[GCHAR: length][string]` - Horse image
 **HORSEBUSHES (22)**: `[GCHAR: bush_count]` - Bushes eaten by horse
-**EFFECTCOLORS (23)**: Variable - `[GCHAR: first]`; if `first == 0` the prop is just that 1 byte, otherwise 5 bytes total (`first` + 4 color bytes). Visual effect colors (RGBA tint)
+**EFFECTCOLORS (23)**: Variable - `[GCHAR: first]`. If `first == 0`, the property is only
+that 1 byte. Otherwise, it is 5 bytes (`first` + 4 color bytes). Visual effect colors
+(RGBA tint)
 **CARRYNPC (24)**: `[GINT3: npc_id]` (**3 bytes**) - Carried NPC ID
 **APCOUNTER (25)**: `[GSHORT: ap_time]` (**2 bytes** — not 1) - AP recovery counter
 **MAGICPOINTS (26)**: `[GCHAR: mp_count]` - Magic points
@@ -571,29 +577,29 @@ integer, not one byte or five raw octets. The independent list-server reader cal
 | 82 | COMMUNITYNAME | `[GCHAR: length][string]` |
 | 83 | *(unspecified)* | Absent from the oracle property-list macro; width and meaning are not specified |
 
-A parser that treats 37-74 as one flat GATTRIB block will misalign every subsequent
-property. Likewise, props **51** (void) and **53** (1 byte, not a string) are the two that
-most often desync a naive parser.
+If a parser treats 37-74 as one flat GATTRIB block, it misaligns each subsequent
+property. Props **51** (void) and **53** (1 byte, not a string) also frequently
+desynchronize a simple parser.
 
 ### Property-stream ordering and failure handling
 
-Server-emitted player and NPC property pairs must be in strictly ascending property-ID
+The server must send player and NPC property pairs in strictly ascending property-ID
 order. The reference full-list and modified-player builders iterate IDs upward
 (`GServer-v2/server/src/player/PlayerProps.cpp:1291-1317`,
 `GServer-v2/server/src/player/PlayerProps.cpp:1357-1380`), while its shared change
 collector sorts by ID because a client stops processing when it encounters a property it
 does not understand (`GServer-v2/server/src/utilities/PropertySerializers.cpp:668-689`).
 
-This makes disorder a silent truncation hazard, not necessarily a reported protocol
-error: a strict parser can stop early and retain only the prefix. An NPC builder that
+Disordered properties can silently truncate data without a reported protocol error.
+A strict parser can stop early and keep only the prefix. An NPC builder that
 emits dictionary-insertion order can therefore produce an NPC with only image/X/Y while
 silently losing later gani, nickname, colors, gear, head image, image part, and GATTRIB
 properties. Sort pairs by numeric ID before serialization. The list-server player-property
-subset is an exception: its switch consumes each explicitly present property one by one,
-so that subset does not require ascending order
+subset is an exception. Its switch consumes each property that is present. Thus, that
+subset does not require ascending order
 (`graal-serverlist/server/src/ServerPlayer.cpp:31-77`).
 
-Robust stream walkers must also obey these rules:
+Stream walkers must also obey these rules:
 
 - An unknown property is not safely skippable without its real declared payload width.
   Blindly skipping one byte after the ID desynchronizes any multi-byte or variable-width
@@ -605,9 +611,9 @@ Robust stream walkers must also obey these rules:
 
 ### Packet-context policy is intentional
 
-The shared wire descriptor table does not make every packet context semantically
-identical. Reborn's `StreamPolicy`, `parse_player_props`, and `parse_other_player`
-symbols deliberately preserve these distinctions:
+The shared wire descriptor table does not give each packet context the same semantics.
+Reborn's `StreamPolicy`, `parse_player_props`, and `parse_other_player` symbols preserve
+these differences:
 
 - `PLO_OTHERPLPROPS` has a leading GSHORT player ID; `PLO_PLAYERPROPS` does not.
 - An empty other-player `CURCHAT` surfaces as `""` to clear a chat bubble, while an
@@ -618,21 +624,23 @@ symbols deliberately preserve these distinctions:
 - `JOINLEAVELVL` is meaningful in other-player roster traffic, including the standalone
   join/leave prefix, but is not ordinary self-state.
 
-These are application semantics layered over one wire codec. A future implementation
-should not “unify” them merely because their payload descriptors are shared.
+These application semantics use one wire codec. A future implementation must not
+combine them only because they share payload descriptors.
 
 **X2/Y2/Z2 (78/79/80)** are the high-precision pixel coordinates used on GMAPs and for
 sub-tile positions. Each is a GSHORT carrying `value = (abs(pixels) << 1) | (negative ? 1 : 0)`.
-Decode: `pixels = value >> 1; if (value & 1) pixels = -pixels;` then `tiles = pixels / 16`.
+Decode with `pixels = value >> 1`. If `value & 1`, use `pixels = -pixels`. Then use
+`tiles = pixels / 16`.
 See [Data Types: X2/Y2 Encoding](data-types.md#x2y2-encoding-the-weird-one).
 
 ## Remote Control Packets (PLI_RC_*)
 
-These packets are used by RC (Remote Control) clients for server administration.
+RC (Remote Control) clients use these packets for server administration.
 
-> **For the complete, byte-validated RC and NC reference** — including the login handshakes,
-> the GEN_2 vs GEN_5 distinction, the full PLI/PLO tables, and the `getPropsForRCPacket`
-> blob layout — see [RC & NC Protocols](rc-nc-protocols.md). The entries below are a quick
+> **For the complete, byte-validated RC and NC reference**, see
+> [RC & NC Protocols](rc-nc-protocols.md).
+> It includes the login handshakes, the GEN_2 versus GEN_5 distinction, the full PLI/PLO
+> tables, and the `getPropsForRCPacket` blob layout. The entries below are a quick
 > subset.
 
 ### PLI_RC_SERVEROPTIONSGET (51) - Get Server Options
@@ -720,7 +728,7 @@ Various file management operations for RC file browser functionality.
 
 ## NPC Control Packets (PLI_NC_*)
 
-These packets are used by NC (NPC Control) clients for NPC/content management.
+NC (NPC Control) clients use these packets for NPC and content management.
 
 ### PLI_NC_NPCGET (103) - Get NPC
 **Trigger**: NC requests NPC data
@@ -824,10 +832,10 @@ Server replies with `PLO_NPCWEAPONSCRIPT (140)`
 [GINT5: checksum]    // CRC32 of client's cached class bytecode (0 forces a resend)
 [STRING: class_name] // Class name, to end of packet
 ```
-Server replies with `PLO_LOADSCRIPT (197)` form 2 (RAWDATA-framed) when the CRC differs;
-unknown classes get a header-only `PLO_NPCWEAPONSCRIPT (140)` instead
-(`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:1495-1530`). Requires an NPC server
-(`hasNPCServer()`); ignored otherwise.
+If the CRC differs, the server replies with `PLO_LOADSCRIPT (197)` form 2
+(RAWDATA-framed). Unknown classes get a header-only `PLO_NPCWEAPONSCRIPT (140)` instead
+(`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:1495-1530`). This packet requires an NPC
+server (`hasNPCServer()`). Otherwise, the server ignores it.
 
 ### PLI_UPDATEPACKAGEREQUESTFILE (159) - Update Package Request
 **Trigger**: Client requests update package files
@@ -846,7 +854,7 @@ unknown classes get a header-only `PLO_NPCWEAPONSCRIPT (140)` instead
 - Key stream generated using: `key = (key + iterator++) & 0xFF`
 
 ### Encryption Limits
-Encryption is limited based on compression type:
+The compression type sets the encryption limit:
 - COMPRESS_UNCOMPRESSED: 40 bytes
 - COMPRESS_ZLIB: 4096 bytes  
 - COMPRESS_BZ2: 65536 bytes
@@ -864,10 +872,10 @@ property-width notes.
 
 ## Implementation Notes
 
-1. **Byte Order**: Multi-byte primitive encoding is summarized in [Data Types](data-types.md)
-2. **String Termination**: String formats are documented in [String Types](strings.md)
+1. **Byte Order**: [Data Types](data-types.md) summarizes multi-byte primitive encoding
+2. **String Termination**: [String Types](strings.md) documents the string formats
 3. **Coordinate System**: Coordinate frames and GMAP packing live in [Data Types](data-types.md)
-4. **Error Handling**: Invalid packets should be ignored, not cause disconnection
+4. **Error Handling**: The receiver should ignore invalid packets and stay connected
 5. **Version Compatibility**: Some packets vary by client version (check version ID)
 
 ## Server-to-Client Packets (PLO_*)
@@ -877,10 +885,11 @@ property-width notes.
 ```
 [tile_data...][\n]   // Newline-terminated inline board data
 ```
-Inline (newline-terminated) board data. **Note**: the full 64×64 board is normally
-*not* sent here. The complete 8192-byte tile dump is delivered out-of-band as
-**PLO_BOARDPACKET (101)**, announced by a preceding **PLO_RAWDATA (100)** length packet.
-PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is a
+This packet contains inline, newline-terminated board data. The server normally does
+*not* send the full 64×64 board here. The server sends the complete 8192-byte tile dump
+out of band as **PLO_BOARDPACKET (101)**. A preceding **PLO_RAWDATA (100)** length packet
+announces it. The server uses PLO_LEVELBOARD for the inline or partial board
+representation. Each tile is a
 16-bit value (2 bytes) representing the tile index.
 
 ### PLO_LEVELLINK (1) - Level Link/Warp
@@ -889,8 +898,8 @@ PLO_LEVELBOARD is used for the inline/partial board representation. Each tile is
 >
 > This packet does NOT use a length-prefixed GSTRING. Multiple client implementations
 > have made this mistake. The server sends raw string data until a newline (0x0A).
-> If you try to read the first byte as a length, you'll read 'l' from "level.nw",
-> compute length = 108 - 32 = 76, and consume half the next packet. Don't do this.
+> If you read the first byte as a length, you will read 'l' from "level.nw".
+> You will compute length = 108 - 32 = 76 and consume half the next packet. Do not do this.
 >
 > See [String Types: The PLO_LEVELLINK Trap](strings.md#the-plo_levellink-trap-) for details.
 
@@ -935,9 +944,9 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
 | 9 | VERSEHURT | `[GCHAR: len][string]` |
 | 10 | VERSEATTACK | `[GCHAR: len][string]` |
 
-> Note prop **4 (POWERIMAGE)** is a power byte followed by a length-prefixed image string —
-> a common mis-parse is to read power as a bare byte and lose sync. pyReborn reliably reads
-> ID/X/Y/TYPE; clients that only need the type can stop after prop 3.
+> Prop **4 (POWERIMAGE)** is a power byte followed by a length-prefixed image string.
+> A parser can lose synchronization if it reads power as a bare byte. pyReborn reliably
+> reads ID/X/Y/TYPE. Clients that only need the type can stop after prop 3.
 
 ### PLO_NPCPROPS (3) - NPC Properties  
 **Trigger**: NPC properties change or player enters level
@@ -946,7 +955,7 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
 [GCHAR: prop_id][payload]...   // NPC property pairs (their OWN enum, not player props)
 ```
 
-> NPCs use a **distinct `NPCProp` enum** — prop 5 is RUPEES (not a direction), 17 is ID,
+> NPCs use a **distinct `NPCProp` enum**. Prop 5 is RUPEES (not a direction), 17 is ID,
 > 75/76/77 are X2/Y2/Z2. See the full table in [NPC Properties](npc-properties.md).
 
 ### PLO_LEVELCHEST (4) - Level Chest
@@ -966,7 +975,7 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
   reward `item_id` and `sign_index`.
 
 > Coordinates are **whole tiles**, not half-tiles. `PLI_OPENCHEST` must echo the same
-> whole-tile coords or the server won't match the chest.
+> whole-tile coordinates. Otherwise, the server will not match the chest.
 
 ### PLO_LEVELSIGN (5) - Level Sign
 **Trigger**: Player enters level with signs
@@ -976,14 +985,14 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
 [ENCODED_TEXT...]    // Reborn sign-encoded text, to end of packet (NOT plain ASCII!)
 ```
 
-> ⚠️ **The sign text is NOT plain ASCII.** It is encoded with a custom alphabet + a
+> ⚠️ **The sign text is NOT plain ASCII.** The server encodes it with a custom alphabet and a
 > button-symbol escape table (`encodeSign`/`decodeSign` in GServer `LevelSign.cpp`). Each
 > encoded byte is `alphabet_index + 32` (a GCHAR). Reading it as a raw string gives
 > garbage.
 
-**Decoding**: for each byte, `code = byte - 32`. If `code` is in the symbol code-table
-(`ctab`), emit `#` followed by the mapped button symbol; otherwise emit `signAlphabet[code]`.
-Literal `#K` (code 13) sequences are stripped.
+**Decoding**: For each byte, use `code = byte - 32`. If `code` is in the symbol code-table
+(`ctab`), emit `#` followed by the mapped button symbol. Otherwise, emit
+`signAlphabet[code]`. The decoder removes literal `#K` (code 13) sequences.
 
 **Sign alphabet** (`signText`, verbatim — index 0 = 'A'):
 ```
@@ -1020,8 +1029,8 @@ replayed to a player entering a non-gmap level (see
 prefix the packet with a 5th leading byte: if the first byte read is **>= 64**, it encodes
 `layer + 64` and everything above shifts one field later. `LevelBoardChange::
 getPropsForSingleLevel` (`LevelBoardChange.cpp:72-80`) is the server-side builder for both
-the plain-edit relay (`msgPLI_BOARDMODIFY`'s echo to other players) and the layered form; a
-plain player edit never sets the layer prefix.
+the plain-edit relay (`msgPLI_BOARDMODIFY`'s echo to other players) and the layered form.
+A plain player edit never sets the layer prefix.
 
 **Source**: `LevelBoardChange.cpp:72-80` (build), `Level::alterBoard` (`Level.cpp:1476`,
 tiles read via `readGShort()`).
@@ -1039,11 +1048,11 @@ whose version puts it in the "classic" replay style (see
 [GCHAR: height]      // Modification height
 [GSHORT: tile]...    // width*height tiles, one GSHORT each (row-major)
 ```
-**Source**: `LevelBoardChange::getPropsForMapClassic` (`LevelBoardChange.cpp:82-94`) —
+**Source**: `LevelBoardChange::getPropsForMapClassic` (`LevelBoardChange.cpp:82-94`).
 `mapX`/`mapY` are always present, even for non-gmap levels (where they resolve to `0,0`),
 because `LevelBoardChange` objects always carry an explicit `MapPosition`. A commented-out
 `getPropsForMapNewMain()` sibling (`LevelBoardChange.cpp:97-104`) exists in source but is
-**dead code** — never called, never compiled into the live send path. Do not implement
+**dead code**. The server never calls it or compiles it into the live send path. Do not implement
 against it.
 
 ### PLO_OTHERPLPROPS (8) - Other Player Properties
@@ -1105,13 +1114,13 @@ against it.
 ```
 
 ### PLO_DISCMESSAGE (16) - Disconnect Message
-**Trigger**: Player is being disconnected
+**Trigger**: The server disconnects the player
 ```
 [STRING: reason]     // Disconnect reason
 ```
 
 ### PLO_HORSEADD (17) - Horse Added
-**Trigger**: Horse is spawned
+**Trigger**: The server spawns a horse
 ```
 [GUSHORT: player_id] // Player who added horse
 [GCHAR: tile_x]      // X position
@@ -1121,7 +1130,7 @@ against it.
 ```
 
 ### PLO_HORSEDEL (18) - Horse Removed
-**Trigger**: Horse is destroyed
+**Trigger**: The server destroys a horse
 ```
 [GUSHORT: player_id] // Player who removed horse
 [GCHAR: tile_x]      // X position
@@ -1153,14 +1162,14 @@ against it.
 ```
 
 ### PLO_ITEMADD (22) - Item Added
-**Trigger**: Item is dropped or spawned
+**Trigger**: A player drops an item or the server spawns one
 ```
 [GCHAR: x * 2]       // X position (half-tiles; tile = value/2)
 [GCHAR: y * 2]       // Y position (half-tiles)
 [GCHAR: item_id]     // NUMERIC LevelItemType id (0-24), NOT a length-prefixed string
 ```
 
-> `item_id` is a single numeric byte, mapped through the `LevelItemType` table below — it is
+> `item_id` is a single numeric byte. The `LevelItemType` table below maps it. It is
 > **not** a string. (`PLI_ITEMADD (12)` uses the same `[x*2][y*2][item_id]` layout.)
 
 **LevelItemType table** (`LevelItem.h`, index = id):
@@ -1178,7 +1187,7 @@ against it.
 | 8 | bomb | 17 | lizardshield | | |
 
 ### PLO_ITEMDEL (23) - Item Removed
-**Trigger**: Item is picked up or destroyed
+**Trigger**: A player picks up an item or the server destroys one
 ```
 [GCHAR: tile_x]      // X position
 [GCHAR: tile_y]      // Y position
@@ -1192,15 +1201,15 @@ against it.
 [GCHAR: y / 8]        // (captured BEFORE removal from the old level)
 [STRING: new_level]   // The NEW level name being warped to, to end of packet
 ```
-> The previous version of this doc claimed a bare `[GUINT: npc_id]` — **that was wrong**. The
-> packet actually carries the NPC's old position plus the destination level name.
+> The previous version of this document incorrectly specified a bare `[GUINT: npc_id]`.
+> The packet carries the NPC's old position and the destination level name.
 
 **Source**: `NPC::setPropWith`, case `NPCProp::CURLEVEL` (`object/NPC.cpp:1337-1355`):
 ```cpp
 >> (int)id >> (char)(localPosition.x()/8) >> (char)(localPosition.y()/8) << strProp->value
 ```
-where `localPosition` is the position in the level being left (captured before removal), and
-`strProp->value` is the new level name being assigned.
+Here, `localPosition` is the position in the level that the NPC leaves. The server captures
+it before removal. The server assigns the new level name in `strProp->value`.
 
 ### PLO_SIGNATURE (25) - Player Signature
 **Trigger**: Player requests signature verification
@@ -1229,7 +1238,7 @@ where `localPosition` is the position in the level being left (captured before r
 ```
 
 ### PLO_NPCDEL (29) - NPC Deleted
-**Trigger**: NPC is removed from level
+**Trigger**: The server removes an NPC from the level
 ```
 [GUINT: npc_id]      // NPC identifier
 ```
@@ -1241,7 +1250,7 @@ where `localPosition` is the position in the level being left (captured before r
 ```
 
 ### PLO_FLAGDEL (31) - Flag Deleted
-**Trigger**: Flag is removed
+**Trigger**: The server removes a flag
 ```
 [STRING: flag_name]  // Flag name to delete
 ```
@@ -1267,7 +1276,7 @@ where `localPosition` is the position in the level being left (captured before r
 ```
 
 ### PLO_NPCWEAPONDEL (34) - NPC Weapon Deleted
-**Trigger**: Weapon is removed from player
+**Trigger**: The server removes a weapon from the player
 ```
 [STRING: weapon_name] // Weapon to remove
 ```
@@ -1295,18 +1304,19 @@ where `localPosition` is the position in the level being left (captured before r
 [CSV body...]        // toCSV: "","Private message:",<msg>   (or "Mass message:")
 ```
 
-> Two gotchas: (1) `from_id` is a **GSHORT** (reborn-encoded), not a raw 16-bit big-endian
-> value — decoding it as `(b0<<8)|b1` gives wildly wrong ids. (2) The body is a quoted-CSV
-> structure (`"<sender>","Private message:",<msg>`), not a bare message string.
+> There are two important details. First, `from_id` is a **GSHORT** (reborn-encoded), not
+> a raw 16-bit big-endian value. If you decode it as `(b0<<8)|b1`, you get incorrect IDs.
+> Second, the body is a quoted-CSV structure (`"<sender>","Private message:",<msg>`), not
+> a bare message string.
 
 ### PLO_PUSHAWAY (38) - Push Away
-**Trigger**: Player is pushed by force
+**Trigger**: A force pushes the player
 ```
 [PUSH_DATA...]       // Push force and direction data
 ```
 
 ### PLO_LEVELMODTIME (39) - Level Modification Time
-**Trigger**: Level modification time is requested
+**Trigger**: A client requests the level modification time
 ```
 [GUINT5: mod_time]   // Level modification timestamp
 ```
@@ -1321,7 +1331,7 @@ where `localPosition` is the position in the level being left (captured before r
 [GINT3: npc_id]       // NPC ID (3 bytes — NOT 4) if NPC caused the damage
 ```
 
-> **The server is a pure relay for PvP.** It forwards `PLO_HURTPLAYER` to the victim; the
+> **The server is a pure relay for PvP.** It forwards `PLO_HURTPLAYER` to the victim. The
 > victim's client decrements its own `CURPOWER` and rebroadcasts. `power` is in half-hearts.
 > `PLI_HURTPLAYER (26)` has the identical field layout (with `victim_id` instead of
 > `attacker_id`), `npc_id` also a **GINT3 (3 bytes)**.
@@ -1367,7 +1377,7 @@ where `localPosition` is the position in the level being left (captured before r
 ```
 
 ### PLO_TRIGGERACTION (48) - Trigger Action
-**Trigger**: Trigger action is executed
+**Trigger**: The server runs a trigger action
 ```
 [GUSHORT: player_id] // Player who triggered
 [ACTION_DATA...]     // Action data
@@ -1384,7 +1394,7 @@ where `localPosition` is the position in the level being left (captured before r
 [STRING: level_name] // Target level/gmap name, to end of packet — DON'T forget this field
 ```
 
-> The trailing level name (e.g. `"chicken.gmap"`) is easy to miss — the server appends
+> The trailing level name (e.g. `"chicken.gmap"`) is easy to miss. The server appends
 > `<< level->levelName` after `gmap_y`. Several parsers stopped at `gmap_y` and dropped it.
 
 ### PLO_ADDPLAYER (55) - Add Player (Legacy)
@@ -1400,12 +1410,12 @@ where `localPosition` is the position in the level being left (captured before r
 ```
 
 ### PLO_LARGEFILESTART (68) - Large File Start
-**Trigger**: Large file transfer begins (file > 32000 bytes)
+**Trigger**: The server starts a large file transfer (file > 32000 bytes)
 ```
 [STRING: filename]   // File being transferred (raw, to end of packet)
 ```
 
-> The total size is **not** in this packet — it arrives separately as `PLO_LARGEFILESIZE (84)`.
+> The total size is **not** in this packet. It arrives separately as `PLO_LARGEFILESIZE (84)`.
 > Full chunked sequence for a large file:
 > ```
 > PLO_LARGEFILESTART (68): [filename]
@@ -1458,15 +1468,15 @@ where `localPosition` is the position in the level being left (captured before r
 ```
 [8192 bytes tile_data]   // 64×64 tiles, 2 bytes per tile (little-endian)
 ```
-This is the **raw 8192-byte board dump**, sent as raw data immediately after a
-**PLO_RAWDATA (100)** packet that announces the byte count. This is the canonical
-way a client receives a level's tiles (not PLO_LEVELBOARD).
+The server sends this **raw 8192-byte board dump** as raw data. It sends the dump
+immediately after a **PLO_RAWDATA (100)** packet that announces the byte count. A client
+usually receives a level's tiles this way, not through PLO_LEVELBOARD.
 
 ### PLO_FILE (102) - File Data
 **Trigger**: File content transfer (small files, ≤ 32000 bytes)
 
-A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte count of the
-*following* packet, then the `PLO_FILE (102)` itself.
+The server sends a file as **two packets**. A `PLO_RAWDATA (100)` announces the byte count
+of the *following* packet. The `PLO_FILE (102)` packet follows it.
 
 ```
 [GINT5: modtime]     // 5 bytes — file modification time (operator>>(long long))
@@ -1476,9 +1486,10 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 [0x0A]               // single trailing newline
 ```
 
-> The doc previously claimed `[GCHAR file_type][GUINT5 file_size][data]` — **that is wrong**.
-> There is no "file type" byte and no inline size: the size comes from the preceding
-> `PLO_RAWDATA`, and a `GINT5 modtime` precedes a GCHAR-length-prefixed name.
+> The document previously specified `[GCHAR file_type][GUINT5 file_size][data]`. That
+> specification is incorrect. There is no "file type" byte and no inline size. The
+> preceding `PLO_RAWDATA` supplies the size. A `GINT5 modtime` precedes a
+> GCHAR-length-prefixed name.
 >
 > The announced `PLO_RAWDATA` length = `1 (file id byte) + 5 (modtime) + 1 + name_len +
 > data_len + 1 (trailing \n)`.
@@ -1487,16 +1498,17 @@ A file arrives as **two packets**: a `PLO_RAWDATA (100)` announcing the byte cou
 > **not** strip it a second time when parsing the file body, or files ending in `0x0A` come
 > out truncated.
 >
-> **Pre-2.1 client variant:** no `modtime` field — `[GCHAR name_len][name][data]`, no
-> trailing newline, and the RAWDATA length is correspondingly smaller.
+> **Pre-2.1 client variant:** This variant has no `modtime` field. It uses
+> `[GCHAR name_len][name][data]`, has no trailing newline, and has a correspondingly
+> smaller RAWDATA length.
 
 > **Historical parser trap** (found and fixed during this audit): the `modtime` field is a
 > **7-bit-per-byte GINT5** (`CString::writeGInt5`), not five 8-bit bytes. An earlier
 > pyReborn `parse_file` decoded it with an 8-bit shift (`mod_time = (mod_time << 8) | b`),
-> producing garbage timestamps while leaving filename/data offsets intact — byte
+> producing garbage timestamps while leaving filename/data offsets intact. Byte
 > consumption is 5 bytes either way, so the bug was invisible except in the decoded value.
 > Fixed in the current `parse_file` (`pyReborn/pyreborn/packets.py:2717`, which now carries
-> its own warning comment). GINT5 is always 7-bit-per-byte; C++ is ground truth.
+> its own warning comment). GINT5 is always 7-bit-per-byte. The C++ code is the ground truth.
 
 ### PLO_UPDATEPACKAGESIZE (105) - Update Package Size
 **Trigger**: Update package download size
@@ -1537,8 +1549,8 @@ if (player->getVersion() >= CLVER_4_0211 && !npc->getScript().getClientByteCode(
     player->sendPacket(byteCodePacket);
 }
 ```
-(`>> (int)` is `writeGInt` — a **3-byte** GINT3, `CString.cpp:1671`.) Byte-validated by
-pyReborn `parse_npc_bytecode` (`packets.py`) and
+(`>> (int)` is `writeGInt`, a **3-byte** GINT3, `CString.cpp:1671`.) These implementations
+validate the bytes: pyReborn `parse_npc_bytecode` (`packets.py`) and
 `game_tester/tier5_tests.py:test_npc_bytecode_synthetic`.
 
 ### PLO_GANISCRIPT (134) - GANI Bytecode
@@ -1549,15 +1561,15 @@ server's current gani bytecode. Wrapped in `PLO_RAWDATA` framing.
 [gani_name]          // WITHOUT the .gani suffix
 [BYTECODE...]        // Compiled gani-script bytecode, to end of packet
 ```
-**Source**: `GameAni::getBytecodePacket` (`animation/GameAni.cpp:107-122`) — the server
+**Source**: `GameAni::getBytecodePacket` (`animation/GameAni.cpp:107-122`). The server
 strips a trailing `.gani` from the stored name before sending. Always followed by a
 `PLO_LOADGANI (195)` load command (sent regardless of whether the bytecode itself was
-re-sent — `msgPLI_UPDATEGANI`, `PlayerClientPackets.cpp:1460-1483`).
+sent again (`msgPLI_UPDATEGANI`, `PlayerClientPackets.cpp:1460-1483`).
 
 ### PLO_NPCWEAPONSCRIPT (140) - Weapon Bytecode
 **Trigger**: Response to `PLI_UPDATESCRIPT (158)` (on-demand weapon-bytecode fetch), and
-also the server's fallback answer to a `PLI_UPDATECLASS` for a **nonexistent** class
-(header-only, empty bytecode — a deliberate workaround, see below).
+also the server's fallback answer to a `PLI_UPDATECLASS` for a **nonexistent** class.
+The fallback has only a header and empty bytecode. This is a deliberate workaround.
 ```
 [GSHORT: header_len] // Length of the header CSV
 [header CSV]         // "weapon,<name>,1,<desKey>"  (quoted-CSV; no CRC in THIS header)
@@ -1565,10 +1577,10 @@ also the server's fallback answer to a `PLI_UPDATECLASS` for a **nonexistent** c
 ```
 **Source**: `Weapon::sendByteCodeToPlayer` (`object/Weapon.cpp:299-308`). The header CSV is
 Reborn quoted-CSV (`toCSV`): `weapon,<name>,1,<desKey>` where `<desKey>` is a 64-bit script
-hash packed as two GINT5s (`Weapon.cpp:230-252`); note this is `m_header` **without** the
-CRC32 — the CRC-bearing variant (`m_headerWithCRC`) goes out in `PLO_LOADSCRIPT (197)`
+hash packed as two GINT5s (`Weapon.cpp:230-252`). This is `m_header` **without** the
+CRC32. The server sends the CRC-bearing variant (`m_headerWithCRC`) in `PLO_LOADSCRIPT (197)`
 instead. The unknown-class fallback (`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:
-1515-1528`) sends a `class,<name>,1,...` header with **empty bytecode** — the code comments
+1515-1528`) sends a `class,<name>,1,...` header with **empty bytecode**. The code comments
 it "should technically be PLO_LOADSCRIPT" but the client breaks `player.join()` scripts if
 a missing class arrives that way. Parsers must accept an empty bytecode tail.
 
@@ -1611,12 +1623,12 @@ a missing class arrives that way. Parsers must accept an empty bytecode tail.
 ```
 
 ### PLO_MOVE (165) - NPC Move Command (v1, < CLVER_2_3)
-**Trigger**: Server-driven NPC movement, for clients below `CLVER_2_3` — see
+**Trigger**: Server-driven NPC movement for clients below `CLVER_2_3`. See
 [Version-Gated Behavior](version-gated-behavior.md#npc-movement-plo_move-vs-plo_move2) and
 its `PLO_MOVE2 (189)` counterpart above. Built from `NPC.cpp:441` (`move1`, the legacy
-sibling of `getMoveQueuePacketData`'s `result.second`/`move2` form) — exact `move1` field
-layout not independently re-derived here; format not documented, only the version gate and
-send site are confirmed. `IEnums.h` carries a maintainer comment: `// Unhandled by 6.037.`
+sibling of `getMoveQueuePacketData`'s `result.second`/`move2` form). This document does
+not independently derive the exact `move1` field layout. It documents only the confirmed
+version gate and send site. `IEnums.h` has a maintainer comment: `// Unhandled by 6.037.`
 ```
 [MOVEMENT_DATA...]   // Format not documented here (see note above)
 ```
@@ -1648,20 +1660,33 @@ send site are confirmed. `IEnums.h` carries a maintainer comment: `// Unhandled 
 ```
 
 ### PLO_SHOOT (175) - Shoot Projectile (v1, < CLVER_5_07)
-**Trigger**: Projectile broadcast to clients below `CLVER_5_07` — see
+**Trigger**: Projectile broadcast to clients below `CLVER_5_07`. See
 [Version-Gated Behavior](version-gated-behavior.md#projectiles-plo_shoot-vs-plo_shoot2).
-Built via `newPacket.constructShootV1()` (`Server.cpp:2283-2292`); prefixed with
-`[GSHORT: owner_id]`. Exact `constructShootV1()` field layout not independently
-re-derived here. `IEnums.h` comment: `// Unhandled by 6.037.`
+The server builds the packet with `newPacket.constructShootV1()`
+(`Server.cpp:2283-2292`) and prefixes it with `[GSHORT: owner_id]`. This document does
+not independently derive the exact `constructShootV1()` field layout. `IEnums.h` has
+this comment: `// Unhandled by 6.037.`
 ```
 [GSHORT: owner_id]
 [SHOOT_DATA...]      // constructShootV1() body — format not documented here
 ```
 
-### PLO_FULLSTOP (176) - Full Stop
-**Trigger**: Disable client input/HUD
+### PLO_DISABLECLASSICMODE (176) - Disable Classic Mode
+**Trigger**: The server tells the client to turn off old client-side mechanics.
+`Player.cpp:701` sends it once, unconditionally, to every login-server client.
 ```
-// No additional data - freezes client completely
+// No additional data
+```
+
+Older sources call packet 176 `PLO_FULLSTOP`. That name and the
+freeze-input-and-hide-HUD behavior belong to packet **177**. Do not freeze the
+client on 176, because every login-server connection receives it.
+
+### PLO_FULLSTOP2 (177) - Full Stop
+**Trigger**: The client stops responding to normal input and hides the HUD.
+Clients 5.07 and later do not handle it.
+```
+// No additional data
 ```
 
 ### PLO_SERVERWARP (178) - Server Warp
@@ -1689,7 +1714,7 @@ re-derived here. `IEnums.h` comment: `// Unhandled by 6.037.`
 ```
 
 ### PLO_BOARDHEIGHTS (185) - Board Height Layer
-**Trigger**: Sent when a level with a height layer is delivered to a player.
+**Trigger**: The server sends this packet when it delivers a level with a height layer to a player.
 ```
 [GCHAR: mapX]         // GMAP segment column (0 for non-gmap)
 [GCHAR: mapY]         // GMAP segment row (0 for non-gmap)
@@ -1701,7 +1726,7 @@ re-derived here. `IEnums.h` comment: `// Unhandled by 6.037.`
   [GCHAR: whole + 50]  // Integer height part, biased by +50
   [GCHAR: frac * 128]  // Fractional height part, scaled by 128
 ```
-**Source**: `SubLevel::sendBoardHeightsToPlayer` (`level/Level.cpp:437-474`) — the block
+**Source**: `SubLevel::sendBoardHeightsToPlayer` (`level/Level.cpp:437-474`). The block
 size is currently always the fixed `0,0` origin / `8,8` extent (a 9×9 grid of height
 samples), giving `(8+1)*(8+1) = 81` height-value pairs after the 6-byte header.
 
@@ -1712,8 +1737,9 @@ samples), giving `(8+1)*(8+1) = 81` height-value pairs after the 6-byte header.
 ```
 
 ### PLO_MOVE2 (189) - NPC Move Command (v2, >= CLVER_2_3)
-**Trigger**: Server-driven NPC movement (`move`/`movexy` GS scripting), for clients at or
-above `CLVER_2_3` — see [Version-Gated Behavior](version-gated-behavior.md#npc-movement-plo_move-vs-plo_move2)
+**Trigger**: Server-driven NPC movement (`move`/`movexy` GS scripting) for clients at or
+above `CLVER_2_3`. See
+[Version-Gated Behavior](version-gated-behavior.md#npc-movement-plo_move-vs-plo_move2)
 for the `PLO_MOVE`/`PLO_MOVE2` version split.
 ```
 [GINT3: npc_id]      // NPC identifier (3 bytes, NOT GUINT)
@@ -1733,12 +1759,12 @@ Each `GSHORT` coordinate/delta field uses the same encoding as player `X2`/`Y2` 
 form), sent via `NPC::sendMoveQueueToLevel`/`sendMoveQueueToPlayer` (`NPC.cpp:443,460`).
 
 ### PLO_SHOOT2 (191) - Shoot Projectile (v2, >= CLVER_5_07)
-**Trigger**: Projectile broadcast to clients at/above `CLVER_5_07` — see
+**Trigger**: Projectile broadcast to clients at or above `CLVER_5_07`. See
 [Version-Gated Behavior](version-gated-behavior.md#projectiles-plo_shoot-vs-plo_shoot2).
-Built via `newPacket.constructShootV2()` (`Server.cpp:2283-2292`); prefixed with
-`[GSHORT: owner_id]`. Exact `constructShootV2()` field layout not independently
-re-derived here. `IEnums.h` comment: "Valid message in 5.07 and 6.037. The code it uses is
-unique."
+The server builds the packet with `newPacket.constructShootV2()`
+(`Server.cpp:2283-2292`) and prefixes it with `[GSHORT: owner_id]`. This document does
+not independently derive the exact `constructShootV2()` field layout. `IEnums.h` has
+this comment: "Valid message in 5.07 and 6.037. The code it uses is unique."
 ```
 [GSHORT: owner_id]
 [SHOOT_DATA...]      // constructShootV2() body — format not documented here
@@ -1758,7 +1784,7 @@ unique."
 [gani_name]          // GANI name (no .gani suffix)
 [stringlist]         // Reborn quoted-CSV, e.g. "SETBACKTO idle" — to end of packet
 ```
-> The packet ID is **195**, not 253 as an earlier revision of this page claimed
+> The packet ID is **195**, not 253 as an earlier revision of this page specified
 > (`IEnums.h:316`). The trailing stringlist currently carries only the `SETBACKTO`
 > directive but is a general quoted-CSV list.
 
@@ -1768,8 +1794,8 @@ sendPacket(CString() >> (char)PLO_LOADGANI >> (char)gani.length() << gani << "\"
 ```
 
 ### PLO_LOADSCRIPT (197) - Load Script (TWO payload forms)
-**Trigger**: (a) weapon-header announcement during weapon registration; (b) class-bytecode
-delivery in response to `PLI_UPDATECLASS (161)` (via `PLO_RAWDATA` framing).
+**Trigger**: (a) weapon-header announcement during weapon registration. (b) class-bytecode
+delivery in response to `PLI_UPDATECLASS (161)` through `PLO_RAWDATA` framing.
 
 **Form 1 — weapon announcement** (`Weapon::registerWeaponWithPlayer`, `object/Weapon.cpp:295`):
 ```
@@ -1785,9 +1811,10 @@ delivery in response to `PLI_UPDATECLASS (161)` (via `PLO_RAWDATA` framing).
 ```
 
 **Disambiguation** (as implemented in pyReborn `parse_loadscript`): form 1 is pure CSV text
-whose payload starts with a known script-type name (`weapon,`/`npc,`/`class,`/`gani,`);
-form 2's first byte is a small GCHAR length. Check for a leading known-type prefix first,
-fall back to the length-prefixed read. Header fields: `type,name,saveToDisk[0/1],desKey
+whose payload starts with a known script-type name (`weapon,`/`npc,`/`class,`/`gani,`).
+Form 2's first byte is a small GCHAR length. Check for a leading known-type prefix first.
+If there is no such prefix, use the length-prefixed read. Header fields:
+`type,name,saveToDisk[0/1],desKey
 (two GINT5s = 64-bit hash),crc32 (GINT5)` per the `IEnums.h:317` comment and
 `Weapon.cpp:242-257` / `ScriptClass.cpp:44-54` header construction.
 
@@ -1825,7 +1852,7 @@ GEN_5 protocol supports multiple compression methods:
 2. **COMPRESS_ZLIB (0x04)**: Zlib compression, 4096-byte encryption limit  
 3. **COMPRESS_BZ2 (0x06)**: Bzip2 compression, 65536-byte encryption limit
 
-The compression type affects both the compression algorithm and encryption limits.
+The compression type sets the compression algorithm and the encryption limit.
 
 ### Packet Bundle Processing
 
@@ -1846,4 +1873,6 @@ Incoming (Server → Client):
 6. Parse individual packets (newline-separated)
 ```
 
-This documentation covers the core packet structures used in the Reborn protocol. Implementation should follow these exact formats for compatibility with existing servers and clients.
+This document describes the core packet structures that the Reborn protocol uses.
+Implementations must use these exact formats for compatibility with existing servers
+and clients.

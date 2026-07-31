@@ -15,11 +15,11 @@ code.
 `Script::compileScript()`, implement the split. Weapon and class delivery use
 `getClientByteCode()` in `server/src/object/Weapon.cpp` and
 `server/src/scripting/ScriptClass.cpp`. The receiving entry point is
-`pyReborn/pyreborn/gs2_client.py`, `ClientGS2.load_bytecode()`.
+`pyReborn/pyreborn/gs2_client/runtime.py:825-893`, `ClientGS2.load_bytecode()`.
 
 ## Container format
 
-A container is a sequence of segments. Each begins with a plain big-endian
+A container is a sequence of segments. Each segment starts with a plain big-endian
 unsigned 32-bit identifier and unsigned 32-bit payload length. These fields
 do **not** use the protocol's usual offset-by-32 packed-number encoding.
 
@@ -34,7 +34,7 @@ Compiler output may have a newline after the final segment, outside its
 declared length. The parser preserves unknown segments.
 
 Function and jump targets are **instruction indices**, not byte offsets. An
-opcode advances the index once; its operand bytes do not.
+opcode advances the index once. Its operand bytes do not advance the index.
 
 Evidence:
 
@@ -46,9 +46,9 @@ Evidence:
 
 ## Operand records
 
-Operands are optional typed records in the instruction stream, not fixed
-fields embedded in particular instructions. A marker encountered in opcode
-position belongs to the preceding instruction and is never executed. If
+Operands are optional typed records in the instruction stream. They are not
+fixed fields in particular instructions. A marker in the opcode position
+belongs to the previous instruction. The VM never runs the marker. If
 several records follow one instruction, the last supplies the operand value.
 
 | Marker | Data | Interpretation |
@@ -61,7 +61,7 @@ several records follow one instruction, the last supplies the operand value.
 | `0xF5` | 4 bytes, big-endian | Signed number |
 | `0xF6` | NUL-terminated ASCII | Floating-point text |
 
-The preceding opcode supplies the value's purpose: string-table index,
+The previous opcode supplies the value's purpose: string-table index,
 literal, register number, or jump target. When an instruction normally
 associated with an operand has no record, its operand is the initial zero.
 Real content uses that omission, so the next opcode must remain an opcode.
@@ -78,7 +78,7 @@ Evidence:
 ## Reverse-engineered register opcodes
 
 The open-source compiler does not emit opcodes 45–47. Captured
-official-compiler output and the official interpreter establish:
+official-compiler output and the official interpreter give these definitions:
 
 | Number | Name | Behavior |
 | ---: | --- | --- |
@@ -86,10 +86,10 @@ official-compiler output and the official interpreter establish:
 | 46 | `OP_REG_LOAD` | Push a copy of a numbered register |
 | 47 | `OP_CONV_TO_PROPERTY` | Convert the stack top in place to a property reference |
 
-Store and load carry a signed operand. Leaving them out of the operand table
-makes the record bytes appear to be opcodes and desynchronizes decoding.
-Accepted register indices are 0 through `0x3FF`. Registers are held per frame
-so a nested call does not overwrite its caller's expression cache.
+Store and load carry a signed operand. If the operand table omits them, the
+record bytes appear to be opcodes and desynchronize decoding. The VM accepts
+register indices from 0 through `0x3FF`. The VM stores registers in each frame.
+Thus, a nested call does not overwrite the expression cache of its caller.
 
 Evidence:
 
@@ -111,7 +111,7 @@ This is not truncation. It matters for negative values and calculations that
 land just below an integer. Array initialization and resizing clamp requested
 lengths to 0 through 10,000 cells.
 
-Multi-dimensional access is exactly two-dimensional. Although the compiler
+Multidimensional access is exactly two-dimensional. Although the compiler
 emits one `OP_ARRAY_MULTIDIM` for any expression with more than one index,
 the runtime consumes exactly two. A three-index expression leaves the
 original array on the stack and treats the first index as the base. This
@@ -134,44 +134,44 @@ Evidence:
 ## GS1 and GS2 value policies
 
 GS1 and GS2 are different engines with deliberately different coercion
-rules. An implementation **must not unify them**, even when two constants
-happen to have the same numeric value.
+rules. An implementation **must not unify them**. This rule applies even when
+two constants have the same numeric value.
 
 | Aspect | GS1 | GS2 |
 | --- | --- | --- |
-| Number to string | Shortest decimal that round-trips to the same double | Demote to float32 for the near-zero test; otherwise format the original double with `%.9f` and remove trailing zeroes and the trailing decimal point |
-| Comparisons | `0.0001` tolerance for numeric `==` and `!=` only; relational operators are exact | Universal `0.0001` three-way comparison tolerance |
-| Integer conversion | `gs1_int()` truncates toward zero; `gs1_index()` floors directly, with no epsilon | `to_int32()` truncates and produces the signed-int32 overflow value; `wrap_int32()` wraps bitwise results |
-| Array index and size | Direct floor for indexing | `array_index()` computes `floor(value + 0.0001)`; `array_size()` additionally clamps to 0 through `MAX_ARRAY_SIZE` (10,000) |
+| Number to string | Shortest decimal that round-trips to the same double | Demote to float32 for the near-zero test. Otherwise, format the original double with `%.9f` and remove trailing zeroes and the trailing decimal point |
+| Comparisons | `0.0001` tolerance for numeric `==` and `!=` only. Relational operators are exact | Universal `0.0001` three-way comparison tolerance |
+| Integer conversion | `gs1_int()` truncates toward zero. `gs1_index()` floors directly, with no epsilon | `to_int32()` truncates and produces the signed-int32 overflow value. `wrap_int32()` wraps bitwise results |
+| Array index and size | Direct floor for indexing | `array_index()` computes `floor(value + 0.0001)`. `array_size()` also clamps to 0 through `MAX_ARRAY_SIZE` (10,000) |
 | Case-insensitive text | Python `.lower()` in Reborn's `strequals`, `strcontains`, and `startswith` builtins | ASCII-only folding through `casefold()` and `casecmp()` |
 
 The GS1 policy home is `reborn_protocol/gs1/values.py`:
 `COMPARE_EPSILON`, `doubles_are_same()`, `gs1_int()`, and `gs1_index()`.
-The server oracle calls `DoublesAreSame()` only from equality and inequality,
-while its relational visitor uses the native operators directly
+The server oracle calls `DoublesAreSame()` only from equality and inequality.
+Its relational visitor uses the native operators directly
 (`GServer-v2/server/include/utilities/CommonTypes.h:315-320` and
 `GServer-v2/server/src/scripting/gs1/GS1Visitor.cpp:1284-1292,1311-1322`).
 The much smaller `2.220446049250313e-16` constant is the separate
-`DoubleIsZero()` threshold used by unary zero testing; it is not the GS1
+`DoubleIsZero()` threshold used by unary zero testing. It is not the GS1
 comparison epsilon (`GServer-v2/server/include/utilities/CommonTypes.h:310-318`).
 
 The GS2 policy home is `reborn_protocol/gs2/values.py`: `casefold()`,
 `casecmp()`, `array_index()`, `array_size()`, `to_int32()`, `wrap_int32()`,
 `MAX_ARRAY_SIZE`, and `ARRAY_INDEX_EPSILON`. The decompiled interpreter's
 `compareNumberValues()` returns equality unless one operand exceeds the other
-by more than `DOUBLE_00402440`, so the tolerance affects ordering as well as
+by more than `DOUBLE_00402440`. Thus, the tolerance affects ordering as well as
 equality. Consequently, `0.99999 < 1.0` is false
 (`Preagonal/FourPlay/quattroplay/src/TScriptMachine.cpp:37-44`).
 
 `SCRIPT_EPSILON` is the machine's comparison and numeric-string settling
 constant. `ARRAY_INDEX_EPSILON` is a separately named policy for index
-conversion. They currently have the same value, `0.0001`, but they describe
-different operations and should remain distinct at call sites.
+conversion. They currently have the same value, `0.0001`. But they describe
+different operations and must remain distinct at call sites.
 
 Number-to-string conversion controls visible script output, including numbers
 interpolated into `showtext`. GS1 uses its shortest round-trip representation.
 GS2 first converts the number to float32 solely for the absolute-value
-comparison against `0.0001`; a value inside that interval becomes `"0"`.
+comparison against `0.0001`. A value inside that interval becomes `"0"`.
 Otherwise the original double is rendered with nine fractional digits and
 settled by stripping trailing zeroes and a final decimal point. Thus `2/3`
 appears as `0.666666667` in GS2, rather than GS1's
@@ -193,12 +193,12 @@ The interpreter's general string comparison likewise uses
 (`Preagonal/FourPlay/quattroplay/src/TString.cpp:1001-1011`).
 
 This is a high-risk conformance trap because Python's `str.casefold()` can
-change string length. It maps German sharp s, `"ß"`, to `"ss"`, so a
+change string length. It maps German sharp s, `"ß"`, to `"ss"`. Thus, a
 Unicode-folding implementation reports `"ßabc".starts("SS")` as true. The
 real client compares two bytes against the one-byte prefix position and
 reports false. Reborn previously made this mistake in `starts`, `ends`, and
 list string sorting. Those paths now use `reborn_protocol/gs2/values.py`,
-`casefold()` and `casecmp()`; the regression is covered by
+`casefold()` and `casecmp()`. These tests cover the regression:
 `tests/test_gs2_coercion_policy.py`,
 `test_casefold_is_ascii_only()`,
 `test_op_starts_is_ascii_only_case_insensitive()`, and
@@ -207,7 +207,7 @@ list string sorting. Those paths now use `reborn_protocol/gs2/values.py`,
 GS1 is intentionally different. Its Reborn builtins `strequals`,
 `strcontains`, and `startswith` still call Python `.lower()`, which can
 over-fold non-ASCII text. GS1 is internally consistent about that policy and
-was deliberately left unchanged; do not infer that the two engines have a
+was deliberately left unchanged. Do not infer that the two engines have a
 shared, settled case-folding rule.
 
 Inside nested `with` blocks, `this` resolves to the innermost target that is
@@ -232,15 +232,16 @@ Evidence:
 
 ## Anonymous function assignments
 
-An anonymous function expression assigned to a member is not stored as a
-function value in bytecode. The compiler:
+The compiler does not store an anonymous function expression as a function
+value in bytecode when code assigns it to a member. The compiler:
 
-1. hoists the body into a public script function with a generated name;
-2. emits a read of `this.<generated-name>`; and
+1. hoists the body into a public script function with a generated name.
+2. emits a read of `this.<generated-name>`.
 3. assigns that read's result to the destination member.
 
-The VM recognizes a missing member named in its function table and returns a
-`GS2ScriptFunction`. A real stored member wins over this fallback. Because a
+The VM recognizes a missing member that has a name in its function table. It
+returns a `GS2ScriptFunction`. A real stored member wins over this fallback.
+Because a
 construction block can rebind `this`, this also assigns event handlers such
 as `onAction` to the control under construction.
 
@@ -257,24 +258,26 @@ Evidence:
 ## Cooperative sleep and resumption
 
 Client event dispatch uses `GS2VM.iter_call()`. A positive `OP_SLEEP` delay
-yields to the client scheduler. The generator retains the program counter,
+returns control to the client scheduler. The generator retains the program
+counter,
 operand stack, arguments, temporary members, `with` stack, and register file.
-Nested calls use `yield from`, so the whole call chain suspends.
+Nested calls use `yield from`. Thus, the whole call chain suspends.
 
-`ClientGS2.process_coroutines()` subtracts elapsed frame time and resumes a
-generator when its delay expires. New events for a suspended script queue
-until the active event finishes. The instruction budget resets after a
-positive sleep.
+`ClientGS2.process_coroutines()` subtracts elapsed frame time. It resumes a
+generator when its delay expires. The client queues new events for a suspended
+script until the active event finishes. A positive sleep resets the instruction
+budget.
 
-The synchronous `GS2VM.call()` interface cannot expose a yield. In that mode
+The synchronous `GS2VM.call()` interface cannot return control temporarily. In
+that mode
 `_op_sleep()` delegates timing to `GS2Host.sleep()` and continues.
 
 Evidence:
 
 - `reborn_protocol/gs2/vm.py`, `_execute()`, `_gcall_script()`,
   `iter_call()`, and `_op_sleep()`
-- `pyReborn/pyreborn/gs2_client.py`, `ClientGS2._drive()` and
-  `ClientGS2.process_coroutines()`
+- `pyReborn/pyreborn/gs2_client/runtime.py:1036-1057,1059-1094`,
+  `ClientGS2._drive()` and `ClientGS2.process_coroutines()`
 - `tests/test_gs2_sleep_resume.py`, which verifies retained state, nested
   suspension, synchronous fallback, and budget reset
 
@@ -291,25 +294,29 @@ to the GS1 client host. `NOT_HANDLED` means neither layer owns a call. The VM
 records the missing name, logs it once, and returns a neutral numeric value
 so one unsupported call does not terminate the event.
 
-`GS2VM.coverage_report()` returns implemented and observed opcodes, observed
-but unimplemented opcodes, skipped execution counts, handled host-call
+`GS2VM.coverage_report()` returns available and observed opcodes, observed
+but unavailable opcodes, skipped execution counts, handled host-call
 counts, and missing host-call counts. `coverage_summary()` renders the
 actionable subset. Call `reset_coverage()` before an isolated measurement
 because accounting is aggregated across VM instances.
 
-Some calls are accepted and deliberately inert. This is policy, not backlog.
-Server-provided scripts may not read, change, derive, or transmit credentials;
-initiate arbitrary network destinations or remote-control sessions; open
-external applications; synthesize input; expose stable device identity; or
-take over platform-owned connection and patching flows. Polling calls receive
-safe completion constants where needed to terminate; other inert calls
-receive a neutral value.
+The host accepts some calls but deliberately gives them no effect. This is
+policy, not backlog.
+Server-provided scripts may not read, change, derive, or transmit credentials.
+They may not start connections to arbitrary network destinations or
+remote-control sessions. They also cannot open external applications,
+synthesize input, or expose a stable device identity. They cannot control
+platform-owned connection and patching flows. Polling calls receive safe
+completion constants where needed to stop. Other inert calls receive a neutral
+value.
 
 Evidence:
 
 - `reborn_protocol/gs2/vm.py`, `GS2Host`, `_call_target()`,
   `coverage_report()`, and `coverage_summary()`
-- `pyReborn/pyreborn/gs2_client.py`, `GS2ClientHost.call_builtin()`,
-  `host_surface()`, `stubbed`, and `_PATCHER_STUB_VALUES`
-- `pyReborn/pyreborn/game/gs2_gui.py`, whose GUI objects and methods are part
-  of the host surface even when calls bypass `call_builtin()`
+- `pyReborn/pyreborn/gs2_client/host.py:37-130,134-141,147-169,228-240`,
+  `GS2ClientHost.call_builtin()`, `host_surface()`, `stubbed`, and
+  `_PATCHER_STUB_VALUES`
+- `pyReborn/pyreborn/game/gs2_gui/factory.py:49-54`, whose GUI objects and
+  methods are part of the host surface even when calls bypass
+  `call_builtin()`

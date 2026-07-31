@@ -1,6 +1,7 @@
 # Usage Examples
 
-This section provides practical examples of implementing the Reborn protocol in various programming languages.
+This section gives practical Reborn protocol examples in different
+programming languages.
 
 ## Basic Client Connection
 
@@ -11,10 +12,10 @@ from pyreborn.client import Client
 
 client = Client("localhost", 14900, version="6.037")
 if client.connect() and client.login("username", "password"):
-    client.send_chat("Hello, world!")
-    # Historical Client attributes remain supported property aliases after the
-    # client_state refactor.
-    print(client.level_name, client.player_x, client.player_y)
+    client.say("Hello, world!")
+    # The Client facade exposes position and level as property aliases over
+    # its state components.
+    print(client.level, client.x, client.y)
 client.disconnect()
 ```
 
@@ -264,53 +265,41 @@ assert decode_gstring(b'\x25hello') == "hello"
 
 ## Player Property Handling
 
+Do **not** bucket property ids into "byte", "short" and "string" groups by
+hand. The buckets do not exist. `RUPEESCOUNT` (3) is a 3-byte gInt, not one
+byte. `ID` (14) and `KILLSCOUNT`/`DEATHSCOUNT`/`ONLINESECS` (27-29) are
+multi-byte gInts, not bit-packed GSHORTs. `SWORDPOWER` (8) and `SHIELDPOWER`
+(9) carry a bias plus an optional image. `X`/`Y` (15/16) are signed half-tiles.
+A hand-written bucket list gets at least one of these wrong and misaligns every
+property after it.
+
+`reborn_protocol.props` owns the descriptor table. Use it:
+
 ```python
-class PlayerProperties:
-    def __init__(self):
-        self.properties = {}
-        
-    def set_property(self, prop_id, value):
-        """Set a player property"""
-        self.properties[prop_id] = value
-        
-    def build_props_packet(self):
-        """Build PLI_PLAYERPROPS packet data"""
-        data = bytearray()
-        
-        for prop_id, value in self.properties.items():
-            data.append(prop_id + 32)  # Property ID
-            
-            if prop_id in [0, 10, 11, 12, 20, 21, 34, 35]:  # String properties
-                # GSTRING encoding
-                str_data = str(value).encode('latin-1')
-                data.append(min(len(str_data), 223) + 32)
-                data.extend(str_data[:223])
-                
-            elif prop_id in [1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 18, 19]:  # Byte properties
-                # GCHAR encoding
-                data.append(int(value) + 32)
-                
-            elif prop_id in [14, 27, 28, 29]:  # Short properties
-                # GSHORT encoding (7-bit shift)
-                val = min(int(value), 28767)
-                val0 = val >> 7
-                if val0 > 223:
-                    val0 = 223
-                val1 = val - (val0 << 7)
-                data.append(val0 + 32)
-                data.append(val1 + 32)
-                
-        return bytes(data)
+from reborn_protocol.props import PLAYER_PROPS, encode_value
 
-# Usage
-props = PlayerProperties()
-props.set_property(0, "PlayerName")      # NICKNAME
-props.set_property(15, 64)               # X position
-props.set_property(16, 96)               # Y position
-props.set_property(12, "Hello!")         # CHAT
+def build_props_packet(props):
+    """Build a PLI_PLAYERPROPS payload from {prop_id: value}."""
+    data = bytearray()
+    for prop_id in sorted(props):        # ascending id order is required
+        desc = PLAYER_PROPS[prop_id]
+        data.append(prop_id + 32)
+        data.extend(encode_value(desc, props[prop_id]))
+    return bytes(data)
 
-packet_data = props.build_props_packet()
+packet_data = build_props_packet({
+    0:  "PlayerName",   # NICKNAME, length-prefixed string
+    3:  1250,           # RUPEESCOUNT, 3-byte gInt
+    12: "Hello!",       # CURCHAT
+    15: 32.0,           # X, half-tile
+    16: 48.0,           # Y, half-tile
+})
 ```
+
+`sorted()` is not cosmetic. Property streams travel in ascending id order, and
+a strict parser stops at the first descending id instead of raising an error,
+so an out-of-order writer makes entities arrive half-populated with no
+diagnostic.
 
 ## File Transfer Example
 
@@ -344,4 +333,5 @@ def handle_file_packet(packet_data):
     }
 ```
 
-These examples demonstrate the core concepts needed to implement a compatible Reborn protocol client or server in any programming language.
+These examples show the core concepts that you must use to make a compatible
+Reborn protocol client or server in any programming language.

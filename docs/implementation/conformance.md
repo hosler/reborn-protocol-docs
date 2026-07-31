@@ -1,16 +1,21 @@
 # Protocol Conformance Guidelines
 
-This section provides guidelines for implementing Reborn protocol conformance and ensuring compatibility with existing servers and clients.
+This section gives guidelines for Reborn protocol conformance. Use these
+guidelines to make an implementation compatible with existing servers and
+clients.
 
 > **pyReborn's current conformance status** (see [PyReborn Implementation Gaps](pyreborn-gaps.md)
 > for detail): base QA suite 16/16, tier1 2/2, tier2 4/4, tier3 4/4, tier5 5/5, GMAP suite
 > 6/6, and PLO packet-coverage harnesses at 100% of emitted types for base/RC/NC sessions.
-> GEN_2, GEN_3, GEN_4, and GEN_5 codecs are all implemented and live-verified (the version
+> The implementation includes GEN_2, GEN_3, GEN_4, and GEN_5 codecs. Live tests
+> verified them (the version
 > probe logs in as 1.411/2.17/2.21/2.22/6.037 against GServer). Server-control packets,
-> GS2 bytecode *transport and execution*, and the RC write-side builders are done. Remaining genuine
+> The implementation includes server-control packets, GS2 bytecode *transport
+> and execution*,
+> and the RC write-side builders. Remaining genuine
 > gaps include GEN_6/v6-native encryption (also unimplemented
-> server-side), and a client-art table for ground-item sprites — none of which block the
-> Level 3 checklist items below.
+> server-side) and a client-art table for ground-item sprites. These gaps do not
+> block the Level 3 checklist items below.
 
 ## Conformance Levels
 
@@ -91,9 +96,9 @@ uint16_t encodeGShort(uint16_t value) {
 
 ## Testing Requirements
 
-Commands below use `$REPO_ROOT` for the directory holding the sibling
-checkouts (`pyReborn/`, `reborn-protocol/`, `GServer-v2/`, …); set it to your
-own working copy first.
+The commands below use `$REPO_ROOT` for the directory that contains the sibling
+checkouts (`pyReborn/`, `reborn-protocol/`, `GServer-v2/`, …). Before you run
+the commands, set it to your working copy.
 
 ### GS2 compiler baseline
 
@@ -113,14 +118,14 @@ ln -s $REPO_ROOT/reborn-protocol/tests/tools/gs2test \
 ```
 
 The accepted baseline is **178 total, 175 passed, 0 failed, 3 expected
-failures, and 0 regressions**. Never adjust a baseline fixture to match new
-output: that is the one change that destroys the suite's value. Diagnose and
-correct either the compiler or the intended behavior instead.
+failures, and 0 regressions**. Do not adjust a baseline fixture to match new
+output. That change destroys the value of the suite. Instead, diagnose and
+correct the compiler or the intended behavior.
 
-The invocation follows `tests/tools/run_tests.py`, `GS2TestRunner._find_compiler()`
-and `main()`, in the cached upstream checkout. Copying `tests/` is important:
-the runner creates reports and transient compiler output, while the
-third-party checkout is a read-only oracle.
+The command follows `tests/tools/run_tests.py`, `GS2TestRunner._find_compiler()`
+and `main()`, in the cached upstream checkout. Copy `tests/` because the runner
+creates reports and temporary compiler output. The third-party checkout is a
+read-only oracle.
 
 ### Live GS2 execution
 
@@ -134,17 +139,17 @@ The accepted result is **6/6**, over **175 scripts**, with **crashes=0**,
 **ops seen=95**, and **unimplemented=0**. This check must target
 GServer-v2's `gs2emu`, not `pygserver`. Its `qa_gs2vm` weapon fixture exists
 only under GServer-v2, at
-`GServer-v2/bin/servers/default/weapons/weaponqa%095gs2vm.txt`; pointing the
-test at `pygserver` produces the misleading result
+`GServer-v2/bin/servers/default/weapons/weaponqa%095gs2vm.txt`. If you point
+the test at `pygserver`, the test gives the misleading result
 `1/6 - no weapon vm`, which is an environment error rather than a VM result.
 
 ### Required Python interpreter
 
 Run these suites with `/usr/bin/python3.13`. The system `python3` is 3.14 and
 lacks Hypothesis. Under it, the `reborn-protocol` property suite fails during
-collection; treating the remaining collected tests as green gives a false
-conformance result. Always inspect collection errors and the collected test
-count, not only the final pass count.
+collection. If you treat the remaining collected tests as successful, you get
+a false conformance result. Always examine collection errors and the collected
+test count. Do not examine only the final pass count.
 
 ### Unit Tests
 ```python
@@ -270,4 +275,5 @@ def test_encryption_limits():
 3. Address feedback and issues
 4. Maintain ongoing compatibility
 
-Following these guidelines ensures robust, compatible Reborn protocol implementations that work reliably with the broader ecosystem of servers and clients.
+Use these guidelines to make compatible Reborn protocol implementations. The
+implementations will work with the larger set of servers and clients.

@@ -1,16 +1,17 @@
 # Version-Gated Server Behavior
 
-The server does not implement one protocol — it implements several, selected per-connection
-by `Player::getVersion()` (the resolved `CLVER_*` for that client). This page catalogs every
-place GServer-v2 branches on client version, verified against the live source. Where a
-version split exists only as **commented-out/dead code**, that is called out explicitly —
-don't implement against a comment that isn't actually running.
+The server does not implement one protocol. It implements several protocols. The server
+uses `Player::getVersion()` to select a protocol for each connection. This value is the
+resolved `CLVER_*` for that client. This page lists each GServer-v2 branch for a client
+version. The live source confirms each branch. The text identifies each version split that
+exists only as **commented-out/dead code**. Do not implement a comment that the server does
+not run.
 
 **Sources**: `GServer-v2/server/src/object/NPC.cpp`, `Weapon.cpp`, `Server.cpp`,
 `player/packets/PlayerClientPackets.cpp`, `player/PlayerClient.cpp`, `player/Player.cpp`,
-`level/LevelBoardChange.cpp`, `level/Level.cpp`, `utilities/PropertySerializers.cpp`; enum
-values from `build/dependencies/fc/gs2lib-src/include/IUtil.h` (`CLVER_*`) — see
-[Client Versions & Encryption](versions-encryption.md) for the full version table.
+`level/LevelBoardChange.cpp`, `level/Level.cpp`, `utilities/PropertySerializers.cpp`. Enum
+values come from `build/dependencies/fc/gs2lib-src/include/IUtil.h` (`CLVER_*`), and the
+full version table lives at [Client Versions & Encryption](versions-encryption.md).
 
 ## NPC Movement: PLO_MOVE vs PLO_MOVE2
 
@@ -34,13 +35,13 @@ m_server->sendPacketToNearby(CString() >> (char)PLO_MOVE >> (int)id << queue.fir
 - At/above `CLVER_2_3` (>= 2.3): `PLO_MOVE2 (189)`.
 
 Both packet builders run per level tick, filtered by version via `sendPacketToNearby`'s
-predicate — the server maintains two parallel move-command queues (`queue.first`/
+predicate. The server maintains two parallel move-command queues (`queue.first`/
 `queue.second`) rather than picking one packet form per NPC.
 
-`IEnums.h` carries a maintainer comment on `PLO_MOVE` (165): `// Unhandled by 6.037. -Codr` —
-worth knowing if you're targeting 6.037 specifically: the server still *sends* PLO_MOVE to
+`IEnums.h` carries a maintainer comment on `PLO_MOVE` (165): `// Unhandled by 6.037. -Codr`.
+Know this if you target 6.037 specifically: the server still *sends* PLO_MOVE to
 pre-2.3 clients, but the comment suggests 6.037 clients (which are always >= 2.3 and thus
-never receive it) don't process it if it somehow arrived.
+never receive it) do not process it if it somehow arrived.
 
 ## Projectiles: PLO_SHOOT vs PLO_SHOOT2
 
@@ -57,15 +58,15 @@ m_server->sendPacketToNearby(newPacketBuf, ..., [](const auto pl) { return pl->g
 - Below `CLVER_5_07` (< 5.07): `PLO_SHOOT (175)`.
 - At/above `CLVER_5_07` (>= 5.07): `PLO_SHOOT2 (191)`.
 
-`IEnums.h` comments: `PLO_SHOOT` — `// Unhandled by 6.037. -Codr`; `PLO_SHOOT2` —
+`IEnums.h` comments: `PLO_SHOOT`: `// Unhandled by 6.037. -Codr`. `PLO_SHOOT2`:
 `// Valid message in 5.07 and 6.037. The code it uses is unique. -Codr`. Same pattern as
 PLO_MOVE: the server still constructs and sends both forms every tick regardless of whether
 any connected client is old enough to need the legacy one.
 
 ## Board Changes: Two Different Code Paths, Only One Is Live
 
-There are **two separate places** board-change version logic exists, and they disagree —
-this is a real trap for anyone reading only one of them.
+There are **two separate places** where board-change version logic exists, and they disagree.
+This is a real trap for anyone reading only one of them.
 
 ### Live Broadcast Path: LevelBoardChange sendToPlayersOnLevel (Version Check Is Dead)
 
@@ -96,18 +97,42 @@ void LevelBoardChange::sendToPlayersOnLevel() const
 }
 ```
 
-**Current live behavior: every client, regardless of version, gets `PLO_BOARDMODIFY2` built
-via `getPropsForMapClassic()`, sent to nearby players (`sendPacketToNearby`, not the whole
-level)**. `getPropsForMapNewMain()` itself is also commented out elsewhere in the file
+The `// ...` above elides the **non-gmap branch, which sends a different
+packet**. The full function is:
+
+```cpp
+if (!level->isGmap())
+    m_server->sendPacketToOneLevelPart(
+        CString() >> (char)PLO_BOARDMODIFY << getPropsForSingleLevel(), {0, 0}, level);
+else
+{
+    // the PLO_BOARDMODIFY2 branch quoted above
+}
+```
+
+**Current live behavior, by level kind:**
+
+| Level kind | Packet | Payload builder | Delivery |
+|---|---|---|---|
+| non-gmap | `PLO_BOARDMODIFY` | `getPropsForSingleLevel()` | `sendPacketToOneLevelPart` |
+| gmap | `PLO_BOARDMODIFY2` | `getPropsForMapClassic()` | `sendPacketToNearby` |
+
+Client version does not enter into either branch
+(`GServer-v2/server/src/level/LevelBoardChange.cpp:51-58`). A client that
+implements only `PLO_BOARDMODIFY2` silently drops every timed tile swap —
+bridges, switches — on ordinary levels. This matches the `msgPLI_BOARDMODIFY`
+split documented in [GServer Behavior](gserver-behavior.md).
+
+`getPropsForMapNewMain()` is also commented out elsewhere in the file
 (`LevelBoardChange.cpp:97-104`) and does not exist as compiled code right now. Do not
-implement a client-version split here — it isn't running in this server.
+implement a client-version split here. It is not running in this server.
 
 ### Level-Entry Replay Path: SubLevel sendBoardChangesToPlayer (Version Check Is Live)
 
 Function reference: `SubLevel::sendBoardChangesToPlayer()`.
 
 A **different** function, `Level.cpp:481-526`, replays a level's accumulated board-change
-history to a player who (re)enters it — this one's version branching is live:
+history to a player who (re)enters it. This one's version branching is live:
 
 ```cpp
 int style = 1;
@@ -130,12 +155,12 @@ for (const auto& change : boardChanges)
   gmap), else style 3.
 - `>= CLVER_4_0211` (default `style = 1`): `PLO_BOARDMODIFY2 (186)` per change
   (`getPropsForMapClassic()`).
-- Style `2` (a batched, single `PLO_LEVELBOARD (0)` packet carrying all changes) is coded
-  but never assigned — see the dead-code note in
+- Style `2` (a batched, single `PLO_LEVELBOARD (0)` packet carrying all changes) exists in
+  the source, but the server never assigns it. See the dead-code note in
   [GServer Behavior Reference](gserver-behavior.md#plo_levelboard-0-is-effectively-dead-code).
 
 `Level::sendBoardChangesToPlayer` (`Level.cpp:1290-1294`) just forwards to the current
-sub-level unconditionally — this replay runs for **both gmap and non-gmap levels**, invoked
+sub-level unconditionally. This replay runs for **both gmap and non-gmap levels**, invoked
 from `PlayerClient::sendDynamicLevelData` (`PlayerClient.cpp:1492-1497`), where the
 `isGmap()` check gates only the *following* horse/baddy sends, not the board-change replay
 itself.
@@ -161,9 +186,9 @@ if (isClient() && m_versionId < CLVER_2_14)
 - **Big-file threshold**: files **> 32000 bytes** use the `PLO_LARGEFILESTART` /
   `PLO_LARGEFILESIZE` / `PLO_FILE`-chunks / `PLO_LARGEFILEEND` sequence (see
   [Packet Structures](packet-structures.md#plo_largefilestart-68---large-file-start)).
-- **`< CLVER_2_14`**: no large-file support at all — `isBigFile` forced false, and files
-  **> 64000 bytes are rejected outright** (`sendFailure`).
-- **`< CLVER_2_1`**: `PLO_FILE (102)` omits the 5-byte `modtime` field — shorter form,
+- **`< CLVER_2_14`**: no large-file support at all. The server forces `isBigFile` false and
+  **rejects files > 64000 bytes outright** (`sendFailure`).
+- **`< CLVER_2_1`**: `PLO_FILE (102)` omits the 5-byte `modtime` field: shorter form,
   `[GCHAR name_len][name][data]`, no trailing newline, vs. the `>= 2.1` form
   `[GINT5 modtime][GCHAR name_len][name][data][0x0A]` (confirmed at
   `Player.cpp:584-594`: the pre-2.1 branch sends plain `PLO_FILE >> filename` with no
@@ -173,7 +198,7 @@ if (isClient() && m_versionId < CLVER_2_14)
 
 There are **two separate mechanisms** here, easy to conflate into one:
 
-1. **Wire byte count** — `PropertyColors::getColorCount()`
+1. **Wire byte count**: `PropertyColors::getColorCount()`
    (`utilities/PropertySerializers.cpp:709-713`):
    ```cpp
    int PropertyColors::getColorCount() const noexcept
@@ -182,12 +207,12 @@ There are **two separate mechanisms** here, easy to conflate into one:
        return server->isNewWorldMode() ? 8 : 5;
    }
    ```
-   This drives the actual `serialize()`/`deserialize()` loop count — **5 bytes classic, 8
-   bytes new-world**. It is gated on `Server::isNewWorldMode()` — **a server-wide mode
+   This drives the actual `serialize()`/`deserialize()` loop count: **5 bytes classic, 8
+   bytes new-world**. `Server::isNewWorldMode()` gates it, **a server-wide mode
    flag**, not a per-connection client-version check. Every player on a given server
-   instance sees the same width; it isn't negotiated per client.
+   instance sees the same width. The server does not negotiate it per client.
 
-2. **Value range clamp** — `PropertyColors::getMaxColorValue()` (`PropertySerializers.cpp:
+2. **Value range clamp**: `PropertyColors::getMaxColorValue()` (`PropertySerializers.cpp:
    715-722`), a *different* setting:
    ```cpp
    size_t colorCount = CLASSICCOLORS_COUNT;
@@ -197,7 +222,7 @@ There are **two separate mechanisms** here, easy to conflate into one:
    `enableexbodycolors` (`Server.h:158`, `SettingCache<bool> enableExBodyColors`) controls
    how many distinct color *values* are legal, not how many *bytes* are on the wire.
 
-Don't gate wire-format parsing on `enableexbodycolors` — gate it on the server's new-world
+Do not gate wire-format parsing on `enableexbodycolors`. Gate it on the server's new-world
 mode instead. This mode is server-wide and is not encoded in the client
 handshake, so a client cannot derive the five-versus-eight-byte width from its
 own version. It needs server configuration, an out-of-band session profile, or
@@ -207,7 +232,7 @@ property stream rather than treating the handshake as a width discriminator.
 ## Sword and Shield Bias Forms Are Server-Generation Gates
 
 Sword and shield properties have a compact preset form and a biased custom-image
-form. Sword custom form stores `power + 30`; shield custom form stores
+form. Sword custom form stores `power + 30`. Shield custom form stores
 `power + 10`, followed by a GUCHAR image length and image bytes
 (`GServer-v2/server/src/utilities/PropertySerializers.cpp:77-164`).
 
@@ -252,7 +277,7 @@ if (m_versionId >= CLVER_2_1) { /* ... PLO_STATUSLIST ... */ }
 Clients below 2.1 never receive `PLO_BIGMAP`, `PLO_MINIMAP`, `PLO_RPGWINDOW`, or
 `PLO_STATUSLIST` at login.
 
-**(d) Dead: `PLO_LISTPROCESSES` for `< CLVER_6_015`** (`:623-627`) — genuinely commented out:
+**(d) Dead: `PLO_LISTPROCESSES` for `< CLVER_6_015`** (`:623-627`). Genuinely commented out:
 ```cpp
 // Ask for processes. This causes windows v6 clients to crash
 /*
@@ -260,9 +285,9 @@ if (m_versionId < CLVER_6_015)
     sendPacket(CString() >> (char)PLO_LISTPROCESSES);
 */
 ```
-No client, of any version, currently receives `PLO_LISTPROCESSES` from `sendLogin` — the
-comment documents *why* it was disabled (a crash in Windows v6 clients), which is useful
-context if you're ever tempted to re-enable process-list polling.
+No client, of any version, currently receives `PLO_LISTPROCESSES` from `sendLogin`. The
+comment explains *why* the server no longer sends it (a crash in Windows v6 clients), which is useful
+context if you are ever tempted to re-enable process-list polling.
 
 ## GS2 Bytecode Delivery Rule
 
@@ -294,7 +319,7 @@ else
 ```
 
 - **No compiled bytecode** (GS1-only content): `PLO_NPCWEAPONADD` includes the `SCRIPT` prop
-  with the raw source inline. This is the *only* path — it runs "even on a MODERN server,"
+  with the raw source inline. This is the *only* path. It runs "even on a MODERN server,"
   per the code comment, because taking the bytecode branch without built bytecode crashes.
 - **Compiled bytecode exists**: `PLO_NPCWEAPONADD` includes a `CLASS` prop (not `SCRIPT`)
   listing the joined class list, followed by a separate `PLO_LOADSCRIPT (197)` packet
@@ -313,28 +338,28 @@ void Weapon::sendByteCodeToPlayer(std::shared_ptr<Player> player) const
 ```
 
 So the full sequence when bytecode exists is **`PLO_NPCWEAPONADD` (with `CLASS` prop) →
-`PLO_LOADSCRIPT` → `PLO_NPCWEAPONSCRIPT`** (the last one from a distinct call site) — the
+`PLO_LOADSCRIPT` → `PLO_NPCWEAPONSCRIPT`** (the last one from a distinct call site). The
 GS1 `SCRIPT` prop is never sent for bytecode-backed weapons.
 
 ### Bytecode packet family
 
 All five packets are now byte-validated (live pyReborn parsers exercised against GServer
-fixtures — `game_tester --tier5`). Full byte layouts live in
-[Packet Structures](packet-structures.md#plo_npcbytecode-131---npc-bytecode); summary:
+fixtures, `game_tester --tier5`). Full byte layouts live in
+[Packet Structures](packet-structures.md#plo_npcbytecode-131---npc-bytecode). Summary:
 
 | Packet | ID | Direction | Payload |
 |---|---|---|---|
-| `PLO_NPCBYTECODE` | 131 | Server → Client | `[GINT3 npc_id][bytecode]` — streamed inside `PLO_RAWDATA`, automatically for clients `>= CLVER_4_0211` with scripted NPCs (`Level.cpp:1352-1358` `sendNPCsToPlayer`) |
-| `PLO_GANISCRIPT` | 134 | Server → Client | `[GCHAR name_len][gani_name][bytecode]` — name has no `.gani` suffix (`GameAni.cpp:107-122` `getBytecodePacket`), wrapped in `PLO_RAWDATA` |
+| `PLO_NPCBYTECODE` | 131 | Server → Client | `[GINT3 npc_id][bytecode]`, streamed inside `PLO_RAWDATA`, automatically for clients `>= CLVER_4_0211` with scripted NPCs (`Level.cpp:1352-1358` `sendNPCsToPlayer`) |
+| `PLO_GANISCRIPT` | 134 | Server → Client | `[GCHAR name_len][gani_name][bytecode]`, name has no `.gani` suffix (`GameAni.cpp:107-122` `getBytecodePacket`), wrapped in `PLO_RAWDATA` |
 | `PLO_NPCWEAPONSCRIPT` | 140 | Server → Client | `[GSHORT header_len][header CSV][bytecode]` (`Weapon.cpp:299-308` `sendByteCodeToPlayer`) |
 | `PLO_LOADGANI` | 195 | Server → Client | `[GCHAR name_len][gani_name][stringlist]`, stringlist e.g. `"SETBACKTO idle"` (`PlayerClientPackets.cpp:1481`) |
-| `PLO_LOADSCRIPT` | 197 | Server → Client | **Two payload forms** — raw header CSV (weapon announcement, `Weapon.cpp:295`) vs `[GCHAR header_len][header CSV][bytecode]` (class bytecode, `ScriptClass.cpp:66-77`) — see the packet-structures entry for disambiguation |
+| `PLO_LOADSCRIPT` | 197 | Server → Client | **Two payload forms**: raw header CSV (weapon announcement, `Weapon.cpp:295`) vs `[GCHAR header_len][header CSV][bytecode]` (class bytecode, `ScriptClass.cpp:66-77`), see the packet-structures entry for disambiguation |
 
 The client-side **request** packets: `PLI_UPDATESCRIPT (158)` = `{weapon_name}` (raw, to
-end); `PLI_UPDATEGANI (157)` = `{GINT5 crc32}{gani_name}`; `PLI_UPDATECLASS (161)` =
-`{GINT5 crc32}{class_name}` — handlers at `PlayerClientPackets.cpp:1460-1533`
+end). `PLI_UPDATEGANI (157)` = `{GINT5 crc32}{gani_name}`. `PLI_UPDATECLASS (161)` =
+`{GINT5 crc32}{class_name}`. Handlers are at `PlayerClientPackets.cpp:1460-1533`
 (`msgPLI_UPDATEGANI/UPDATESCRIPT/UPDATECLASS`). The server answers `UPDATEGANI`/
-`UPDATECLASS` only when the client's CRC32 differs from the current bytecode's; send
+`UPDATECLASS` only when the client's CRC32 differs from the current bytecode's. Send
 checksum 0 to force a fresh copy.
 
 The Python client parses, stores, and executes this bytecode. See

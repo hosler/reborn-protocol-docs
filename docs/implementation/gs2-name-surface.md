@@ -1,63 +1,62 @@
 # GS2 script-visible name surface: reference vs. ours
 
-This page enumerates the **official** GS2 name surface — every script-visible
-free function, object property, and object method the reference client's
-interpreter registers — and diffs it against what
+This page lists the **official** GS2 name surface. This surface contains every
+script-visible free function, object property, and object method that the
+reference client's interpreter registers. The page compares this surface with what
 `reborn-protocol/reborn_protocol/gs2/vm.py` and
-`pyReborn/pyreborn/gs2_client.py` answer today.
+`pyReborn/pyreborn/gs2_client/` answer today.
 
 ## Status (2026-07-26)
 
 This started as a **specification for implementers** with nothing implemented.
-That is no longer true, and the tiers below are still written in the
-future tense — read them as the *survey*, and this section as what actually
-landed.
+That is no longer true. The tiers below still use the future tense. Read them
+as the *survey*. Read this section as the list of implemented items.
 
 **Landed:**
 
 - All of **T1** (44 names): every string-typed name the reference registers
   now answers `""`-or-better on globals, `player`, other players, an NPC
   `this`, `level`, `showimg` handles and `new`-ed objects
-  (`pyReborn/pyreborn/gs2_client.py`).
+  (`pyReborn/pyreborn/gs2_client/`).
 - All five items under **Things our implementation gets actively wrong**,
   except that item 3 landed on the VM side rather than the host: `player.nick`
-  is read-only, `client`/`clientr`/`serverr` resolve player properties (reads
+  offers read-only access, `client`/`clientr`/`serverr` resolve player properties (reads
   only — a write through them stays a flag write), `level` is a real object
   with all 14 chain properties plus the `test*` probe family, and `levelname`
-  is answered alongside our own `player.level` extension.
+  receives an answer alongside our own `player.level` extension.
 - The **T2 top-20**, including the clamped/validated setters (`freezetime`,
   `zoomfactor`, `selectedweapon`, `selectedsword`, `glovepower`).
 - **T3's `TGraalVar` root methods**: `addarray`/`sortbyvalue` on the VM side
   (`reborn_protocol/gs2/vm.py`), and `savelines`/`sortascending`/
   `sortdescending`/`settimer` on the host, which had to move off their
-  `isinstance(obj, list)` gate — the host is consulted *before* the VM, so a
-  gate that misses walks past the VM's root surface and ends at `0.0`.
+  `isinstance(obj, list)` gate. The system consults the host *before* the VM.
+  Thus, a gate that misses passes the VM's root surface and ends at `0.0`.
 - The **`GuiTextListCtrl` row API** (T3's GUI section): `rowcount`,
   `isrowselected`, `isidselected`, `getrownumbyid`, `getselectedid`,
   `getselectedids`, `getselectedrows`, `getrowatpoint`, `getrowidatpoint`,
   `findtextid`, `setselectedbytext`, `setselectedbyids`, `setselectedrows`,
   `clearselection`, `insertrow`, `removerow`, `removerowbyid`, `setrowbyid`,
   `setrowactivebyid`, `makevisible`, `makevisiblebyid`, the `selected*`
-  properties and the sort enums; plus `resize` on every control and `reflow`
+  properties and the sort enums. Plus `resize` on every control and `reflow`
   on `GuiMLTextCtrl` (**not** on the text list, where a call-count sweep had
   placed it).
 
 **Still open:**
 
-- The GUI control tables are **no longer sampled** — the remaining 21 classes
-  plus `GuiControlProfile` were audited entry-by-entry and are written up in
+- The GUI control tables are **no longer sampled**. The audit examined the
+  remaining 21 classes plus `GuiControlProfile` entry-by-entry. The results are in
   {doc}`gs2-gui-core-controls`, {doc}`gs2-gui-layout-controls` and
-  {doc}`gs2-gui-remaining-controls`. The per-class caveats now live there; the
+  {doc}`gs2-gui-remaining-controls`. The per-class caveats now live there. The
   counts in the table below predate that audit and undercount.
 
   That audit also established that **this oracle is not the whole client**:
   `FourPlay/libqplay_symbols.txt` carries 24 `Gui*` classes while the Era
-  build's `graal-revlib-osx/docs/symbol_dump.log` carries 43. Absence from
-  FourPlay is therefore not evidence that a name does not exist —
+  build's `graal-revlib-osx/docs/symbol_dump.log` carries 43. Thus, absence
+  from FourPlay does not show that a name does not exist.
   `GuiTabCtrl`, `GuiTreeViewCtrl`, `GuiAccountPasswordCtrl` and
   `GuiMLTextEditCtrl` are all real, all used by Login content, and all absent
   here.
-- The **T2 runners-up** list below is untouched: `getkeycode`/`keyname`,
+- The **T2 runners-up** list below remains untouched: `getkeycode`/`keyname`,
   `findlevel`, `findnpcbyid`, `findani`, `format2`, `getascii`, `strcmp`,
   `getnearestplayer`, `trace`, `aindexof`, `randomstring`,
   `hasfunction`/`getfunctions`, `level.findareanpcs`/`getmappartfile`, the
@@ -67,18 +66,17 @@ landed.
 
 ### Method caveat: this page was built top-down only
 
-Every name below was found by reading the reference's *registration tables*.
-Nothing was found by grepping the production script corpora for names they
-actually reference, and that gap hid real bugs — see "Bottom-up findings"
-at the end.
+I found every name below in the reference's *registration tables*. I did not
+search the production script corpora for names that they use. That gap hid
+real bugs. See "Bottom-up findings" at the end.
 
 ## Where the oracle is and how it was read
 
-The oracle is the reference client's interpreter, decompiled to C++, checked
-out at `Preagonal/FourPlay/quattroplay/`. It outranks GServer-v2, the C#
-client, and every doc in this tree.
+The oracle is the reference client's interpreter. The checkout at
+`Preagonal/FourPlay/quattroplay/` contains its C++ decompilation. It outranks
+GServer-v2, the C# client, and every doc in this tree.
 
-Names are not scattered through the code: they are declared in static tables.
+Static tables declare the names in one part of the code.
 
 ```c
 typedef struct TPropertyPropDef {          // include/TPropertyPropDef.h
@@ -103,18 +101,18 @@ typedef struct TPropertyFuncDef {          // include/TPropertyFuncDef.h
 } TPropertyFuncDef;
 ```
 
-Every table is installed by `TScriptProperty::addProps` /
-`addFuncs`, and the first argument decides the *scope*:
+`TScriptProperty::addProps` / `addFuncs` installs each table. The first
+argument specifies the *scope*:
 
 - `addProps(nullptr, …)` installs onto `TScriptUniverse_properties` — the
   **global** name surface (`src/TScriptProperty.cpp:27-49`).
 - `addProps(this, …)` installs onto one class's `TProperties` — a **per-object**
   surface.
 
-A class's parent chain is spelled in its `TProperties(type, parentType)`
-constructor, and `TProperties::compileProperties()` copies the parent's table
-in first, then **replaces** any entry the child redeclares
-(`src/TProperties.cpp:108-129`). Child wins.
+The `TProperties(type, parentType)` constructor specifies a class's parent
+chain. `TProperties::compileProperties()` first copies the parent's table.
+It then **replaces** each entry that the child declares again
+(`src/TProperties.cpp:108-129`). The child wins.
 
 Chains that matter:
 
@@ -127,7 +125,7 @@ Chains that matter:
 | a `showimg` handle | `TShowImg` | TShowImg → TLevelObject → TGraalVar |
 | GUI controls | `Gui*Ctrl` | (control) → … → GuiControl → TGraalVar |
 
-Bare names are resolved by `TScriptMachine::resolveObjectMember`
+`TScriptMachine::resolveObjectMember` resolves bare names
 (`src/TScriptMachine.cpp:5042`). Fixed aliases live at the top of it:
 
 | Name | Resolves to | Line |
@@ -160,32 +158,32 @@ current level → the universe globals.
 | GUI control properties (**sampled**, see below) | 189 | not audited |
 | GUI control methods (**sampled**) | 123 | 36 |
 
-Total extracted table entries: **1474** across 43 `*Properties.cpp` files plus
-`TInitStatics.cpp`, `TClient.cpp`, and the `src/gui/` tree. Extraction is
-complete for every table whose declared array size is a literal (all of them —
-each declared size matched the entry count).
+The extraction found **1474** table entries across 43 `*Properties.cpp` files.
+It also examined `TInitStatics.cpp`, `TClient.cpp`, and the `src/gui/` tree. Extraction is
+complete for every table whose declared array size is a literal. All tables
+use a literal, and each declared size matched the entry count.
 
 ### Honest coverage statement
 
-- Global functions/properties, and the `player` / other-player / NPC / `level`
-  property and method chains, are covered **exhaustively**.
+- The audit covers all global functions and properties. It also covers all
+  `player` / other-player / NPC / `level` property and method chains.
 - The GUI control tables (`src/gui/*Properties.cpp`) were **sampled** when this
-  page was written — only `GuiControl`'s own table had been read
-  entry-by-entry, so the GUI counts below are not a completeness claim. The
-  remaining classes were audited separately afterwards; see the three
+  page took shape. At that time, the audit had read only `GuiControl`'s own
+  table entry-by-entry. Thus, the GUI counts below are not a completeness
+  claim. A later audit examined the remaining classes. See the three
   `gs2-gui-*-controls` pages, which supersede the GUI rows here.
 - Roughly 20 % of property entries and 9 % of function entries carry a **raw
   address** (`(void*)0x27f150`) instead of a named function, because the
   decompilation did not recover those bodies and no symbol map exists in
   `asm/`. For those, this page records the **registered type and read/write
-  flags only** — which is exactly what the T1 rule below depends on — and says
-  so. No semantics are asserted for a body that was not read.
+  flags only**. The T1 rule below uses only this information. The page says
+  when this limit applies. It does not assert semantics for an unread body.
 
 ---
 
 ## The unanswered-name hazard (why T1 exists)
 
-Three verified facts compose into a silent-wrong-answer bug:
+Three verified facts cause a silent-wrong-answer bug:
 
 1. A name that resolves to nothing becomes **Number 0.0**:
    `TScriptStackEntry::resolve()` calls `makeProperty()`, and when both the
@@ -209,15 +207,16 @@ leave unanswered is a latent wrong-answer bug**, because our host returns
 
 This is not hypothetical. Two live outages came from it: `serverstartconnect`
 (unanswered → `serverstartconnect == "skills"` true → the serverlist request
-was skipped) and `player.platform` (unanswered → 48 `== "linuxstream"` tests
-per session all true). Both are now answered as `""`; the fixes are commented
-in `gs2_client.py`.
+the code skipped) and `player.platform` (unanswered → 48 `== "linuxstream"` tests
+per session all true). We now answer both as `""`. Comments describe the fixes
+in `gs2_client/host_objects.py:81-98` (`serverstartconnect`) and
+`gs2_client/objects_player.py:345-361` (`player.platform`).
 
 Note that "answer a string" does **not** mean "answer `""`". Several globals
 are pre-seeded with non-empty defaults, e.g. `spritesimage` = `"sprites.png"`
 and `statusimage` = `"state.png"` (`src/TInitStatics.cpp:4809-4813`), and
 `servername` = `"Offline"` (`:4930-4932`). The pre-allocated-`TString` globals
-are all created in the `*_initStaticVars()` functions; the ones for the
+are all created in the `*_initStaticVars()` functions. The ones for the
 serverlist are at `src/TInitStatics.cpp:4928-4937`.
 
 ---
@@ -232,21 +231,21 @@ yields Number 0.0 and every `== "literal"` against it is true.
 | Name | R/W | Citation | Semantics |
 | --- | --- | --- | --- |
 | `emoticonchar` | RO | table `src/TInitStatics.cpp:2746`, getter `:2371-2376` | `TInput::emoticonchar` stringified as an integer |
-| `spritesimage` | RW | table `:2779`, getter `:2674`, default `:4810-4811` | sprite-sheet filename; defaults to `"sprites.png"` |
-| `statusimage` | RW | table `:2780`, getter `:2678`, default `:4812-4813` | status-bar image filename; defaults to `"state.png"` |
+| `spritesimage` | RW | table `:2779`, getter `:2674`, default `:4810-4811` | sprite-sheet filename. Defaults to `"sprites.png"` |
+| `statusimage` | RW | table `:2780`, getter `:2678`, default `:4812-4813` | status-bar image filename. Defaults to `"state.png"` |
 | `downloadfile` | RO | `src/TFileDownload.cpp:69` | file currently downloading |
 | `lastdownloadfile` | RO | `src/TFileDownload.cpp:70` | last completed download |
 | `disabledsoundeffects` | RW | `src/sound/TSounds.cpp:214` | CSV of suppressed effect names |
 | `allowedimageanimations` | RW | `src/TTexture.cpp:70` | CSV allow-list for animated images |
 | `installedlanguages` | RO | `src/TTranslations.cpp:39` | CSV of installed translation languages |
-| one plugin-cookie option | RO | `src/TOptions.cpp:457` | web-plugin session cookie (name spelled verbatim at that line; it contains a term the naming policy scrubs, so it is not repeated here) |
-| **six** `$pref::`-namespaced string options | RW | `src/TOptions.cpp:471,472,473`; `src/TFontOptions.cpp:124,142`; `src/TTranslations.cpp:38` | GUI-style, screenshot-format, font and language preferences (same spelling caveat). An earlier revision of this page said *five* while listing six lines; each of those six is a distinct registered name. |
+| one plugin-cookie option | RO | `src/TOptions.cpp:457` | web-plugin session cookie (name spelled verbatim at that line. It contains a term the naming policy scrubs, so it is not repeated here) |
+| **six** `$pref::`-namespaced string options | RW | `src/TOptions.cpp:471,472,473`, `src/TFontOptions.cpp:124,142`, `src/TTranslations.cpp:38` | GUI-style, screenshot-format, font and language preferences (same spelling caveat). An earlier revision of this page said *five* while listing six lines. Each of those six is a distinct registered name. |
 
 ### Every object (the `TGraalVar` root — `player`, other players, NPCs, `level`, every `new`-ed object)
 
 | Name | R/W | Citation | Semantics |
 | --- | --- | --- | --- |
-| `name` | RW | table `src/TGraalVarProperties.cpp:627`, getter `:147-152`, setter `:154-` | the object's own name. For `level` it is the **lower-cased level filename**: `TServerLevel::TServerLevel` passes `TFiles::lowerCaseFilename(levelName)` to the `TGraalVar` base (`src/TServerLevel.cpp:352-354`). The setter is a no-op once a name is set and the object is linked (`:156-158`). |
+| `name` | RW | table `src/TGraalVarProperties.cpp:627`, getter `:147-152`, setter `:154-` | the object's own name. For `level` it is the **lower-cased level filename**: `TServerLevel::TServerLevel` passes `TFiles::lowerCaseFilename(levelName)` to the `TGraalVar` base (`src/TServerLevel.cpp:352-354`). The setter is a no-op once code sets a name and links the object (`:156-158`). |
 
 `level.name == "somelevel.nw"` is a common script idiom and today evaluates
 true in **every** level.
@@ -258,16 +257,16 @@ true in **every** level.
 | `levelname` | RO | table `src/TServerPlayerProperties.cpp:573`, getter `:181` | `player->levelname` |
 | `language` | RO | table `:555`, getter `:176` | the player's language token |
 | `languagedomain` | RO | table `:564`, getter `:177-180` | `TTranslations::getLanguageDomain(language)` |
-| `chatoffset` | RW | table `:339` | raw-address getter; type only |
-| `horseimg` | RW | `src/TPlayerProperties.cpp:117` (local), `src/TServerPlayerProperties.cpp:429` (remote) | raw-address getter; type only. We answer this on NPCs but not on players. |
-| `alliedguilds` | RW | `src/TPlayerProperties.cpp:54` | raw-address getter; type only |
-| `letters` | RW | `src/TPlayerProperties.cpp:234` | raw-address getter; type only |
-| `aniparams` | RO | `src/TGaniObjectProperties.cpp:55` | raw-address getter; type only |
-| `rotationcenter` | RW | `src/TGaniObjectProperties.cpp:208` | raw-address getter; type only |
+| `chatoffset` | RW | table `:339` | raw-address getter. Type only |
+| `horseimg` | RW | `src/TPlayerProperties.cpp:117` (local), `src/TServerPlayerProperties.cpp:429` (remote) | raw-address getter. Type only. We answer this on NPCs but not on players. |
+| `alliedguilds` | RW | `src/TPlayerProperties.cpp:54` | raw-address getter. Type only |
+| `letters` | RW | `src/TPlayerProperties.cpp:234` | raw-address getter. Type only |
+| `aniparams` | RO | `src/TGaniObjectProperties.cpp:55` | raw-address getter. Type only |
+| `rotationcenter` | RW | `src/TGaniObjectProperties.cpp:208` | raw-address getter. Type only |
 
 ### NPC `this` — additionally
 
-Our `_NPC_THIS_ATTR` (`gs2_client.py:625-641`) covers 14 names. These
+Our `_NPC_THIS_ATTR` (`gs2_client/objects.py:26-41`) covers 14 names. These
 string-typed inherited ones are not among them:
 
 | Name | R/W | Citation |
@@ -292,7 +291,7 @@ table, so they are the same slot under two names):
   `propfun_serverplayer_fullhearts_r`
 
 So `player.shield` is the shield **image name**, not the shield power. Our
-mapping already gets this right (`_PLAYER_MEMBER_ATTR` → `shield_image`); the
+mapping already gets this right (`_PLAYER_MEMBER_ATTR` → `shield_image`). The
 NPC side does not have it at all.
 
 ### `showimg` handles (sampled)
@@ -303,8 +302,8 @@ NPC side does not have it at all.
 (`:270`), `position` (`:360`), `rotationcenter` (`:387`), `attachoffset`
 (`:477`), `movementvector` (`:531`), `sound` (`:558`). The class registers
 **13** in total: `ani` (`:144`) and `image` (`:171`) sit above that range and
-are string-typed too. Our `_ShowImgObject`
-(`gs2_client.py:765-800`) stores unknown keys on the record so writes
+have string types too. Our `_ShowImgObject` (now `_LayerImage`,
+`gs2_client/objects.py:302-343`) stores unknown keys on the record so writes
 round-trip, but an **unset** one still reads `None` → Number 0.0. Lower
 priority than the player/level cases (reading back a never-written showimg
 string is rare), but the same class of bug.
@@ -324,30 +323,30 @@ needs a new wire field, or cannot.
 
 | # | Name | Type | Citation | One-line semantics | Source |
 | ---: | --- | --- | --- | --- | --- |
-| 1 | `level.width`, `level.height` | i RO | table `src/TServerLevelProperties.cpp:107` / `:62`; getters `:43-53` / `:6-16` | `64` for a plain level; on a gmap, the map's segment count `<< 6` | have |
+| 1 | `level.width`, `level.height` | i RO | table `src/TServerLevelProperties.cpp:107` / `:62`, getters `:43-53` / `:6-16` | `64` for a plain level. On a gmap, the map's segment count `<< 6` | have |
 | 2 | `level.name` | s RW | see T1 | lower-cased level filename | have |
 | 3 | `player.levelname` | s RO | `src/TServerPlayerProperties.cpp:181` | current level filename | have |
-| 4 | `testplayer(x,y)`, `level.testnpc(x,y)` | i | `src/TInitStatics.cpp:4278` (body `:3880-3900`); `src/TServerLevelProperties.cpp:263` | index of the player / blocking NPC covering the tile, `-1` on a miss | **already implemented** in `gs1_client.py::_test_at` (`:1415`); simply not listed in `_GS1_FUNCTIONS` (`gs2_client.py:90-92`), so GS2 gets 0.0 |
-| 5 | `level.testsign`, `testitem`, `testbomb`, `testexplo` | i | `src/TServerLevelProperties.cpp:254`, `:245`, `:227`, `:236` | same probe shape for the other level-object kinds (raw-address bodies; signature only) | have (level object lists) |
+| 4 | `testplayer(x,y)`, `level.testnpc(x,y)` | i | `src/TInitStatics.cpp:4278` (body `:3880-3900`), `src/TServerLevelProperties.cpp:263` | index of the player / blocking NPC covering the tile, `-1` on a miss | **Fixed.** `gs1_client/host_functions.py:172-213` `_test_at` implements the probe, and `_GS1_LEVEL_PROBES` now carries `testnpc`/`testplayer`, which `_GS1_FUNCTIONS` unions in (`gs2_client/registry.py:77-85`). Formerly they were missing from that table, so every GS2 spelling read 0.0 — "index 0", a hit on the first NPC, for a probe whose miss value is negative. |
+| 5 | `level.testsign`, `testitem`, `testbomb`, `testexplo` | i | `src/TServerLevelProperties.cpp:254`, `:245`, `:227`, `:236` | same probe shape for the other level-object kinds (raw-address bodies. Signature only) | have (level object lists) |
 | 6 | `player.glovepower` | i RW | `src/TServerPlayerProperties.cpp:366` | glove power | have (`playerglovepower`) |
-| 7 | `player.swimming`, `.onhorse`, `.online` | b RO | `src/TPlayerProperties.cpp:324`, `:261`, `:270` | state flags (raw-address bodies; type only) | have (GS1 `playerswimming` / `playeronhorse` / `playeronline`) |
-| 8 | `player.freezetime` | d RW | table `src/TPlayerProperties.cpp:99`; getter `:11-16`; setter `:18-37` | freeze remaining in **seconds**, and **`-1.0`, not 0, when not frozen** (`DOUBLE_004023f0 = -1.0`, `src/TInitStatics.cpp:1269`). The counter runs at 20 ticks/second (`DOUBLE_004023f8`, `:1264`), so the setter's 600-tick clamp is 30 s (`DOUBLE_00402518`, `:1254`); it quantises with `int(seconds * 20 + 1e-4)`, ignores writes on 2002-era servers, and cancels the action mode | have (`playerfreezetime`) |
-| 9 | `player.hp`, `player.maxhp` | d/i | `src/TPlayerProperties.cpp:135`; `src/TServerPlayerProperties.cpp:582` | `maxhp` shares `fullhearts`' getter (`:585`) | have |
-| 10 | `player.hurt`, `.hurted`, `.hurtdx`, `.hurtdy`, `.hurtpower` | b/b/d/d/d RO | `src/TPlayerProperties.cpp:144`, `:171`, `:153`, `:162`, `:180` | last-hit feedback (raw-address bodies; type only) | partial — `PLO_HURTPLAYER` carries dx/dy/power |
-| 11 | `iscarrying` | b RO | table `src/TInitStatics.cpp:2754`, getter `:2418-2421` | the active player is carrying something | have (GS1 `carrying`) |
+| 7 | `player.swimming`, `.onhorse`, `.online` | b RO | `src/TPlayerProperties.cpp:324`, `:261`, `:270` | state flags (raw-address bodies. Type only) | have (GS1 `playerswimming` / `playeronhorse` / `playeronline`) |
+| 8 | `player.freezetime` | d RW | table `src/TPlayerProperties.cpp:99`, getter `:11-16`, setter `:18-37` | freeze remaining in **seconds**, and **`-1.0`, not 0, when not frozen** (`DOUBLE_004023f0 = -1.0`, `src/TInitStatics.cpp:1269`). The counter runs at 20 ticks/second (`DOUBLE_004023f8`, `:1264`), so the setter's 600-tick clamp is 30 s (`DOUBLE_00402518`, `:1254`). It quantises with `int(seconds * 20 + 1e-4)`, ignores writes on 2002-era servers, and cancels the action mode | have (`playerfreezetime`) |
+| 9 | `player.hp`, `player.maxhp` | d/i | `src/TPlayerProperties.cpp:135`, `src/TServerPlayerProperties.cpp:582` | `maxhp` shares `fullhearts`' getter (`:585`) | have |
+| 10 | `player.hurt`, `.hurted`, `.hurtdx`, `.hurtdy`, `.hurtpower` | b/b/d/d/d RO | `src/TPlayerProperties.cpp:144`, `:171`, `:153`, `:162`, `:180` | last-hit feedback (raw-address bodies. Type only) | partial — `PLO_HURTPLAYER` carries dx/dy/power |
+| 11 | `iscarrying` | b RO | table `src/TInitStatics.cpp:2754`, getter `:2418-2421` | the active player carries something | have (GS1 `carrying`) |
 | 12 | `isonmap` | b RO | table `:2756`, getter `:2428-2431` | the acting player is on a gmap | have |
-| 13 | `levelorgx`, `levelorgy` | d RO | table `:2757` / `:2758`, getters `:2445-2455`, helper `:2433-2443` | **local** x/y of the object the acting NPC is *attached to* (the active player's attach target when the NPC is the player-attached one); `0` when nothing is attached. Not a level origin. | partial (attachment state) |
-| 14 | `selectedweapon` | i RW | table `:2778`, getter `:2657-2660`, setter `:2662-2668` | the active player's weapon index, `-1` if none; the setter is bounds-checked against the weapon array | have (inventory selection) |
+| 13 | `levelorgx`, `levelorgy` | d RO | table `:2757` / `:2758`, getters `:2445-2455`, helper `:2433-2443` | **local** x/y of the acting NPC attachment. For the player-attached NPC, this is the active player's attach target. `0` when nothing has an attachment. Not a level origin. | partial (attachment state) |
+| 14 | `selectedweapon` | i RW | table `:2778`, getter `:2657-2660`, setter `:2662-2668` | the active player's weapon index, `-1` if none. The setter checks bounds against the weapon array | have (inventory selection) |
 | 15 | `selectedsword` | i RW | table `:2777` | selected sword index | have |
 | 16 | `mousebuttons` | i RO | table `:2760`, getter `:2471-2474` | button mask, forced to `0` when the game viewport lacks focus. Also `mousebuttonsglobal` (`:2759`), `rightmousebutton` (`:2766`), `middlemousebutton` (`:2764`), `mousewheeldelta` (`:2767`) and the four `*global` variants | have (pygame) |
 | 17 | `worldx(sx,sy)`, `worldy(sx,sy)` | d | table `:4284` / `:4285`, bodies `:3906-3921` | inverse of `screenx`/`screeny`: floor the argument after adding 1e-4, then `screenToWorldX/Y`. We already implement `screenx`/`screeny`. | have |
 | 18 | `player.zoomfactor` | f RW | table `src/TPlayerProperties.cpp:351`, getter `:39-42`, setter `:44-50` | per-player camera zoom, clamped to a fixed range | have (camera) |
-| 19 | `player.defaultwalkspeed`, `.diagonalwalkspeed` | d RW | `src/TPlayerProperties.cpp:81`, `:90` | movement speeds (raw-address bodies; type only) | have (movement code) |
-| 20 | gani display transform on players **and** NPCs: `rotation`, `zoom`, `stretchx`, `stretchy`, `red`, `green`, `blue`, `alpha`, `mode`, `useowncenter` | f/i RW | `src/TGaniObjectProperties.cpp:199`, `:244`, `:217`, `:226`, `:253`, `:262`, `:271`, `:280`, `:289`, `:235` | per-object render transform and colour/blend; our equivalents exist only for showimg records | have (renderer) |
+| 19 | `player.defaultwalkspeed`, `.diagonalwalkspeed` | d RW | `src/TPlayerProperties.cpp:81`, `:90` | movement speeds (raw-address bodies. Type only) | have (movement code) |
+| 20 | gani display transform on players **and** NPCs: `rotation`, `zoom`, `stretchx`, `stretchy`, `red`, `green`, `blue`, `alpha`, `mode`, `useowncenter` | f/i RW | `src/TGaniObjectProperties.cpp:199`, `:244`, `:217`, `:226`, `:253`, `:262`, `:271`, `:280`, `:289`, `:235` | per-object render transform and colour/blend. Our equivalents exist only for showimg records | have (renderer) |
 
 Runners-up, same tier:
 
-- `getkeycode(name)` (`src/TInitStatics.cpp:4213`, body `:3394-3397`), `keyname(i)` / `keyname2(i)` (`:4229` / `:4230`) — the key-name table is built at `src/TInitStatics.cpp:4825-4829` and searched by `TInput::getKeyCode` (`src/TInput.cpp:310-324`). We have the map; only the lookups are missing.
+- `getkeycode(name)` (`src/TInitStatics.cpp:4213`, body `:3394-3397`), `keyname(i)` / `keyname2(i)` (`:4229` / `:4230`) — code at `src/TInitStatics.cpp:4825-4829` builds the key-name table. `TInput::getKeyCode` searches it (`src/TInput.cpp:310-324`). We have the map. Only the lookups are missing.
 - `findlevel(name)` (`:4206`, body `:3341-3356`) — lower-cased filename match over the loaded maps, then `getLevel`.
 - `findnpcbyid(id)` (`:4207`, body `:3358-3361`), `findani(name)` (`:4205`, body `:3336-3339`).
 - `format2(fmt, paramArray)` (`:2307`, body `:2203-2209`) — printf-style formatting with an array of parameters.
@@ -355,10 +354,10 @@ Runners-up, same tier:
 - `strcmp(a,b)` (`:2317`, body `:2267-2270`) — three-way, **case-insensitive**. Do not implement it as a case-sensitive `strcmp`.
 - `getnearestplayer(x,y)` (`:2293`) — the index form of `findnearestplayer`.
 - `trace(s)` (`:2292`) — registered as an alias of `echo`, same function pointer.
-- `aindexof(value, array)` (`:2282`, body `:1841-1851`) — index of a **number** in an array; returns `0` (not `-1`) when the array is null.
-- `randomstring(csv)` (`:2316`, body `:2251-2265`) — picks a random CSV field, **except** that a string ending in `,` is returned with its last character removed instead.
+- `aindexof(value, array)` (`:2282`, body `:1841-1851`) — index of a **number** in an array. Returns `0` (not `-1`) when the array is null.
+- `randomstring(csv)` (`:2316`, body `:2251-2265`) — picks a random CSV field. As an exception, it removes the last character from a string ending in `,` and returns that string instead.
 - `hasfunction(name)` on any object (`src/TGraalVarProperties.cpp:341`), `getfunctions()` (`:332`).
-- `level.findareanpcs(x,y,w,h)` (`src/TServerLevelProperties.cpp:128`), `level.getmappartfile(x,y)` (`:119`) — raw-address bodies; signature only.
+- `level.findareanpcs(x,y,w,h)` (`src/TServerLevelProperties.cpp:128`), `level.getmappartfile(x,y)` (`:119`) — raw-address bodies. Signature only.
 - `player.attachedtoobject` (`src/TServerPlayerProperties.cpp:294`, RW object), `.attached` (`:285`), `attachid` / `attachtype` (`src/TGaniObjectProperties.cpp:73`, `:82`) — we can *set* attachment (`attachplayertoobj`) but not read it back.
 - NPC geometry and layering: `width` / `height` (`src/TServerNPCProperties.cpp:1233`, `:1044`), `layer` (`:1116`), `isblocking` (`:1098`), `isblockingprojectiles` (`:1107`), `actionplayer` (`:1026`), `npcsindex` (`:1125`), and the six `peltwith*` flags (`:1134`-`:1179`).
 - `player.isinvincible` / `isinvincible2` (`src/TPlayerProperties.cpp:198`, `:207`), `player.paused` (`:279`), `player.reading` (`:288`), `player.isjumping` (`:126`), `player.map` (`:243`), `player.isobserver` (`:225`, body `src/TPlayerProperties.cpp:7-10`: true only in ghost mode 2).
@@ -392,7 +391,7 @@ Runners-up, same tier:
   `setsoundpitch`, `setsoundpitchbynote`, `musicpos`, `musiclen`,
   `soundoffscreendistance` — `src/sound/TSounds.cpp:222-271`.
 - `level.putbomb2` (`src/TServerLevelProperties.cpp:146`) — the four-argument
-  form; we answer `putbomb` only.
+  form. We answer `putbomb` only.
 - `parsejson(obj, text)` — `src/TGraalVarProperties.cpp:613`.
 - `chessrating` helpers `updateratings`, `updateratingdeviation` —
   `src/TInitStatics.cpp:6090-6091`.
@@ -402,10 +401,10 @@ Runners-up, same tier:
 The `src/gui/` tree registers **189 distinct property names** and **123
 distinct method names** across 24 control classes plus `GuiControlProfile`. We
 name 36 of the 123 methods
-(`pyReborn/pyreborn/game/gs2_gui.py`, the nine `_METHOD_NAMES` sets).
+(`pyReborn/pyreborn/game/gs2_gui/`, the `_METHOD_NAMES` sets).
 `GuiControlProperties::propDefs` alone is 55 entries
-(`src/gui/GuiControlProperties.cpp:895` is the constructor; the table precedes
-it), of which 13 are string-typed: `bounds`, `clientextent`, `color`, `cursor`,
+(`src/gui/GuiControlProperties.cpp:895` is the constructor. The table precedes
+it), of which 13 have string types: `bounds`, `clientextent`, `color`, `cursor`,
 `extent`, `hint`, `horizsizing`, `minextent`, `minsize`, `position`,
 `rotationcenter`, `style`, `vertsizing` — each a T1 candidate on any control
 that never gets it written. A full GUI audit is out of scope for this pass and
@@ -415,12 +414,12 @@ should be its own wave.
 
 ## T4 — not implementable client-side
 
-These are registered names an implementer will otherwise waste time on.
+The reference registers these names, which an implementer will otherwise waste time on.
 
 - **`TClient::funcDefs`, 85 entries** (`src/TClient.cpp:4586-4670`). Every one
   but `triggerserver` is a `tclient_*` packet-injection entry point
   (`tclient_setnpcprops`, `tclient_setlevelboard`, `tclient_addbomb`, …). They
-  exist so a *scripted network layer* can feed the client decoded packets; they
+  exist so a *scripted network layer* can feed the client decoded packets. They
   are not a gameplay surface, and pyReborn's decoder occupies that role.
 - **`main_android_funcDefs`, 44 entries** (`src/TInitStatics.cpp:5977-6020`):
   Tapjoy, Google Play billing, Facebook, Distimo, Fabzat, TrialPay, Android
@@ -452,69 +451,99 @@ These are registered names an implementer will otherwise waste time on.
 
 ## Things our implementation gets actively wrong
 
-Each verified against the oracle table entry, not inferred.
+Each verified against the oracle table entry, not inferred. All five landed
+(see Status above); this section keeps the historical bug description because
+it explains why the fix looks the way it does.
 
-1. **`player.nick` is writable for us, read-only in the reference.**
+1. **`player.nick` was writable for us, read-only in the reference. Fixed.**
    `TPlayerProperties`'s own entry registers `nick` with a getter and a
    **`nullptr` setter** (`src/TPlayerProperties.cpp:252-258`), and the child
    table replaces the parent's read/write `nick`
    (`src/TServerPlayerProperties.cpp:609`) per
    `TProperties::compileProperties` (`src/TProperties.cpp:117-129`). So on the
-   **local** player a write is a no-op; on a **remote** `TServerPlayer` it is
-   not. Our `_PlayerObject.set` writes through `_PLAYER_MEMBER_ATTR` in both
-   cases (`gs2_client.py:562-572`).
+   **local** player a write was a no-op; on a **remote** `TServerPlayer` it was
+   not. Our `_PlayerObject.set` used to write through `_PLAYER_MEMBER_ATTR` in
+   both cases. It now checks `_PLAYER_READONLY` (`{"nick", "maxhp",
+   "levelname"}`, `gs2_client/registry.py:143`) first and no-ops the write on
+   the local player before it reaches `_PLAYER_MEMBER_ATTR`
+   (`gs2_client/objects_player.py:509-513`). Remote players are plain
+   `GS2Object`s (`gs2_client/runtime.py:262-279`,
+   `ClientGS2.script_player_object`), so a write to one still lands,
+   preserving the reference's local/remote asymmetry.
 
-2. **`client` / `clientr` / `serverr` are the executing PLAYER object in the
-   reference, not a standalone flag store.**
+2. **`client` / `clientr` / `serverr` were a standalone flag store for us;
+   the reference resolves all three to the executing PLAYER object. Fixed.**
    `resolveObjectMember` binds all three (and `player`, `playero`) to
-   `executingplayer` (`src/TScriptMachine.cpp:5123-5130`); flags are that
+   `executingplayer` (`src/TScriptMachine.cpp:5123-5130`). Flags are that
    object's dynamic vars, so `client.<anything the player class registers>`
-   resolves against the player property table. Our `_obj_flag_scope`
-   (`gs2_client.py:1060-1063`) returns a dedicated flag object, so
-   `clientr.x`, `client.nick`, `serverr.account` and friends read 0.0 instead
-   of the player's value. Flags themselves behave; property reads through the
-   alias do not.
+   resolves against the player property table. Our `_obj_flag_scope` used to
+   return a dedicated flag object with no player fallback, so `clientr.x`,
+   `client.nick`, `serverr.account` and friends read 0.0 instead of the
+   player's value. `_FlagScopeObject.get` now falls back to a `player` object
+   handed in by `flag_scope_object()` once the flag store says it does not
+   have the name (`gs2_client/objects_player.py:63-133`,
+   `gs2_client/runtime.py:1164-1186`). Only reads take the fallback — a write
+   through `client`/`clientr`/`serverr` still lands as a flag write, and
+   `server` (which the reference does not alias to the player) gets no
+   fallback at all.
 
-3. **`savelines`, `sortascending`, `sortdescending`, `settimer` are registered
-   on `TGraalVar` — i.e. on *every* object — but we answer them only in a
-   narrower form.** `savelines` / `sortascending` / `sortdescending` live in
-   `_GS2_LIST_METHODS`, gated on `isinstance(obj, list)`
-   (`gs2_client.py:1275-1278`); `settimer` lives in `_GS2_BARE`, reachable
+3. **The reference registers `savelines`, `sortascending`, `sortdescending`, `settimer`
+   on `TGraalVar` — i.e. on *every* object — but we used to answer them only
+   in a narrower form. Fixed on the host side (the VM-side `addarray`/
+   `sortbyvalue` widening is covered in Status above).** `savelines` /
+   `sortascending` / `sortdescending` used to live in `_GS2_LIST_METHODS`,
+   gated on `isinstance(obj, list)`. `settimer` lived in `_GS2_BARE`, reachable
    only as a bare call. `this.savelines("f.txt", 0)` and `this.settimer(1)` are
-   valid official spellings (`src/TGraalVarProperties.cpp:494`, `:548`) and
-   return 0.0 for us. `sortbyvalue` is likewise a `TGraalVar` method
-   (`:575`) that our VM implements only for Python lists
-   (`vm.py:1725-1746`).
+   valid official spellings (`src/TGraalVarProperties.cpp:494`, `:548`) that
+   used to return 0.0 for us. All four now live in `_GS2_OBJ_METHODS`, which
+   the host dispatches for any object regardless of type
+   (`gs2_client/host_objmethods.py:43-59` for `sortascending`/
+   `sortdescending`/`savelines`, `:91-96` for `settimer`); the array-only
+   check moved inside each handler instead of gating dispatch, so a
+   non-array object is now *answered* (with 0.0) rather than falling through
+   unhandled. `sortbyvalue` is likewise a `TGraalVar` method (`:575`) that our
+   VM now implements on its own root object surface rather than only for
+   Python lists.
 
-4. **`level` is an empty object.** `ClientGS2.__init__` does
-   `self.level_object = GS2Object(name="level")` (`gs2_client.py:2363`) and
-   nothing ever populates it. All 14 official `level` properties read 0.0,
-   including the string-typed `name`. The 14 is the **whole chain**, not one
-   table: `TServerLevelProperties::propDefs` is six entries — `height`,
+4. **`level` was an empty object. Fixed.** `ClientGS2.__init__` used to do
+   `self.level_object = GS2Object(name="level")` and nothing ever populated
+   it. All 14 official `level` properties read 0.0, including the
+   string-typed `name`. The 14 is the **whole chain**, not one table:
+   `TServerLevelProperties::propDefs` is six entries — `height`,
    `isnopkzone`, `issparringzone`, `nopkzone`, `tilelayercount`, `width`
    (`src/TServerLevelProperties.cpp:60-115`) — and `TGraalVarProperties::
    propDefs` adds eight more — `name`, `initialized`, `ispaused`,
    `joinedclasses`, `maxlooplimit`, `scripterrors`,
    `scriptlogmissingfunctions`, `timeout` (`src/TGraalVarProperties.cpp:
-   625-698`). `level`'s *methods* mostly work by
-   accident, because the bare-name forms (`putbomb`, `tiletype`, …) are routed
-   through the GS1 host — but the property surface is entirely absent.
+   625-698`). `level`'s *methods* mostly worked by
+   accident, because the code routes the bare-name forms (`putbomb`, `tiletype`, …)
+   through the GS1 host — but the property surface used to be entirely
+   absent. `ClientGS2.__init__` now does `self.level_object =
+   _LevelObject(self)` (`gs2_client/runtime.py:40`), a real object that
+   answers `name`, `width`, `height`, `tilelayercount`,
+   `joinedclasses`/`scripterrors` (empty arrays) and the remaining
+   numeric/boolean entries from the same two tables with `0.0`
+   (`gs2_client/objects.py:370-452`).
 
-5. **`player.level` is ours, not the reference's.** No property named `level`
-   exists on any player class; the official spelling is `levelname` (string).
+5. **`player.level` was ours, not the reference's, and the official
+   `levelname` spelling used to read 0.0. Fixed.** No property named `level`
+   exists on any player class. The official spelling is `levelname` (string).
    The reference registers `level` only on `TLevelObject`
    (`src/TLevelObjectProperties.cpp:6`, object-typed), which players are not.
-   Our `player.level` (`gs2_client.py:513-529`) is a deliberate extension that
-   fixed a real bug; keep it, but add `levelname` as the *official* name, since
-   scripts written against the reference use that one and today get 0.0.
+   Our `player.level` (`gs2_client/objects_player.py:397-410`) is a
+   deliberate extension that fixed a real bug and stays. `player.levelname`
+   now answers too, returning the same value as `player.level`
+   (`gs2_client/objects_player.py:431-439`), so content written against the
+   reference's spelling no longer reads 0.0.
 
 ### Deliberate divergences (verified, not bugs)
 
 - `graalversion` returns `6.15401` unconditionally in the reference
   (`src/TInitStatics.cpp:2331-2334`). We return the version negotiated at
-  login, on purpose (`pyReborn/pyreborn/gs1_client.py:445-454`).
+  login, on purpose (`pyReborn/pyreborn/gs1_client/host_builtins.py:351-360`).
 - `allstats` returns `0x7ff` = 2047 (`src/TInitStatics.cpp:2340`). Our
-  hard-coded `2047.0` (`gs2_client.py:1164-1171`) is now oracle-confirmed. The
+  hard-coded `2047.0` (`gs2_client/host_objects.py:128-134`) is now
+  oracle-confirmed. The
   neighbouring constants are `allfeatures` = `0xffff` (`:2336`) and
   `allrenderobjecttypes` = `0x3f` (`:2338`), both unanswered.
 - `player.x` / `player.y` are world-frame in the reference too:
@@ -532,10 +561,11 @@ Each verified against the oracle table entry, not inferred.
    `""`-or-better answer. Highest value per line of code in this document, and
    the only tier where *not* implementing is worse than implementing wrongly.
 2. **Populate `level`.** `name`, `width`, `height` from data the client
-   already has; the rest can follow.
-3. **Route the probes that already exist.** Adding `testnpc`, `testplayer`
-   (and the sign/item/bomb/explosion probes once written) to `_GS1_FUNCTIONS`
-   is a one-line change per name.
+   already has. The rest can follow.
+3. **Route the probes that already exist.** Done for `testnpc` and
+   `testplayer`, which now sit in `_GS1_LEVEL_PROBES`. The sign, item, bomb and
+   explosion probes still need writing, and each is a one-line change per name
+   once it exists.
 4. The rest of T2, then T3. T4 should be left registered-but-inert, with the
    existing `stubbed` mechanism, so `builtins_missing` stops reporting them.
 
@@ -553,7 +583,7 @@ what we answer. It found things the top-down sweep structurally could not.
 
 T4 lists `TOptions` / `TFontOptions` / `TTranslations` as "not implementable
 client-side". That is true of the *persistence* and false of the *values*:
-every one of these is given a default in its `*_initStaticVars()`, and scripts
+each `*_initStaticVars()` gives these names a default, and scripts
 read the default. Answering `""` is as wrong as answering nothing.
 
 | Name | Type | Reference default | Citation |
@@ -590,11 +620,11 @@ zoom = $pref::graal::defaultfontsize/24;
 
 and the adjacent line `:93` draws every nearby player's nickname with
 `showtext(200+i, pl.x+1.5, pl.y+3, $pref::graal::defaultfontname, "bc",
-pl.nick)` at that zoom. Unanswered, `zoom` is `0` and the labels never render;
+pl.nick)` at that zoom. Unanswered, `zoom` is `0` and the labels never render.
 answered, the ratio is exactly `1`. The same two lines also want
 `defaultfontname` to be `"Arial"`, not `""`.
 
-**Generalised lesson:** the T1 criterion should be read as "any registered
+**Generalised lesson:** read the T1 criterion as "any registered
 name we leave unanswered is a latent wrong answer", with the string case being
 merely the one that is *provably* always wrong. A numeric or boolean name with
 a non-zero/non-false reference default is the same bug and is harder to see.
@@ -606,13 +636,13 @@ Login content branches on `defaultguistyle` being *empty*, e.g.
 `visible = (isLoginServer() && $pref::Video::defaultguistyle == "" ||
 style.pos("toon") >= 0)`. We answer the reference's seed
 (`"toon_small.wba"`), which is what a fresh install with no options file has,
-so those branches take the "a style is set" path. If a future capture shows
+so those branches take the "a style has a value" path. If a future capture shows
 the real client taking the other path, this is the value to revisit first.
 
 ### Where the extraction method should change
 
 Any future wave over this surface should run **both** directions and diff
-them: the tables say what *can* be asked, the corpora say what *is* asked.
+them: the tables say what users *can* ask, the corpora say what users *do* ask.
 Rank the work by distinct-script reference count, not by table position —
 `$pref::video::defaultguistyle` (17 scripts) and the `GuiTextListCtrl` row
 API (up to 12 scripts per name) both outrank most of T2, and neither was

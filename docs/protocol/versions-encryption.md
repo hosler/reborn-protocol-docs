@@ -1,30 +1,29 @@
 # Client Versions & Encryption Generation
 
-This page answers two questions that are easy to get backwards: *"what version string does
-a given client send?"* and *"which encryption generation does the server pick?"* The second
-question's answer surprises most implementers — see [The Critical Rule](#the-critical-rule-pltype-not-version-string)
-below.
+This page answers two questions: *"what version string does a given client send?"* and
+*"which encryption generation does the server select?"* For the second answer, see
+[The Critical Rule](#the-critical-rule-pltype-not-version-string) below.
 
 > For the GEN_5 cipher internals (LCG, XOR, iterator start values), see
 > [Encryption and Packet Processing](encryption.md). This page covers the version table,
-> generation *selection*, and per-generation wire framing — it does not re-derive the GEN_5
+> generation *selection*, and per-generation wire framing. It does not rederive the GEN_5
 > algorithm.
 
 **Sources**: `GServer-v2/build/dependencies/fc/gs2lib-src/{include,src}/IUtil.{h,cpp}`,
 `include/CEncryption.h`, `src/CEncryption.cpp`, `server/include/network/IPacketHandler.h`,
 `server/src/player/PlayerClient.cpp`, `server/src/player/Player.cpp`. **Not** the vendored
-`GServer-v2/dependencies/gs2lib/` copy — see the sources-of-truth callout in
+`GServer-v2/dependencies/gs2lib/` copy. See the sources-of-truth callout in
 [GServer Behavior Reference](gserver-behavior.md#sources-of-truth).
 
 ## Full Client Version Table
 
-The `CLVER_*` enum (`IUtil.h:150-218`) is a plain sequential enum — no explicit numeric
-values are assigned in the header. Each entry has two independent strings, both looked up
-by array index in `IUtil.cpp`:
+The `CLVER_*` enum (`IUtil.h:150-218`) is a plain sequential enum. The header does not
+assign explicit numeric values. Each entry has two independent strings. `IUtil.cpp` looks
+up both strings by array index:
 
-- **`clientVersions[]`** (`IUtil.cpp:50-123`) — the compact identifier the *client* actually
+- **`clientVersions[]`** (`IUtil.cpp:50-123`) is the compact identifier that the *client*
   sends on the wire as its 8-byte version field (e.g. `"GNW03014"`, `"G3D0311C"`).
-- **`clientVersionString[]`** (`IUtil.cpp:142-215`) — the human-readable display version
+- **`clientVersionString[]`** (`IUtil.cpp:142-215`) is the human-readable display version
   (e.g. `"2.22"`, `"6.037"`).
 
 | CLVER enum | Display version | Wire identifier |
@@ -95,19 +94,18 @@ by array index in `IUtil.cpp`:
 | *(no enum symbol — trailing array slot, comment `NSVER_LNXMAD`)* | `[NPC-Server] lnxmad` | `LNX00001` |
 
 > The three NPC-server rows are appended to the *same* `clientVersions[]`/`clientVersionString[]`
-> arrays as extra trailing slots, but there is no `NSVER_*`-prefixed enumerator declared
-> anywhere in the headers — the array comments (`IUtil.cpp:119-121,211-213`) are the only
-> naming that exists. Don't invent an `NSVER_*` enum in a from-scratch implementation; just
-> match by string.
+> arrays as extra trailing slots. The headers do not declare an `NSVER_*`-prefixed
+> enumerator. Only the array comments (`IUtil.cpp:119-121,211-213`) provide these names.
+> Do not add an `NSVER_*` enum to a new implementation. Match the string.
 
 Lookup is a linear string scan: `getVersionID()` (`IUtil.cpp:234-244`) matches the wire
-identifier against `clientVersions[]`; `getVersionString()` (`IUtil.cpp:246-277`) resolves
+identifier against `clientVersions[]`. `getVersionString()` (`IUtil.cpp:246-277`) resolves
 the display string and dispatches between the client/RC/NC arrays by `PLTYPE_*` bitmask.
 
 ### RC versions
 
 Separate dedicated enum `RCVER_*` (`IUtil.h:227-233`) with its own parallel arrays
-(`rcVersions[]`/`rcVersionString[]`, `IUtil.cpp:133-140,225-232`) — **not** part of the
+(`rcVersions[]`/`rcVersionString[]`, `IUtil.cpp:133-140,225-232`). It is **not** part of the
 `CLVER_*` index space:
 
 | RCVER enum | Display version | Wire identifier |
@@ -129,19 +127,18 @@ Separate dedicated enum `NCVER_*` (`IUtil.h:220-225`), own arrays (`ncVersions[]
 | `NCVER_2_1` | 2.1 | `NCL21075` |
 
 See [RC & NC Protocols](rc-nc-protocols.md) for the login-type-byte handshake that gets a
-connection classified as RC vs NC vs game client in the first place.
+the server uses to classify a connection as an RC, NC, or game client.
 
 ## The Critical Rule: PLTYPE, Not Version String
 
-**The encryption generation is selected by the PLTYPE login-type byte, before the version
-string is even fully parsed — not by which CLVER the client turns out to be.** This is the
-single most common mistake in from-scratch implementations: assuming "2.22 = GEN_5, 6.037 =
-GEN_5" is a version fact. It isn't; it's a consequence of which login type each client build
-happens to send.
+**The PLTYPE login-type byte selects the encryption generation before the server fully
+parses the version string. The resulting CLVER does not select it.** New implementations
+often incorrectly treat "2.22 = GEN_5, 6.037 = GEN_5" as a version rule. Instead, each
+client build sends a login type that causes this result.
 
 ### PLTYPE byte values
 
-From `IUtil.h:344-360` (note: **not** `IEnums.h` — that header has no `PLTYPE_*` symbols):
+From `IEnums.h:344-360` (not `IUtil.h`, which has no `PLTYPE_*` symbols):
 
 | Constant | Value | Bit |
 |---|---|---|
@@ -156,7 +153,7 @@ From `IUtil.h:344-360` (note: **not** `IEnums.h` — that header has no `PLTYPE_
 | `PLTYPE_EXTERNAL` | 128 | `1<<7` (comment: "IRC client?") |
 | `PLTYPE_WEB` | 256 | `1<<8` |
 
-The wire byte is **not** the flag value directly — it's the *shift amount*. `PlayerClient::
+The wire byte is **not** the flag value. It is the *shift amount*. `PlayerClient::
 handleLogin` (`PlayerClient.cpp:314`) computes:
 
 ```cpp
@@ -201,11 +198,11 @@ switch (m_type)
 
 ### The GEN_2 → GEN_3 downgrade
 
-`PLTYPE_CLIENT` gets GEN_2 unconditionally at the switch above, but immediately afterward
+The switch above always gives `PLTYPE_CLIENT` GEN_2. Immediately after the switch,
 (`PlayerClient.cpp:343-356`) the server reads an 8-byte version identifier and looks it up
 with `getVersionID()`. If that identifier is **not** one of the *old-style* SERV/GNW-prefixed
 strings in `clientVersions[]` (i.e. it resolves to `CLVER_UNKNOWN`), the server concludes
-this is actually a 1.41-style client that also sends an encryption key, re-sets the gen to
+the server identifies a 1.41-style client that also sends an encryption key. It resets the generation to
 GEN_3, and rewinds the packet read cursor by one byte:
 
 ```cpp
@@ -223,22 +220,21 @@ if (m_type == PLTYPE_CLIENT)
 }
 ```
 
-The rewind matters: it lets the generic "newer clients" block (below) re-parse starting one
-byte earlier, so the byte that would have been the start of a second version-string attempt
-is instead read as the encryption-key byte.
+The rewind lets the generic "newer clients" block below parse the data again from one byte
+earlier. The server then reads the potential second version-string byte as the encryption-key byte.
 
 ## Login Packet Layout
 
 Field order as read in `handleLogin` (`PlayerClient.cpp:303-378`):
 
-1. **Login-type byte** — `GCHAR`, shifted into `PLTYPE_*` as described above.
+1. **Login-type byte**. The server reads a `GCHAR` and shifts it into `PLTYPE_*` as described above.
 2. **(PLTYPE_CLIENT only)** 8-byte version identifier, looked up via `getVersionID()`. May
    trigger the GEN_3 downgrade + 1-byte rewind described above.
-3. **Encryption-key byte** — read **only when `m_versionId` is still `CLVER_UNKNOWN`** at
+3. **Encryption-key byte**. The server reads it **only when `m_versionId` is still `CLVER_UNKNOWN`** at
    this point (`PlayerClient.cpp:359-361`). This covers `PLTYPE_CLIENT2`/`CLIENT3`/`WEB`
    unconditionally (they skip step 2 entirely, so `m_versionId` is still unknown), plus the
    rewound 1.41-style `PLTYPE_CLIENT` case. In other words, for game-client logins: **the
-   key byte is present whenever gen ends up >= GEN_3** — GEN_1/GEN_2 logins never send it;
+   key byte is present whenever gen ends up >= GEN_3**. GEN_1 and GEN_2 logins never send it.
    **GEN_3, GEN_4, and GEN_5 all do**. Sending the key byte on an unrecognized version
    string is precisely how a 1.41-style client gets *detected* as GEN_3: unknown 8-char
    string at the version slot → rewind → re-read that position as key + version.
@@ -257,9 +253,9 @@ Field order as read in `handleLogin` (`PlayerClient.cpp:303-378`):
    ever GEN_2 (no key) or GEN_5 (key); no GEN_3 NC/RC clients exist.
 4. **8-byte version identifier** (again, but via `getVersionIDByVersion()` this time — which
    dispatches to `getVersionID()`/`getNCVersionID()`/`getRCVersionID()` by connection type).
-5. **Account name** — 1-byte unsigned length (`GUCHAR`) + that many raw chars.
-6. **Password** — same length-prefixed pattern.
-7. **Identity string** — `readString("")` (reads to end of packet). Comma-delimited:
+5. **Account name**. A 1-byte unsigned length (`GUCHAR`) precedes that number of raw chars.
+6. **Password**. It uses the same length-prefixed pattern.
+7. **Identity string**. `readString("")` reads to the end of the packet. The value is comma-delimited:
    `{platform},{mobile 'dc:id2'},{md5:harddisk-id},{md5:network-id},{uname release/version},{android-id}`.
    Only the platform token is actually consumed by the server.
 
@@ -271,7 +267,7 @@ Two layers are involved: an **outer bundle frame** (always present, gen-independ
 ### Outer framing (all generations)
 
 `IPacketHandler::retrievePacketBundle` (`IPacketHandler.h:239-248`) always reads a `uint16`
-bundle-size prefix before anything gen-specific happens — this 2-byte length prefix is
+bundle-size prefix before any generation-specific operation. This 2-byte length prefix is
 universal, not GEN_2-specific.
 
 ### Payload transform — `IPacketHandler::processPacketBundle` (`IPacketHandler.h:250-289`)
@@ -287,8 +283,8 @@ universal, not GEN_2-specific.
 
 ### GEN_3's "single byte insertion", precisely
 
-`CEncryption.cpp` — encrypt side (`:98-107`) inserts a **literal `)` character (`0x29`)** at
-a pseudo-random offset derived from the LCG iterator; decrypt (`:49-57`) removes one byte at
+The encrypt code in `CEncryption.cpp` (`:98-107`) inserts a **literal `)` character (`0x29`)** at
+a pseudo-random offset from the LCG iterator. The decrypt code (`:49-57`) removes one byte at
 that same computed offset:
 
 ```cpp
@@ -305,7 +301,7 @@ return CString() << pBuf.subString(0, pos) << ")" << pBuf.subString(pos);
 
 **GEN_3 is direction-asymmetric.** The insertion cipher exists only on the **client →
 server** direction. The server's *outgoing* GEN_3 path (`CFileQueue.cpp:175-196`) shares
-its `case` label with GEN_2 — zlib-compress, length-prefix, and **never calls
+its `case` label with GEN_2. It uses zlib compression and a length prefix, and **never calls
 `encrypt()`**:
 
 ```cpp
@@ -321,14 +317,14 @@ So a GEN_3 *client implementation* must:
 - **Sending**: per packet (without its trailing `\n`), advance the LCG once
   (`iterator = iterator*0x8088405 + key`, seed `0x04A80B38`), insert one filler byte at
   `pos = (iterator & 0xFFFF) % (len + 1)` — the modulus is over the **post-insertion**
-  length, since the server computes the removal offset over the length it *receives* —
+  length because the server computes the removal offset over the length it *receives*.
   then re-append `\n`, join packets, zlib the bundle, length-prefix. The filler must not
-  be `\n` (it would split the server's newline framing); use `)` like the reference
+  be `\n` because it would split the server's newline framing. Use `)` like the reference
   encryptor.
 - **Receiving**: plain zlib bundles. No decryption at all.
 
 This exact behavior is implemented and live-verified in
-`reborn-protocol/reborn_protocol/codec.py` (`Gen3Codec`) — probed against GServer with a
+`reborn-protocol/reborn_protocol/codec.py` (`Gen3Codec`). Tests probed it against GServer with a
 real 1.411 login (`game_tester/version_probe.py`).
 
 ### GEN_4, both directions
@@ -337,13 +333,13 @@ Symmetric, per `CFileQueue.cpp:198-219` (server send) and `IPacketHandler.h:268-
 (server receive): bundle → **bz2 compress** → partial XOR with the GEN_5 LCG keystream
 (iterator seed `0x4A80B38`, `limitFromType(COMPRESS_BZ2)` = 4 iterations = first **16
 bytes**, limit re-armed per bundle) → `uint16` length prefix. **No compression-type byte**
-in either direction — GEN_4 is always bz2. Implemented and live-verified as `Gen4Codec` in
+in either direction. GEN_4 always uses bz2. `Gen4Codec` implements this behavior in
 `reborn-protocol/reborn_protocol/codec.py` (probed with real 2.17/2.21 logins).
 
 ### XOR limits (GEN_4/GEN_5, shared implementation)
 
 Same LCG-driven 4-byte XOR keystream as GEN_5 (see [Encryption](encryption.md) for the
-detailed algorithm); the per-compression-type block limits from `CEncryption.cpp:145`
+detailed algorithm). The per-compression-type block limits come from `CEncryption.cpp:145`
 (`limitFromType`, table `{0x02,0x0C, 0x04,0x04, 0x06,0x04}`):
 
 | Compression type | Byte value | XOR limit (4-byte blocks) | Bytes encrypted |
@@ -372,7 +368,7 @@ A modern list-server exchange is:
 Reborn retains a plain-zlib first-response fallback because an implementation
 may queue output before processing the initialization packet: at connection
 creation the open reference server's output queue and input codec are still
-GEN_2. The recorded production session does not take this fallback; accepting
+GEN_2. The recorded production session does not use this fallback. Support for
 it is interoperability with the open implementation, not evidence that
 production sends a GEN_2 first response.
 
@@ -381,7 +377,7 @@ List-server response text uses **cp1252**, whereas game-session text uses
 single quotation mark in cp1252).
 
 The version field is parsed and stored but does not select the returned server
-set. Client type does: exactly `newmain` selects `Version3`; every other value
+set. The client type selects it. Exactly `newmain` selects `Version3`. Every other value
 selects `AllServers` (`graal-serverlist/server/src/PlayerConnection.cpp:315-322`).
 `sendServerList` filters by that bucket and suppresses an `offline`-named entry
 only outside `AllServers`

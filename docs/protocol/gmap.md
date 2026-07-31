@@ -1,12 +1,12 @@
 # GMAP Coordinate System
 
-A **GMAP** (`.gmap` file) stitches a grid of individual 64×64 levels into one
-seamless overworld. Coordinate-frame confusion is especially dangerous here:
+A **GMAP** (`.gmap` file) joins a grid of individual 64×64 levels into one
+overworld. Coordinate-frame confusion can cause serious errors:
 a level warp and an entity property can describe the same position in different
 frames.
 
-The shared `reborn_protocol.coords` module owns this vocabulary and its
-conversions. A segment is always `LEVEL_SIZE = 64` tiles on each axis and its
+The shared `reborn_protocol.coords` module defines these terms and conversions. A segment
+is always `LEVEL_SIZE = 64` tiles on each axis. Its
 board contains `LEVEL_TILE_COUNT = 4096` tiles.
 
 ## Coordinate Frames
@@ -15,7 +15,7 @@ board contains `LEVEL_TILE_COUNT = 4096` tiles.
 |-------|-----------------|---------|
 | **Local** | tiles, `0 <= x,y < 64` | Position inside one 64×64 segment |
 | **Segment (grid)** | integer `(grid_x, grid_y)` | Which GMAP cell owns a world position |
-| **World** | unbounded tiles | Seamless position: `local + grid * 64` |
+| **World** | unbounded tiles | Continuous position: `local + grid * 64` |
 | **Level-array index** | integer `0..4095` | Row-major board offset: `local_y * 64 + local_x` |
 | **Screen** | pixels | Render/input position after the camera transform |
 
@@ -31,15 +31,15 @@ simply `x` and `y`.
 | `PLO_PLAYERWARP2` X/Y | **Local**, plus separate `gmap_x`/`gmap_y` segment coordinates |
 | Player `GMAPLEVELX` (43), `GMAPLEVELY` (44) | **Segment (grid)** |
 | NPC `GMAPLEVELX` (41), `GMAPLEVELY` (42) | **Segment (grid)** |
-| Player/NPC X/Y or X2/Y2 entity properties | Position coordinates whose frame is server/context dependent: normally **local**, but X2/Y2 may legitimately be **world** on GMAP streams |
+| Player/NPC X/Y or X2/Y2 entity properties | Position coordinates whose frame is server/context dependent. Normally **local**, but X2/Y2 may legitimately be **world** on GMAP streams |
 | Level links, chests, signs, baddies, and board positions | **Local** |
 
 The trap is therefore not the numeric encoding alone. A level-warp coordinate
 must remain local even when the client stores the player in world coordinates,
 while an entity X2/Y2 property at or above 64 may already be a world coordinate.
-Keep accompanying segment properties and packet context until normalization;
-blindly adding the current segment origin can double-offset a world property.
-The Reborn client performs this normalization in the
+Keep accompanying segment properties and packet context until normalization.
+Blindly adding the current segment origin can double-offset a world property.
+The Reborn client normalizes this in the
 `handle_player_props` and `handle_npc_props` handlers.
 
 ## World, Segment, and Local Conversion
@@ -52,8 +52,8 @@ segment = floor(world / 64)
 local   = world % 64
 ```
 
-These are exposed as `local_to_world`, `segment_index`/`segment_at`, and
-`local_coord`/`world_to_local` in `reborn_protocol.coords`.
+`reborn_protocol.coords` exposes these as `local_to_world`, `segment_index`/`segment_at`, and
+`local_coord`/`world_to_local`.
 
 ### Negative coordinates: floor, never truncation
 
@@ -63,8 +63,8 @@ behave as follows:
 | Spelling | Result for `world = -1` | Correct? |
 |----------|-------------------------|----------|
 | `math.floor(world / 64)` | `-1` | Yes |
-| `world // 64` | `-1` | Yes; agrees with `floor` on wire coordinates |
-| `int(world / 64)` | `0` | No; truncates toward zero |
+| `world // 64` | `-1` | Yes, agrees with `floor` on wire coordinates |
+| `int(world / 64)` | `0` | No, truncates toward zero |
 
 `int(world / 64)` disagrees for negative, non-boundary coordinates and selects
 the segment to the right or below the real one. This is an observable segment,
@@ -93,8 +93,8 @@ outside the promised interval.
 Real wire coordinates cannot reach this case: position properties are multiples
 of 1/16 tile. Those values are exact binary fractions, so the normal
 world/local round trip is exact. `local_coord` preserves Python's ordinary `%`
-behavior rather than adding an unreachable special case; the limitation is
-pinned by `test_local_coord_float_artifact_near_zero`.
+behavior rather than adding an unreachable special case. `test_local_coord_float_artifact_near_zero`
+pins the limitation.
 
 ## Level-Array Index
 
@@ -150,15 +150,15 @@ property to an integer tile before selecting its segment.
 
 Track these states separately:
 
-- **GMAP loaded** — the grid is parsed; this may remain true inside a house,
+- **GMAP loaded**: the client has parsed the grid. This may remain true inside a house,
   cave, or dungeon reached from the GMAP.
-- **In a grid segment now** — the current level is one of that grid's segment
+- **In a grid segment now**: the current level is one of that grid's segment
   files.
 
 Coordinate normalization, perimeter clamping, and edge-link filtering must key
 off the second state. The Reborn client exposes it as `Client.in_gmap_segment`.
 When in a segment, clamp against the full `gmap_extent` so internal seams remain
-crossable; ordinary and interior levels use the local 64×64 bounds.
+crossable. Ordinary and interior levels use the local 64×64 bounds.
 
 Links themselves remain local even in a GMAP segment. See
 [Level Link Implementation](level-link-implementation.md#coordinate-frame-of-a-link)

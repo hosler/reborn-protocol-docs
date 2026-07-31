@@ -17,11 +17,11 @@ function add(a, b) {
 add(3, 4);
 ```
 
-Parameters temporarily bind bare variables for the duration of the call and
-restore the prior values afterward. User functions still have no value return;
-a call in value position produces `0.0`.
+Parameters temporarily bind bare variables during the call. After the call,
+the interpreter restores the previous values. User functions still do not
+return a value. A call in a value position produces `0.0`.
 
-Functions named by GS2 event convention also receive classic events:
+Functions that use the GS2 event naming convention also receive classic events.
 `onTimeout`, `onPlayerEnters`, and `onActionX` match `timeout`,
 `playerenters`, and `actionx` without regard to case. Classic
 `if (playerenters)` blocks continue to work.
@@ -32,12 +32,12 @@ Evidence:
 - `reborn_protocol/gs1/interp.py:246-280`
 - `reborn-protocol/tests/test_gs1_era_newgs1.py:30-69`
 
-`@` concatenates values as text. Assignment is right-associative across a
-chain, so `a = b = false` writes both targets. The parser also accepts method
-calls on references and call results. Implemented string and list methods
-include `tokenize`, `pos`, `starts`, `ends`, case conversion, trimming,
+`@` concatenates values as text. Assignment associates from right to left
+across a chain. Thus, `a = b = false` writes both targets. The parser also
+accepts method calls on references and call results. Available string and list
+methods include `tokenize`, `pos`, `starts`, `ends`, case conversion, trimming,
 length/index/slice operations, and mutating list operations such as `add`.
-An unknown method is inert rather than invalidating its enclosing script.
+An unknown method has no effect and does not invalidate its enclosing script.
 
 Evidence:
 
@@ -46,13 +46,13 @@ Evidence:
 - `reborn_protocol/gs1/interp.py:832-905`
 - `reborn-protocol/tests/test_gs1_era_newgs1.py:92-139`
 
-Classic commands retain their space form, but may also use call form:
+Classic commands retain their space form. They can also use the call form:
 `triggeraction(0, 0, "serverside", "-System", "x")` and
 `enableweapons()` parse through the command's existing typed argument
-signature. Quoted call-form strings lose their quotes; whitespace separates
-arguments rather than becoming string content.
+signature. Quoted call-form strings lose their quotes. Whitespace separates
+arguments and does not become string content.
 
-`setTimer(value)` maps to assignment of the classic `timeout` variable. It
+`setTimer(value)` assigns the classic `timeout` variable. It
 therefore uses the host's normal scheduling hook, including the rule that a
 value less than or equal to `0.0001` cancels the timer.
 
@@ -65,17 +65,18 @@ Evidence:
 
 ## Recovery policy
 
-Live scripts contain harmless surplus syntax. Empty statements are ignored,
-including an extra semicolon between an `if` branch and its `else`. A stray
-top-level closing brace is skipped. An unclosed block at end of source is
-tolerated.
+Live scripts contain harmless surplus syntax. The parser ignores empty
+statements, including an extra semicolon between an `if` branch and its
+`else`. The parser skips a stray top-level closing brace. The parser accepts
+an unclosed block at the end of the source.
 
-Malformed input is contained to its failed statement. Recovery consumes to
-that statement's semicolon, balanced block end, or end of file. If the failed
+The parser confines malformed input to its failed statement. During recovery,
+the parser consumes input through that statement's semicolon, balanced block
+end, or end of file. If the failed
 head owns a block, the entire balanced block is skipped so its body cannot be
-promoted to the enclosing scope. A junk character likewise produces at most
-one parse error and drops one statement; later statements still parse and
-execute.
+promoted to the enclosing scope. A junk character also produces at most one
+parse error and removes one statement. The parser still parses and runs later
+statements.
 
 Evidence:
 

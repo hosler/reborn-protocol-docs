@@ -11,11 +11,12 @@ the classic table embedded in the official v6.0.3.7 Linux client binary. That
 revision changed nine bytes from the older shipped file: indices 2958 and
 3060-3061 are type 9, while 3248-3250 and 3264-3266 are type 2.
 
-`pyReborn/pyreborn/tiletypesnw.dat` is the new-world table. It was extracted
-from that binary at file offset `0x541740`, immediately after the classic
-table at `0x540740`. The result was checked against the labeled type-template
-tileset: the regions identified by the template report their labeled types,
-rather than the mostly-blocking results produced by the classic table.
+`pyReborn/pyreborn/tiletypesnw.dat` is the new-world table. The authors
+extracted it from that binary at file offset `0x541740`. It occurs immediately
+after the classic table at `0x540740`. The authors checked the result against
+the labeled type-template tileset. The regions that the template identifies
+report their labeled types instead of the mostly blocking results from the
+classic table.
 
 Both files are exactly 4,096 bytes. The loader takes one byte per base tile ID
 and retains an all-walkable fallback for a missing classic file. A missing
@@ -30,8 +31,9 @@ Evidence:
 
 Every level change resets `tilestype` to zero and examines registered full
 tile definitions. The definition whose prefix is the longest match for the
-stripped level name wins; the first registered definition wins an equal-length
-tie. Definitions with type 3 or greater are skipped, except type 5. In
+stripped level name wins. For an equal-length tie, the first registered
+definition wins. The client skips definitions with type 3 or greater, except
+type 5. In
 particular, type-4 partial pastes do not select a type table.
 
 Reads route as follows:
@@ -40,7 +42,7 @@ Reads route as follows:
 | ---: | --- |
 | 0 | classic `tiletypes1.dat` |
 | 1 or 2 | new-world `tiletypesnw.dat` |
-| 5 | no table; every valid tile reports type 0 |
+| 5 | no table. Every valid tile reports type 0 |
 
 An off-level negative tile remains blocking. The selection registry persists
 across level changes until a script removes its definitions.
