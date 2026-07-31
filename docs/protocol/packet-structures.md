@@ -1507,8 +1507,9 @@ of the *following* packet. The `PLO_FILE (102)` packet follows it.
 > pyReborn `parse_file` decoded it with an 8-bit shift (`mod_time = (mod_time << 8) | b`),
 > producing garbage timestamps while leaving filename/data offsets intact. Byte
 > consumption is 5 bytes either way, so the bug was invisible except in the decoded value.
-> Fixed in the current `parse_file` (`pyReborn/pyreborn/packets.py:2717`, which now carries
-> its own warning comment). GINT5 is always 7-bit-per-byte. The C++ code is the ground truth.
+> Fixed in the current `parse_file` (`pyReborn/pyreborn/packet_codec/files.py:11`, which now
+> carries its own warning comment). GINT5 is always 7-bit-per-byte. The C++ code is the
+> ground truth.
 
 ### PLO_UPDATEPACKAGESIZE (105) - Update Package Size
 **Trigger**: Update package download size

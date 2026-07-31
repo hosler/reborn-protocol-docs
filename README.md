@@ -50,6 +50,37 @@ system `python3` is 3.14 and does not have Hypothesis installed.
 The build system automatically builds and hosts the documentation at
 **https://reborn-protocol-docs.readthedocs.io/**.
 
+## Citation guard
+
+These docs cite source by `path/to/file.py:123` in about 640 places. A refactor
+in another repo invalidates those citations silently, because nothing connects
+the two. That is how 65 citations went dead at once when `gs1_client.py`,
+`gs2_client.py`, `game/gs2_gui.py` and `packets.py` each became a package.
+
+`scripts/check_doc_citations.py` resolves every citation it can and fails on the
+ones that rot. Run it from anywhere in the checkout:
+
+```bash
+python3 scripts/check_doc_citations.py            # exit 1 on a dead citation
+python3 scripts/check_doc_citations.py --verbose  # also list what it skipped
+```
+
+It needs the sibling repos (`pyReborn`, `reborn-protocol`, and the third-party
+checkouts) beside this one, and it exits quietly when it cannot find them. A
+citation it cannot resolve without guessing is reported, never failed.
+
+To run it on every commit, symlink the chained hook into each repo. That hook
+also runs the prose lint, so it replaces an existing `pre-commit` rather than
+conflicting with it:
+
+```bash
+ln -sfn "$PWD/scripts/pre-commit" ../pyReborn/.git/hooks/pre-commit
+ln -sfn "$PWD/scripts/pre-commit" ../reborn-protocol/.git/hooks/pre-commit
+ln -sfn "$PWD/scripts/pre-commit" .git/hooks/pre-commit
+```
+
+`git config doccite.block false` downgrades the guard to a warning.
+
 ## Contributing
 
 This documentation is part of the OpenReborn2 project. The project welcomes

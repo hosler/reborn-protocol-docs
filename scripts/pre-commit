@@ -1,0 +1,52 @@
+#!/bin/sh
+# Chained pre-commit hook for the opengraal2 repos.
+#
+# Symlink this file to <repo>/.git/hooks/pre-commit. It runs, in order:
+#   1. the ste-writing lint  (prose style; warns by default)
+#   2. check_doc_citations   (dead `file:line` citations; BLOCKS by default)
+#
+# Both always run, so one commit reports every problem rather than making you
+# fix them one round-trip at a time.
+#
+# Escape hatches:
+#   git config ste.lint.block true      -- make the prose lint blocking
+#   git config doccite.block false      -- downgrade the citation guard to a warning
+#   git commit --no-verify              -- skip every hook
+
+set -u
+
+# Resolve through the symlink to find this script's real directory.
+self=$0
+while [ -L "$self" ]; do
+    target=$(readlink "$self")
+    case $target in
+        /*) self=$target ;;
+        *)  self=$(dirname "$self")/$target ;;
+    esac
+done
+SCRIPT_DIR=$(cd "$(dirname "$self")" && pwd)
+
+status=0
+
+STE_LINT="$HOME/.claude/skills/ste-writing/pre-commit-ste-lint"
+if [ -x "$STE_LINT" ]; then
+    "$STE_LINT" || status=$?
+fi
+
+GUARD="$SCRIPT_DIR/check_doc_citations.py"
+if [ -f "$GUARD" ]; then
+    PYTHON=/usr/bin/python3.13
+    [ -x "$PYTHON" ] || PYTHON=python3
+    if ! "$PYTHON" "$GUARD"; then
+        if [ "$(git config --bool doccite.block || echo true)" = "false" ]; then
+            echo "check_doc_citations: warning only (doccite.block=false)."
+        else
+            echo "check_doc_citations: commit blocked."
+            echo "  Re-derive the citation from the current source, or run"
+            echo "  'git config doccite.block false' to downgrade this to a warning."
+            status=1
+        fi
+    fi
+fi
+
+exit $status
