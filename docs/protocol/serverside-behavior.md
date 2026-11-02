@@ -118,8 +118,8 @@ The search iterates the level's own `m_players` set, not a server-wide player
 list. Level-part delivery preserves that membership rule:
 `Server::sendPacketToOneLevelPart` delegates to
 `Level::findPlayersInLevelPart`, which filters the same `m_players` set by map
-cell (`GServer-v2/server/src/Server.cpp:2676-2689`,
-`GServer-v2/server/src/level/Level.cpp:3077-3095`).
+cell (`GServer-v2/server/src/Server.cpp:2370-2378`,
+`GServer-v2/server/src/level/Level.cpp:3105-3115`).
 
 ### Explosion damage uses a plus, and only targets NPCs
 
