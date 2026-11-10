@@ -334,11 +334,11 @@ void Weapon::sendByteCodeToPlayer(std::shared_ptr<Player> player) const
     if (const auto& bytecode = m_script.getClientByteCode(); !bytecode.empty())
     {
         // ...
-        player->sendPacket(CString() >> (char)PLO_NPCWEAPONSCRIPT >> (short)m_header.length() << m_header << bytecodeView);
+        player->sendPacket(CString() >> (char)PLO_WEAPONBYTECODE2 >> (short)m_header.length() << m_header << bytecodeView);
 ```
 
 So the full sequence when bytecode exists is **`PLO_NPCWEAPONADD` (with `CLASS` prop) →
-`PLO_LOADSCRIPT` → `PLO_NPCWEAPONSCRIPT`** (the last one from a distinct call site). The
+`PLO_LOADSCRIPT` → `PLO_WEAPONBYTECODE2`** (the last one from a distinct call site). The
 GS1 `SCRIPT` prop is never sent for bytecode-backed weapons.
 
 ### Bytecode packet family
@@ -351,7 +351,7 @@ fixtures, `game_tester --tier5`). Full byte layouts live in
 |---|---|---|---|
 | `PLO_NPCBYTECODE` | 131 | Server → Client | `[GINT3 npc_id][bytecode]`, streamed inside `PLO_RAWDATA`, automatically for clients `>= CLVER_4_0211` with scripted NPCs (`Level.cpp:1352-1358` `sendNPCsToPlayer`) |
 | `PLO_GANISCRIPT` | 134 | Server → Client | `[GCHAR name_len][gani_name][bytecode]`, name has no `.gani` suffix (`GameAni.cpp:107-122` `getBytecodePacket`), wrapped in `PLO_RAWDATA` |
-| `PLO_NPCWEAPONSCRIPT` | 140 | Server → Client | `[GSHORT header_len][header CSV][bytecode]` (`Weapon.cpp:299-308` `sendByteCodeToPlayer`) |
+| `PLO_WEAPONBYTECODE2` | 140 | Server → Client | `[GSHORT header_len][header CSV][bytecode]` (`Weapon.cpp:299-308` `sendByteCodeToPlayer`) |
 | `PLO_LOADGANI` | 195 | Server → Client | `[GCHAR name_len][gani_name][stringlist]`, stringlist e.g. `"SETBACKTO idle"` (`PlayerClientPackets.cpp:1481`) |
 | `PLO_LOADSCRIPT` | 197 | Server → Client | **Two payload forms**: raw header CSV (weapon announcement, `Weapon.cpp:295`) vs `[GCHAR header_len][header CSV][bytecode]` (class bytecode, `ScriptClass.cpp:66-77`), see the packet-structures entry for disambiguation |
 

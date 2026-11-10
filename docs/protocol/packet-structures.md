@@ -823,7 +823,7 @@ Server replies with `PLO_GANISCRIPT (134)` only if the CRC differs, then **alway
 ```
 [STRING: weapon_name] // Weapon name, to end of packet (no checksum field)
 ```
-Server replies with `PLO_NPCWEAPONSCRIPT (140)`
+Server replies with `PLO_WEAPONBYTECODE2 (140)`
 (`msgPLI_UPDATESCRIPT`, `PlayerClientPackets.cpp:1485-1493`).
 
 ### PLI_UPDATECLASS (161) - Update NPC Class
@@ -833,7 +833,7 @@ Server replies with `PLO_NPCWEAPONSCRIPT (140)`
 [STRING: class_name] // Class name, to end of packet
 ```
 If the CRC differs, the server replies with `PLO_LOADSCRIPT (197)` form 2
-(RAWDATA-framed). Unknown classes get a header-only `PLO_NPCWEAPONSCRIPT (140)` instead
+(RAWDATA-framed). Unknown classes get a header-only `PLO_WEAPONBYTECODE2 (140)` instead
 (`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:1495-1530`). This packet requires an NPC
 server (`hasNPCServer()`). Otherwise, the server ignores it.
 
@@ -1217,7 +1217,7 @@ it before removal. The server assigns the new level name in `strProp->value`.
 [STRING: signature]  // Player signature data
 ```
 
-### PLO_NPCACTION (26) - NPC Action
+### PLO_NPCSETSCRIPT (26) - NPC Action
 **Trigger**: NPC performs action
 ```
 [GUINT: npc_id]      // NPC identifier
@@ -1567,7 +1567,7 @@ strips a trailing `.gani` from the stored name before sending. Always followed b
 `PLO_LOADGANI (195)` load command (sent regardless of whether the bytecode itself was
 sent again (`msgPLI_UPDATEGANI`, `PlayerClientPackets.cpp:1460-1483`).
 
-### PLO_NPCWEAPONSCRIPT (140) - Weapon Bytecode
+### PLO_WEAPONBYTECODE2 (140) - Weapon Bytecode
 **Trigger**: Response to `PLI_UPDATESCRIPT (158)` (on-demand weapon-bytecode fetch), and
 also the server's fallback answer to a `PLI_UPDATECLASS` for a **nonexistent** class.
 The fallback has only a header and empty bytecode. This is a deliberate workaround.
@@ -1771,7 +1771,7 @@ this comment: "Valid message in 5.07 and 6.037. The code it uses is unique."
 [SHOOT_DATA...]      // constructShootV2() body — format not documented here
 ```
 
-### PLO_CLEARWEAPONS (194) - Clear Weapons
+### PLO_RESETCLIENT (194) - Clear Weapons
 **Trigger**: Remove all weapons from player
 ```
 // No additional data - clears weapon list

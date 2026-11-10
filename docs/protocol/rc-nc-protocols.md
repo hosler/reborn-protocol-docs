@@ -138,7 +138,7 @@ NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 
 ### RC login sequence (server → client, in order)
 
-`PLO_CLEARWEAPONS (194)` → `PLO_RC_CHAT (74)` motd lines → server-list-connected →
+`PLO_RESETCLIENT (194)` → `PLO_RC_CHAT (74)` motd lines → server-list-connected →
 "New RC" broadcast → `PLO_STAFFGUILDS (47)` → `PLO_STATUSLIST (180)` →
 `PLO_RC_MAXUPLOADFILESIZE (103)` → player-prop exchange for everyone online →
 "Currently online" chat.
