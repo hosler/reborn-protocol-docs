@@ -1693,17 +1693,25 @@ Clients 5.07 and later do not handle it.
 ### PLO_SERVERWARP (178) - Server Warp
 **Trigger**: Warp to different server
 ```
-[STRING: server_info] // Comma text, read to end: unused,name,host,port[,...]
+[STRING: server_info] // gtokenized text, read to end: name,name,host,port[,...]
 ```
-The 2.31 client needs at least four comma fields. Field 0 is not used, field 1 is the
-server name, field 2 the host and field 3 the port. The client closes the connection and
-logs in again to the new host with a fresh login, with no list-server step. A lab test
-with a real 2.31 client confirmed this. While a 4.x-6.x client is connected to a server
-whose name starts with "login", it draws no characters and no HUD. A `PLO_SERVERWARP` to a
-server with another name ends that mode. Source: Graal_analysis
-[`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md)
-and
-[`protocol/v5v6-lab-play.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5v6-lab-play.md).
+The reference server does not build this packet. It relays the list server's
+`SVO_SERVERINFO` text verbatim, and only to a client whose version is 2.1 or later
+(`ServerList.cpp:966-975` at GServer-v2 beta4). The open list server builds that text as
+`name`, `name`, `ip`, `port` joined with `gtokenize()`
+(`graal-serverlist/server/src/ServerConnection.cpp:1345-1346`). So the fields are
+gtokenized (a field with a space, comma, slash or non-ASCII byte is quoted; pinned gs2lib
+`src/CString.cpp:1220-1227`), and field 0 repeats the server name.
+The decompiled reference client needs more than three fields and uses field 1 as the
+name, field 2 as the host and field 3 as the port (`TServerList.cpp:131-170`).
+
+The following is reported in squirelworks' client-analysis notes (`protocol/packet-ids.md`,
+`protocol/v5v6-lab-play.md`) and is not verified against the reference. The 2.31 client
+also needs at least four comma fields and does not use field 0. A lab test with a real 2.31
+client showed that it closes the connection and logs in again to the new host with a fresh
+login, with no list-server step. While a 4.x-6.x client is connected to a server whose name starts with
+"login", it draws no characters and no HUD. A `PLO_SERVERWARP` to a server with another
+name ends that mode.
 
 ### PLO_RPGWINDOW (179) - RPG Window
 **Trigger**: Display RPG-style window
@@ -1828,29 +1836,33 @@ If there is no such prefix, use the length-prefixed read. Header fields:
 (two GINT5s = 64-bit hash),crc32 (GINT5)` per the `IEnums.h:317` comment and
 `Weapon.cpp:242-257` / `ScriptClass.cpp:44-54` header construction.
 
-## Ids the Reference Server Leaves Unknown or Unused
+## Ids Whose Layout Comes from the Reference Enum Comments and Client Observation
 
-GServer-v2 and gs2lib name these ids but do not give a full layout, or never send them.
-Static reads of the original clients give the layouts below. Names follow upstream gs2lib.
-`c` = GCHAR, `s` = GSHORT, `i5` = GINT5, `str` = GCHAR length + bytes. Source for this
-whole section: Graal_analysis
-[`protocol/unknown-ids-2026-11-06.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/unknown-ids-2026-11-06.md)
-and
-[`client-internals/serveroptions-198.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/serveroptions-198.md).
+The pinned gs2lib (`include/IEnums.h`) names each id below and gives its layout in the
+enum comment. The reference server sends few of them and handles none of the client ids
+in game sessions. The "Layout" column follows the enum comment. Detail beyond the comment,
+the "Clients" column and the "What the client does" column are observations: static reads
+of the original clients, reported in squirelworks' client-analysis notes
+(`protocol/unknown-ids-2026-11-06.md`, `client-internals/serveroptions-198.md`); not
+verified against the reference unless a citation is given. `c` = GCHAR, `s` = GSHORT,
+`i5` = GINT5, `str` = GCHAR length + bytes. The decompiled reference client is under
+`Preagonal/FourPlay/quattroplay/src/`.
 
-| Id | Name | Layout | Clients | What the client does |
+| Id | Reference name (`IEnums.h`) | Layout | Clients (observed) | What the client does |
 |---|---|---|---|---|
-| PLI 25 | `PLI_TOWEAPON` | as `PLO_NPCWEAPONADD`: name, image, script | sent by 1.21-1.37 | Uploads each weapon the player holds. 1.38 replaced it with `PLI_WEAPONADD (33)`. GServer-v2 beta4 kicks a 1.33 client for it ("Unknown Player Packet: 25") |
-| PLO 104 | `PLO_FILEDECRYPTKEY` | `str filename`, `c a`, `i5 lo`, `i5 hi` | 3.153 to 6.03r7 | Stores an 8-byte DES key (`lo`, `hi` little-endian) for the encrypted package or file with that name. The gs2lib comment leaves out the leading file name |
-| PLO 108 | `PLO_PING` | `c sub`, `s value` | 4.20, 6.01, 6.03 (not 5.x) | `sub` 0: the client answers `PLI 162` with `!` + `s min(value, 0x6FFF)`. `sub` 1: the client stores `value`. Handled before the main dispatch, like 100 |
-| PLI 162 | `PLI_PONG` | game clients: `!` + `s value`; RC3: empty | as above | The answer to PLO 108. RC3 and the 2010 Linux RC send it empty every 60 s |
-| PLO 109 | `PLO_HTTPDOWNLOAD` | `i5 modtime`, `str localname`, `str url` | 5.24r4 to 6.03r7 | Downloads the URL over HTTP and stores it under the local name. The gs2lib comment leaves out the local name |
-| PLO 168 | `PLO_ONLINEMODE` | empty | 2.05 to 6.03r7 | Sets a one-time flag on the local player. The server sends it after the login burst |
-| PLO 181 | (unnamed) | `s player_id`, `c toggle` | 2.17 to 5.24r4 | Sets a boolean on that player to `toggle > 0`. What the boolean does is not known |
-| PLO 193 | `PLO_WEAPONHASH` | `i5 crc32`, rest = weapon name | 4.04r2 to 5.12 | Loads the cached `weblevels/weapons/<name>.code` if its zlib CRC32 matches. If not, the client asks for the script with `PLI_UPDATESCRIPT (158)`. The `i5` is a CRC, not a modtime |
-| PLO 198 | `PLO_SERVEROPTIONS` | `i5 value` | 5.24 / 6.00 beta and later | Stored, and not read anywhere up to 6.03 |
+| PLI 25 | `PLI_TOWEAPON` (`:57`) | `str name`, `str image`, `s scriptLength`, script (`{GSTRING name}{GSTRING image}{GSHORT scriptLength}{STRING script}`). Unlike `PLO_NPCWEAPONADD` it has no prop-id bytes between the fields (compare `Weapon.cpp:176-182`) | 1.21 to 1.37 (also in the enum comment) | Uploads each weapon the player holds. 1.38 replaced it with `PLI_WEAPONADD (33)`. GServer-v2 beta4 has no handler: it logs "Unknown Player Packet" and disconnects after the third invalid packet within a minute (`Player.cpp:1657-1674`, counter reset `PlayerClient.cpp:276-280`). A lab test saw beta4 drop a 1.33 client for it |
+| PLO 104 | `PLO_FILEDECRYPTKEY` (`:258`) | `str filename`, `c keyPurpose`, `i5 lo`, `i5 hi` | 3.153 to 6.03r7 | Stores an 8-byte DES key (`lo`, `hi` little-endian) for the package or file with that name. The enum comment gives purpose 0 = `.gpake`, 1 = `.enc`. The decompiled client parses the same layout (`TClient.cpp:5100-5125`, little-endian key at `:4852-4861`). The server never sends it |
+| PLO 108 | `PLO_PING` (`:262`) | `c sub`, `s value` | 4.20, 6.01, 6.03 (not 5.x) | `sub` 0: the client answers `PLI 162` with `!` + `s min(value, 0x6FFF)`. `sub` 1: the client stores `value`. Handled before the main dispatch, like 100. The decompiled client does the same (`TClient.cpp:1994-2021`, `:935-957`). The server never sends it |
+| PLI 162 | `PLI_PONG` (`:162`) | `c type`, `s value`. Game clients send type 1 (`!`) on a reply to 108. RC3: empty | as above | The answer to PLO 108. RC3 and the 2010 Linux RC send it empty every 60 s. The server handles it only for RC, as a stub (`PlayerRC.cpp:86`, `packets/PlayerRCPackets.cpp:1608-1612`) |
+| PLO 109 | `PLO_HTTPDOWNLOAD` (`:263`) | `i5 modtime`, `str localname`, `str url` | 5.24r4 to 6.03r7 | Downloads the URL over HTTP and stores it under the local name. The decompiled client parses the same layout (`TClient.cpp:5075-5098`). The server never sends it |
+| PLO 168 | `PLO_ONLINEMODE` (`:289`) | empty | 2.05 to 6.03r7 | Sets a one-time flag on the local player. The server sends it after the login burst (`Player.cpp:762-763`) |
+| PLO 181 | `PLO_PLAYERNOUDP` (`:302`) | `s player_id`, `c toggle` | 2.17 to 5.24r4 | Sets a boolean on that player to `toggle > 0`. The enum comment says the toggle removes the player from the "nearby" list that UDP peer-to-peer uses. The server never sends it |
+| PLO 193 | `PLO_WEAPONHASH` (`:314`) | `i5 crc32`, rest = weapon name | 4.04r2 to 5.12 | Loads the cached `weblevels/weapons/<name>.code` if its zlib CRC32 matches. If not, the client asks for the script with `PLI_UPDATESCRIPT (158)`. The server sends it to clients before 5.07 (`Weapon.cpp:197-199`), and the value is the zlib CRC32 of the bytecode (`:352-353`) |
+| PLO 198 | `PLO_SERVEROPTIONS` (`:318`) | `i5 value` | 5.24 / 6.00 beta and later | Stored, and not read anywhere up to 6.03. The server never sends it |
 
-No client of any age handles PLO 60, 81, 83 or 110, and that includes the staff clients.
+The reference names PLO 60, 81, 83 and 110 `PLO_UNHANDLED60`, `PLO_UNHANDLED81`,
+`PLO_UNHANDLED83` and `PLO_UNHANDLED110` (`IEnums.h:229`, `:250`, `:252`, `:264`). The same
+notes report that no client of any age handles them, and that includes the staff clients.
 
 ## Encryption Implementation Details
 
