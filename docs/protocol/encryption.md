@@ -235,6 +235,25 @@ the partial-XOR limit from it. Reborn records the distinction in
 `reborn_protocol.encryption.CompressionPolicy`, `GAME_COMPRESSION`, and
 `LIST_SERVER_COMPRESSION`.
 
+The original clients use different size limits. The 2.22 client chooses the type for each
+flush of its send buffer (`n` bytes before compression):
+
+| `n` | Type |
+|---|---|
+| below `0x30` (48) | `0x02`, or `0x04` when zlib output is actually shorter |
+| `0x30` to `0xFFF` | `0x04` zlib |
+| `0x1000` (4096) and above | `0x06` bzip2 |
+
+The send buffer flushes at `0x1000` bytes. Real 2.22 sessions under Wine sent 580 `0x02` and
+17 `0x04` frames. No `0x06` frame from a client has been captured yet. The Delphi
+RemoteControl RC socket uses the same per-flush choice. So the 55 and 8192 limits above are
+Reborn's own policy, not the 2.22 client's. Any receiver accepts all three
+types, so either policy works on the wire. Source: Graal_analysis
+[`protocol/client-versions.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/client-versions.md)
+and
+[`protocol/codec-and-framing.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/codec-and-framing.md)
+(static read and lab captures).
+
 The two-tier list-server rule describes the client's historical behavior
 against the closed production list server; it is **not** a demonstrated
 server-side prohibition. The open reference list server accepts `0x06`, calls
