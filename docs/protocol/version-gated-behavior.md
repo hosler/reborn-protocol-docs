@@ -222,6 +222,44 @@ if (isClient() && m_versionId < CLVER_2_14)
 > (no newline, one newline, binary with a newline). The empty and two-newline cases are
 > still open. Clients older than 2.05 were not checked.
 
+### Unknown tokens get the pre-2.1 file layout
+
+Every gate above compares `m_versionId`, and `m_versionId` comes only from the login token's
+position in gs2lib's `clientVersions[]`. A token that the server allows but that is not in
+the table resolves to `CLVER_UNKNOWN` (0). That is below `CLVER_2_1`, so the client gets
+every pre-2.1 path: no modtime, no large-file packets, and a failure for files over 64000
+bytes.
+
+The 5.24 and 6.00 beta builds show the effect. Their tokens (`G3D15010`, `G3D03048`) are not
+in the table. The client always reads `PLO_FILE` as `[GINT5 modtime][GCHAR name_len][name]`.
+Given the short form, it takes the name length and the first four name characters as the
+modtime, and the fifth character as the name length. For `sword1.png` it reads `d` (68) as
+the length, so the "name" is `1.png` plus 63 bytes of PNG data. The client then reports that
+it cannot open that file for writing. When the token is added to the table, the same server
+sends the modtime form and the client saves the files normally.
+
+So a server for 5.x and 6.x clients must have every allowed token in its version table. All
+5.x and 6.x entries rank above `CLVER_2_14`. The array and the `CLVER_*` enum must stay in
+step: an entry added to one and not the other shifts every later version id.
+
+### What 5.x and 6.x clients request at login
+
+- 5.00r7 to 6.03r7 open with `basepackage.gupd`. The client sends it as
+  `PLI_VERIFYWANTSEND (47)` (`GINT5 crc32` + name) when it has a cached copy for that
+  server, and as `PLI_WANTFILE (23)` when it does not. The cache is per server name: a
+  5.00r7 client sent 47 on the `Login` server and 23 on the next server after the warp.
+- Then `PLI_UPDATEFILE (34)` for cached images and animations, for example `idle.gani`,
+  `sprites.png`, `body.png`, `head0.png` and `shield1.png`.
+- Then `PLI_WANTFILE (23)` for the fonts (`arial.ttf`, `arialbd.ttf`) and for
+  `tiledefs<server>.txt`.
+
+A real 5.00r7 client, with its token in the table, saved a 541,248-byte file sent as
+`68`, `84`, `102` chunks (each with modtime and name) and `69` byte for byte.
+
+Source: Graal_analysis
+[`protocol/file-transfer.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/file-transfer.md).
+It has the lab captures for 5.00r7, 5.24r4, 5.30r3 and 6.03r7.
+
 ## PLPROP_COLORS Width: Two Independent Switches
 
 There are **two separate mechanisms** here, easy to conflate into one:
