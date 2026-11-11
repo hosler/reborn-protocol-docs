@@ -28,7 +28,7 @@ Where:
 
 ### Bundle Processing (GEN_5 Protocol)
 
-For ENCRYPT_GEN_5 protocol (recommended):
+For the ENCRYPT_GEN_5 protocol:
 
 1. **Bundle Structure**: `[UINT8: compression_type][ENCRYPTED_COMPRESSED_DATA]`
 2. **Compression Types**:
@@ -36,9 +36,9 @@ For ENCRYPT_GEN_5 protocol (recommended):
    - `0x04`: COMPRESS_ZLIB (zlib compression)
    - `0x06`: COMPRESS_BZ2 (bzip2 compression)
 
-3. **Processing Order**:
-   - Client → Server: Compress data → Encrypt → Send
-   - Server → Client: Receive → Decrypt → Decompress
+3. **Processing Order** (the same in both directions):
+   - Sending: Compress data → Encrypt → Send
+   - Receiving: Decrypt → Decompress
 
 4. **Encryption**: Partial packet encryption using XOR-based stream cipher
    - Uses iterator-based key generation
@@ -49,8 +49,11 @@ For ENCRYPT_GEN_5 protocol (recommended):
 Newlines (`\n`) separate the packets in each bundle. Raw data packets are the exception:
 
 ```
-[UINT8: packet_id][PACKET_DATA]\n
+[GCHAR: packet_id][PACKET_DATA]\n
 ```
+
+The id byte is GCHAR-encoded (id + 32); the reference reads it with `readGUChar()`, which
+subtracts 32 (`server/include/network/IPacketHandler.h:337`).
 
 Special case for raw data:
 ```
@@ -71,21 +74,26 @@ use the information at the link.
 ### PLI_LEVELWARP (0) - Level Warp Request
 **Trigger**: Player moves to a different level
 ```
-[GUCHAR: tile_x]     // X coordinate (in tiles)
-[GUCHAR: tile_y]     // Y coordinate (in tiles)  
+[GCHAR: x]           // X coordinate (in half-tiles)
+[GCHAR: y]           // Y coordinate (in half-tiles)
 [STRING: level_name] // Target level name (reads to end of packet)
 ```
 
-**GServer Implementation Notes**:
-- Coordinates are read as `pPacket.readGChar() * 8` to get pixel position
+**GServer Implementation Notes** (`PlayerClient::msgPLI_LEVELWARP`,
+`server/src/player/packets/PlayerClientPackets.cpp:52-107`):
+- Coordinates are read as `pPacket.readGChar() * 8` into a local pixel position
+  (`:59`). At 16 pixels per tile that makes each unit a half-tile. The handler has
+  no permission check.
 - Level name uses `pPacket.readString("")` which reads to end of packet
-- Requires appropriate permissions when `warptoforall = false`
+- If the warp fails, the handler warps the player back to its current level at its current
+  position (`:92-97`). If that also fails, it warps to the configured unstick level and
+  tile (`:98-104`). It does not send `PLO_WARPFAILED`.
 
 **Variant**: PLI_LEVELWARPMOD (30) - includes modification time:
 ```
 [GUINT5: mod_time]   // Level modification timestamp
-[GUCHAR: tile_x]
-[GUCHAR: tile_y]
+[GCHAR: x]           // X coordinate (in half-tiles)
+[GCHAR: y]           // Y coordinate (in half-tiles)
 [STRING: level_name] // Reads to end of packet
 ```
 
@@ -100,9 +108,14 @@ use the information at the link.
 ```
 **Source**: `PlayerClient::msgPLI_BOARDMODIFY` (`PlayerClientPackets.cpp:109-134`) reads
 `x/y/w/h` via `readGUChar()` ×4, then the level applies the tiles (`Level::alterBoard`,
-`Level.cpp:1476`, `tileData.readGShort()` per tile). The data is **not** a raw opaque
-string. Each tile is a proper GSHORT. The server does **not echo it to the sender**. See
+`server/src/level/Level.cpp:1610`, `tileData.readGShort()` per tile at `:1737`). The
+data is **not** a raw opaque string. Each tile is a proper GSHORT. The server does **not
+echo it to the sender**. See
 [GServer Behavior: PLI_BOARDMODIFY Is Not Echoed](gserver-behavior.md#pli_boardmodify-is-not-echoed-to-the-sender).
+
+One exception: when `enableClientsidePushPull` is on and the change is a 4x4 push-pull
+stone, `Level::alterBoard` rejects it and sends a `PLO_BOARDMODIFY` for the same area
+back to the sender (`Level.cpp:1660-1664`).
 
 ### PLI_PLAYERPROPS (2) - Player Property Update
 **Trigger**: Player properties change (movement, appearance, stats, etc.)
@@ -128,8 +141,13 @@ Property format:
 [GUCHAR: tile_x]           // X position (in half-tiles)
 [GUCHAR: tile_y]           // Y position (in half-tiles)
 [GUCHAR: player_power]     // Player ID (upper 6 bits) + Power (lower 2 bits)
-[GUCHAR: time_to_explode]  // Timer in 0.05s increments (default: 55 = 3 seconds)
+[GUCHAR: time_to_explode]  // Timer in 0.05s increments; remaining time = (value + 1) * 50 ms
 ```
+**Source**: `PlayerClient::msgPLI_BOMBADD` (`PlayerClientPackets.cpp:215-242`). The reference
+computes `(readGUChar() * 50ms) + 50ms`. Its comment says a bomb takes 3 seconds, but the
+client has already counted down to 2.75 s when it sends the packet
+(`PlayerClientPackets.cpp:222-225`). So a value of 55 means 2.8 s remaining. The reference
+defines no default value.
 
 ### PLI_BOMBDEL (5) - Remove Bomb
 **Trigger**: Bomb explodes or is removed
@@ -141,8 +159,13 @@ Property format:
 ### PLI_TOALL (6) - Chat Message
 **Trigger**: Player sends public chat
 ```
-[STRING: message]    // Chat message text
+[GUCHAR: message_len] // Length of the message
+[STRING: message]     // Chat message text
 ```
+**Source**: `Player::msgPLI_TOALL` (`server/src/player/Player.cpp:1759-1785`). The server
+ignores the packet when the sender is jailed. It relays
+`PLO_TOALL >> short id >> char len << message` to every other player that does not have the
+`PLFLAG_NOTOALL` flag set.
 
 ### PLI_HORSEADD (7) - Add Horse
 **Trigger**: Player places/spawns a horse
@@ -214,18 +237,27 @@ byte after the sender player ID.
 ```
 
 ### PLI_BADDYPROPS (15) - Baddy Property Update
-**Trigger**: Client updates baddy properties (level leader only)
+**Trigger**: Client updates baddy properties (intended to come from the level leader)
 ```
 [GUCHAR: baddy_id]   // Baddy identifier (0-255)
 [STRING: prop_data]  // Baddy property data
 ```
+The server does not check that the sender is the leader. It needs only a level with
+players, applies the properties, and relays them to every player in the level part except
+the leader, which is the first player in the level's list (`msgPLI_BADDYPROPS`,
+`PlayerClientPackets.cpp:495-522`).
 
 ### PLI_BADDYHURT (16) - Hurt Baddy
 **Trigger**: Baddy takes damage
 ```
 [GUCHAR: baddy_id]   // Baddy identifier
-[GUCHAR: damage]     // Damage amount
+[GCHAR: hurt_dx]     // Knockback X (midpoint 64)
+[GCHAR: hurt_dy]     // Knockback Y (midpoint 64)
+[GUCHAR: damage]     // Damage amount, in half hearts
 ```
+**Source**: `msgPLI_BADDYHURT` (`PlayerClientPackets.cpp:524-542`). The four fields are
+documented only in a comment. The server does not parse them. It forwards the raw bytes as
+`PLO_BADDYHURT` to the level leader only, and ignores the packet when there is no leader.
 
 ### PLI_BADDYADD (17) - Add Baddy
 **Trigger**: Player spawns a baddy
@@ -279,11 +311,14 @@ byte after the sender player ID.
 [STRING: filename]   // Requested file path
 ```
 
-### PLI_SHOWIMG (24) - Show Image
+### PLI_SHOWIMGPLAYER (24) - Show Image
 **Trigger**: Player displays an image to others
 ```
-[IMAGE_DATA...]      // Image display data
+[IMAGE_DATA...]      // Image display data; the server does not parse it
 ```
+**Source**: `msgPLI_SHOWIMGPLAYER` (`PlayerClientPackets.cpp:814-818`) relays
+`PLO_SHOWIMGPLAYER (32) >> short player_id << body` to nearby players, excluding the
+sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 
 ### PLI_HURTPLAYER (26) - Hurt Player
 **Trigger**: Player damages another player
@@ -317,6 +352,15 @@ byte after the sender player ID.
 ```
 [STRING: weapon_name] // Weapon name to remove
 ```
+
+### PLI_PACKETCOUNT (31) - Packet Count Check
+**Trigger**: Client reports how many packets it has sent
+```
+[GUSHORT: count]     // Packets the client counts as sent
+```
+**Source**: `Player::msgPLI_PACKETCOUNT` (`server/src/player/Player.cpp:1858-1867`) logs a
+warning when `count` differs from the server's own packet counter, or when that counter
+is above 10000. It then resets the counter to 0. It sends nothing back.
 
 ### PLI_WEAPONADD (33) - Add Weapon
 **Trigger**: Player gains a weapon
@@ -366,11 +410,15 @@ byte after the sender player ID.
 [STRING: action_data] // Comma-separated action parameters
 ```
 
-### PLI_MAPINFO (39) - Map Information
-**Trigger**: Client requests map information
+### PLI_TAMPERCHECK (39) - Memory Hash Report
+**Trigger**: Client reports hashes of parts of its own memory
 ```
-[STRING: data]       // Map-related data (usage unclear)
+[GINT5: memory_hash1]  // layout from the gs2lib IEnums.h:71 comment
+[GINT5: memory_hash2]
 ```
+**Source**: gs2lib `IEnums.h:71` names it `PLI_TAMPERCHECK` and gives the layout in a
+comment. The server handler reads the packet as one string and discards it
+(`msgPLI_TAMPERCHECK`, `PlayerClientPackets.cpp:1323-1327`). It is not a map request.
 
 ### PLI_SHOOT (40) - Shoot Projectile (v1)
 **Trigger**: Player fires a projectile
@@ -481,12 +529,36 @@ The clients read so far use a fourth form: the 2-byte ×256 value above.
 [GSHORT: player_id]  // Target player ID
 [GBYTE: mute_state]  // 1 = mute, 0 = unmute
 ```
+Unverified beyond the gs2lib `IEnums.h:74` comment: the reference server registers no
+handler for this id. It falls through to `Player::msgPLI_NULL`, which logs the packet as
+unknown and disconnects the player after the third invalid packet
+(`server/src/player/Player.cpp:283,1657-1675`).
 
 ### PLI_PROCESSLIST (44) - Process List
-**Trigger**: Server requests client's running processes
+**Trigger**: Client reports its running processes
 ```
-[STRING: process_data] // Newline-separated process list
+[STRING: process_data] // gtokenized, newline-separated process list
 ```
+**Source**: `msgPLI_PROCESSLIST` (`PlayerClientPackets.cpp:1420-1424`) guntokenizes the
+string, splits it on newlines and discards the result. The request in the other
+direction is `PLO_HASPROCESSRUNNING (183)`, which the client answers with
+`PLI_PROCESSRUNNING (45)` (gs2lib `IEnums.h:76`, `:304`).
+
+### PLI_PROCESSRUNNING (45) - Process Running Reply
+**Trigger**: Client answers `PLO_HASPROCESSRUNNING (183)`
+```
+[GCHAR: flag]        // 1 if a matching process is running
+```
+Layout from the gs2lib `IEnums.h:76` comment. The reference server registers no handler
+for this id.
+
+### PLI_ENTERLEVEL (46) - Level Entered
+**Trigger**: Client entered a new level
+```
+[GCHAR: 1]
+```
+Layout from the gs2lib `IEnums.h:77` comment. The server handler does nothing
+(`msgPLI_ENTERLEVEL`, `PlayerClientPackets.cpp:1426-1429`).
 
 ### PLI_VERIFYWANTSEND (47) - Verify File Checksum
 **Trigger**: Client verifies file integrity before requesting
@@ -500,6 +572,36 @@ The clients read so far use a fourth form: the 2-byte ×256 value above.
 ```
 [GUINT: data_size]   // Size of following raw data in bytes
 ```
+
+### PLI_PROFILEGET (80) - Request Player Profile
+**Trigger**: Client asks for a player's profile
+```
+[STRING: account_name] // Account whose profile is wanted, to end of packet
+```
+**Source**: `Player::msgPLI_PROFILEGET` (`server/src/player/Player.cpp:1878-1883`) does not
+parse the body. It forwards the whole packet, id byte included, to the list server as
+`SVO_GETPROF >> short player_id`. The list server skips that id byte and reads the account
+name (`graal-serverlist/server/src/ServerConnection.cpp:868-876`). It answers with the
+profile fields.
+
+### PLI_PROFILESET (81) - Set Own Profile
+**Trigger**: Client saves its own profile
+```
+[GCHAR: account_len][STRING: account]   // Must equal the sender's own account name
+[GCHAR: len][STRING: name]
+[GCHAR: len][STRING: age]               // decimal text
+[GCHAR: len][STRING: gender]
+[GCHAR: len][STRING: country]
+[GCHAR: len][STRING: messenger]
+[GCHAR: len][STRING: email]
+[GCHAR: len][STRING: website]
+[GCHAR: len][STRING: hangout]
+[GCHAR: len][STRING: quote]
+```
+**Source**: `Player::msgPLI_PROFILESET` (`Player.cpp:1885-1894`) ignores the packet unless the
+account name matches. Otherwise it forwards the whole packet, id byte included, to the
+list server as `SVO_SETPROF`. The list server skips the id byte and reads the nine
+length-prefixed fields above (`graal-serverlist/server/src/ServerConnection.cpp:904-926`).
 
 ## Player Properties (PLI_PLAYERPROPS Data)
 
@@ -554,17 +656,22 @@ reference list binds `FULLHEARTS` to `account.maxHitpoints`
 > uses `< 10` and `>= 10` the same way. In particular, testing `power > 4` for sword
 > is wrong. It attempts to read an image string that is absent from the bare form and
 > desynchronizes every following property. The serializer/deserializer definitions are
-> at `GServer-v2/server/src/utilities/PropertySerializers.cpp:68-163`.
+> at `server/src/utilities/PropertySerializers.cpp:98-154` (sword) and `:159-218`
+> (shield).
 >
 > For a bare nonzero power, the receiver synthesizes `sword{N}.png` or
 > `shield{N}.png`. Classic generation uses `.gif`. The reference shield implementation
 > is intentionally asymmetric: serialization permits the bare form only through power
 > 3, while deserialization synthesizes a default through power 4. Its deserializer also
 > returns early when no bytes remain after a biased power, an explicit 1.41-client quirk.
-> A custom sword name without an extension gains `.gif`. A custom shield name gains
-> `.gif` only for classic generation
-> (`GServer-v2/server/src/utilities/PropertySerializers.cpp:89-182`).
-**GANI (10)**: `[GCHAR: length][string]` - Animation file
+> In classic generation only, a custom sword or shield name without an extension gains
+> `.gif` (`server/src/utilities/PropertySerializers.cpp:134-139` for the sword, `:198-203`
+> for the shield).
+**GANI (10)**: `[GCHAR: length][string]` - Animation file. In the classic server
+generation (0) this prop is BOWGIF instead: a byte below 10 is a bow preset with no
+string, and any other byte is `10 + length` followed by the image name, with `.gif`
+appended when the name has no dot. The server picks the form by its generation, not by
+client version (`server/src/utilities/PropertySerializers.cpp:223-264`).
 **HEADIMAGE (11)**: Variable format (see below) — *also called HEADGIF in some older docs*
 
 > ⚠️ **MAGIC NUMBER ALERT** - HEADIMAGE
@@ -578,7 +685,8 @@ reference list binds `FULLHEARTS` to `account.maxHitpoints`
 >
 > This is a 100-offset preset/name union, **not** a normal length-prefixed string.
 > Treating a preset byte as a string length consumes bytes belonging to the next
-> property (`GServer-v2/server/src/utilities/PropertySerializers.cpp:261-290`).
+> property (`server/src/utilities/PropertySerializers.cpp:282-334`; serialize
+> `:284-295`, deserialize `:297-315`).
 **CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble
 **COLORS (13)**: `[8 bytes: color_data]` (server new-world mode) or `[5 bytes]`
 (other mode). This is server-wide configurable policy, not a width implied by the
@@ -593,14 +701,14 @@ negative signed bytes before division by 2. *Not* pixels/2.
 **CARRYSPRITE (19)**: one unsafe GCHAR byte. The oracle maps it to
 `PropertyUnsafeByte`. Its writer adds 32 without the ordinary G-byte clamp. Values
 above 223 therefore differ from a clamped-byte writer
-(`GServer-v2/server/include/object/Player.h:633`,
-`GServer-v2/server/include/utilities/PropertySerializers.h:220-231`).
+(`server/include/object/Player.h:711`,
+`server/include/utilities/PropertySerializers.h:229-258`).
 **CURLEVEL (20)**: `[GCHAR: length][string]` - Current level name
 **HORSEGIF (21)**: `[GCHAR: length][string]` - Horse image
 **HORSEBUSHES (22)**: `[GCHAR: bush_count]` - Bushes eaten by horse
 **EFFECTCOLORS (23)**: Variable - `[GCHAR: first]`. If `first == 0`, the property is only
-that 1 byte. Otherwise, it is 5 bytes (`first` + 4 color bytes). Visual effect colors
-(RGBA tint)
+that 1 byte. Otherwise, it is 5 bytes (`first` + 4 color bytes). Visual effect colors.
+The reference shows only the byte layout, not what the four bytes mean
 **CARRYNPC (24)**: `[GINT3: npc_id]` (**3 bytes**) - Carried NPC ID
 **APCOUNTER (25)**: `[GSHORT: ap_time]` (**2 bytes** — not 1) - AP recovery counter
 **MAGICPOINTS (26)**: `[GCHAR: mp_count]` - Magic points
@@ -643,7 +751,7 @@ integer, not one byte or five raw octets. The independent list-server reader cal
 | 80 | Z2 | `[GSHORT]` (2 bytes) high-precision Z pixel coord |
 | 81 | PLAYERLISTCATEGORY | `[GCHAR]` (1 byte) |
 | 82 | COMMUNITYNAME | `[GCHAR: length][string]` |
-| 83 | *(unspecified)* | Absent from the oracle property-list macro; width and meaning are not specified |
+| 83 | UNKNOWN83 | The server does not handle it: it is absent from the property-list macro (`FOR_LIST_OF_PLAYER_PROPS`), so it is never sent or parsed. The enum comment says v6 reads a GBYTE5 and stores it if the number is below 1,000,000,000 (`server/include/player/PlayerProps.h:111-112`) |
 
 If a parser treats 37-74 as one flat GATTRIB block, it misaligns each subsequent
 property. Props **51** (void) and **53** (1 byte, not a string) also frequently
@@ -653,10 +761,11 @@ desynchronize a simple parser.
 
 The server must send player and NPC property pairs in strictly ascending property-ID
 order. The reference full-list and modified-player builders iterate IDs upward
-(`GServer-v2/server/src/player/PlayerProps.cpp:1291-1317`,
-`GServer-v2/server/src/player/PlayerProps.cpp:1357-1380`), while its shared change
+(`server/src/player/PlayerProps.cpp:1325-1351`,
+`server/src/player/PlayerProps.cpp:1393-1418`), while its shared change
 collector sorts by ID because a client stops processing when it encounters a property it
-does not understand (`GServer-v2/server/src/utilities/PropertySerializers.cpp:668-689`).
+does not understand (`server/src/utilities/PropertySerializers.cpp:681-747`; the sort
+comment is at `:683-685`).
 
 Disordered properties can silently truncate data without a reported protocol error.
 A strict parser can stop early and keep only the prefix. An NPC builder that
@@ -674,8 +783,9 @@ Stream walkers must also obey these rules:
   value. Stop cleanly if the width is unknown.
 - A property ID at end-of-packet with zero payload is truncation for every non-void
   property, not successful full consumption.
-- Do not infer a shape for player prop 83: it is absent from
-  `FOR_LIST_OF_PLAYER_PROPS` (`GServer-v2/server/include/object/Player.h:613-696`).
+- Do not infer a shape for player prop 83 from the server: it is absent from
+  `FOR_LIST_OF_PLAYER_PROPS` (`server/include/object/Player.h:691-774`). Only the enum
+  comment above describes it.
 
 ### What old clients parse
 
@@ -765,8 +875,12 @@ RC (Remote Control) clients use these packets for server administration.
 ### PLI_RC_SERVEROPTIONSSET (52) - Set Server Options  
 **Trigger**: RC updates server configuration
 ```
-[STRING: options_data] // Server configuration text
+[STRING: options_data] // gtokenized (quoted CSV) options text
 ```
+Needs `PLPERM_SETSERVEROPTIONS`. The server guntokenizes the string
+(`msgPLI_RC_SERVEROPTIONSSET`, `server/src/player/packets/PlayerRCPackets.cpp:61-81`).
+All the RC handlers below log a `[Hack]` line and refuse when the sender is a plain
+client (`isClient()`), except where noted.
 
 ### PLI_RC_FOLDERCONFIGGET (53) - Get Folder Config
 **Trigger**: RC requests folder configuration
@@ -777,27 +891,45 @@ RC (Remote Control) clients use these packets for server administration.
 ### PLI_RC_FOLDERCONFIGSET (54) - Set Folder Config
 **Trigger**: RC updates folder configuration
 ```
-[STRING: folder_config] // Folder configuration data
+[STRING: folder_config] // gtokenized (quoted CSV) folder list
 ```
+Needs `PLPERM_SETFOLDEROPTIONS`. The server turns the CSV into lines of
+`foldersconfig.txt` (`msgPLI_RC_FOLDERCONFIGSET`, `PlayerRCPackets.cpp:151-173`).
 
 ### PLI_RC_PLAYERPROPSGET (59) - Get Player Properties
 **Trigger**: RC requests player information
 ```
-[STRING: player_name] // Player account name
+// Deprecated: the server reads nothing
 ```
+The handler is an empty "Deprecated" stub (`PlayerRCPackets.cpp:200-204`). Player
+information is requested with `PLI_RC_PLAYERPROPSGET2 (73)` and `PLI_RC_PLAYERPROPSGET3 (74)`.
 
 ### PLI_RC_PLAYERPROPSSET (60) - Set Player Properties
 **Trigger**: RC modifies player properties
 ```
-[STRING: player_name] // Target player
-[STRING: prop_data]   // Property modifications
+[GUSHORT: player_id]  // Target player
+[RC_PROP_BLOB]        // Property modifications
+```
+Needs `PLPERM_SETATTRIBUTES` for another player, or `PLPERM_SETSELFATTRIBUTES` for the
+sender's own account (`msgPLI_RC_PLAYERPROPSSET`, `PlayerRCPackets.cpp:206-231`). The
+reference comment calls the handler "Deprecated?". The blob is read by
+`Player::setPropsFromRCPacket` (`server/src/player/PlayerProps.cpp:1242-1323`):
+```
+[GCHAR: world_len][STRING: world]          // skipped
+[GCHAR: props_len][STRING: props]          // a normal player-property stream
+[GUSHORT: flag_count] then flag_count x [GCHAR: len][STRING: "name=value"]
+[GUSHORT: chest_count] then chest_count x [GCHAR: len][GUCHAR: x][GUCHAR: y][STRING: level (len - 2 bytes)]
+[GUCHAR: weapon_count] then weapon_count x [GCHAR: len][STRING: weapon]
 ```
 
 ### PLI_RC_DISCONNECTPLAYER (61) - Disconnect Player
 **Trigger**: RC kicks a player
 ```
-[STRING: player_name] // Player to disconnect
+[GUSHORT: player_id]  // Player to disconnect
+[STRING: reason]      // Optional, to end of packet
 ```
+Needs `PLPERM_DISCONNECT` (`msgPLI_RC_DISCONNECTPLAYER`, `PlayerRCPackets.cpp:233-262`). A
+non-empty reason is added to the disconnect message the player sees.
 
 ### PLI_RC_ADMINMESSAGE (63) - Admin Message
 **Trigger**: RC sends server-wide message
@@ -808,9 +940,10 @@ RC (Remote Control) clients use these packets for server administration.
 ### PLI_RC_PRIVADMINMESSAGE (64) - Private Admin Message
 **Trigger**: RC sends private message to player
 ```
-[STRING: player_name] // Target player
+[GUSHORT: player_id]  // Target player
 [STRING: message]     // Private message
 ```
+Needs `PLPERM_ADMINMSG` (`msgPLI_RC_PRIVADMINMESSAGE`, `PlayerRCPackets.cpp:296-310`).
 
 ### PLI_RC_SERVERFLAGSGET (68) - Get Server Flags
 **Trigger**: RC requests server flags
@@ -821,14 +954,27 @@ RC (Remote Control) clients use these packets for server administration.
 ### PLI_RC_SERVERFLAGSSET (69) - Set Server Flags
 **Trigger**: RC updates server flags
 ```
-[STRING: flags_data] // Server flags data
+[GUSHORT: flag_count]
+// flag_count times:
+[GUCHAR: len][STRING: flag]   // "name=value"
 ```
+Needs `PLPERM_SETSERVERFLAGS`. The server rewrites `serverflags.txt` from these entries
+(`msgPLI_RC_SERVERFLAGSSET`, `PlayerRCPackets.cpp:354-401`).
 
 ### PLI_RC_ACCOUNTADD (70) - Add Account
 **Trigger**: RC creates new player account
 ```
-[STRING: account_data] // Account creation data
+[GUCHAR: len][STRING: account]
+[GUCHAR: len][STRING: password]      // read, not used
+[GUCHAR: len][STRING: email]
+[GUCHAR: banned]
+[GUCHAR: only_load]
+[GUCHAR: admin_level]                // read, not used
+[GUCHAR: len][STRING: admin_worlds]  // read, not used
+[GUCHAR: len][STRING: ban_reason]
 ```
+Needs `PLPERM_MODIFYSTAFFACCOUNT`. The `banned` and `ban_reason` fields apply only if the
+sender also has `PLPERM_BAN` (`msgPLI_RC_ACCOUNTADD`, `PlayerRCPackets.cpp:403-435`).
 
 ### PLI_RC_ACCOUNTDEL (71) - Delete Account
 **Trigger**: RC deletes player account
@@ -911,16 +1057,24 @@ NC (NPC Control) clients use these packets for NPC and content management.
 ```
 
 ### PLI_REQUESTTEXT (152) - Request Server Text
-**Trigger**: Client requests server-stored value
+**Trigger**: Client requests text from the server or the list server
 ```
-[STRING: key] // Key to retrieve
+[STRING: request] // gtokenized (quoted CSV) string
 ```
+After guntokenizing, the request is a `\n`-separated `weapon`, `type`, `option` and
+optional further parameters, for example `<weapon>,lister,serverinfo`. The server answers
+from the type and option, for example by forwarding to the list server or with
+`PLO_SERVERTEXT`. There is no key/value store on this path
+(`Player::msgPLI_REQUESTTEXT`, `server/src/player/PlayerRequestText.cpp:18-158`).
 
 ### PLI_SENDTEXT (154) - Send Server Text
-**Trigger**: Client sets server-stored value
+**Trigger**: Client sends text to the server or the list server
 ```
-[STRING: key_value] // "key=value" format
+[STRING: text] // gtokenized (quoted CSV) string, same shape as PLI_REQUESTTEXT
 ```
+Handled by `Player::msgPLI_SENDTEXT` (`PlayerRequestText.cpp:160-278`). The reference
+reads `weapon`, `type`, `option` and the remaining parameters, with the same dispatch on
+`type` as PLI_REQUESTTEXT (for example `irc` and `lister`).
 
 ### PLI_UPDATEGANI (157) - Update GANI Animation
 **Trigger**: Client requests GANI bytecode update
@@ -928,16 +1082,21 @@ NC (NPC Control) clients use these packets for NPC and content management.
 [GUINT5: checksum]   // CRC32 of client's cached gani bytecode (0 forces a resend)
 [STRING: gani_name]  // GANI name (without .gani extension), to end of packet
 ```
-Server replies with `PLO_GANISCRIPT (134)` only if the CRC differs, then **always**
-`PLO_LOADGANI (195)` (`msgPLI_UPDATEGANI`, `PlayerClientPackets.cpp:1460-1483`).
+Server replies with `PLO_GANISCRIPT (134)` only if the CRC differs, then
+`PLO_LOADGANI (195)` with `[GCHAR len][gani]"SETBACKTO <x>"`
+(`msgPLI_UPDATEGANI`, `PlayerClientPackets.cpp:1470-1493`). If the server cannot find the
+gani, it sends nothing.
 
 ### PLI_UPDATESCRIPT (158) - Update Weapon Script
 **Trigger**: Client requests weapon bytecode
 ```
 [STRING: weapon_name] // Weapon name, to end of packet (no checksum field)
 ```
-Server replies with `PLO_WEAPONBYTECODE2 (140)`
-(`msgPLI_UPDATESCRIPT`, `PlayerClientPackets.cpp:1485-1493`).
+For a known weapon with non-empty bytecode, the server replies with
+`PLO_WEAPONBYTECODE2 (140)` to clients 5.07 and later, and with `PLO_WEAPONBYTECODE (132)`
+`[GCHAR len][name][bytecode]` to older ones. Otherwise it sends nothing
+(`msgPLI_UPDATESCRIPT`, `PlayerClientPackets.cpp:1495-1503`; `Weapon::sendByteCodeToPlayer`,
+`server/src/object/Weapon.cpp:204-216`).
 
 ### PLI_UPDATECLASS (161) - Update NPC Class
 **Trigger**: Client requests class bytecode
@@ -945,9 +1104,13 @@ Server replies with `PLO_WEAPONBYTECODE2 (140)`
 [GINT5: checksum]    // CRC32 of client's cached class bytecode (0 forces a resend)
 [STRING: class_name] // Class name, to end of packet
 ```
-If the CRC differs, the server replies with `PLO_LOADSCRIPT (197)` form 2
-(RAWDATA-framed). Unknown classes get a header-only `PLO_WEAPONBYTECODE2 (140)` instead
-(`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:1495-1530`). This packet requires an NPC
+If the CRC matches, the server sends nothing. If it differs, the server sends the class
+RAWDATA-framed: `PLO_LOADSCRIPT (197)` to clients 5.07 and later, or
+`PLO_CLASSBYTECODE (133)` `[GCHAR len][name][bytecode]` to older ones
+(`ScriptClass::getClassPacket`, `server/src/scripting/ScriptClass.cpp:66-81`). For an
+unknown class, clients 5.07 and later get a header-only `PLO_WEAPONBYTECODE2 (140)`, and
+older clients get a name-only `PLO_CLASSBYTECODE`
+(`msgPLI_UPDATECLASS`, `PlayerClientPackets.cpp:1505-1545`). This packet requires an NPC
 server (`hasNPCServer()`). Otherwise, the server ignores it.
 
 ### PLI_UPDATEPACKAGEREQUESTFILE (159) - Update Package Request
@@ -963,7 +1126,7 @@ server (`hasNPCServer()`). Otherwise, the server ignores it.
 
 [Encryption](encryption.md) is the reference for GEN_5. In summary:
 
-- The login packet sets the one-byte key.
+- The login packet sets the one-byte key (`server/src/player/PlayerClient.cpp:336-340`).
 - The iterator starts at `0x4A80B38`. Each 4-byte group advances it once:
   `iterator = iterator * 0x8088405 + key`. The data is XORed with the little-endian
   bytes of the iterator.
@@ -971,7 +1134,8 @@ server (`hasNPCServer()`). Otherwise, the server ignores it.
   `0x02`, 4 groups (16 bytes) for `0x04` and `0x06`.
 
 An earlier revision of this section gave `key = (key + iterator++) & 0xFF` and limits of
-40, 4096 and 65536 bytes. Those values do not match `CEncryption.cpp` and are wrong.
+40, 4096 and 65536 bytes. Those values do not match gs2lib `CEncryption.cpp:159` and are
+wrong.
 
 ## Data Type Reference
 
