@@ -235,6 +235,33 @@ the partial-XOR limit from it. Reborn records the distinction in
 `reborn_protocol.encryption.CompressionPolicy`, `GAME_COMPRESSION`, and
 `LIST_SERVER_COMPRESSION`.
 
+The reference client uses different size limits from the reference server. Its send path
+(`Preagonal/FourPlay/quattroplay/src/TGraalConnection.cpp:559-580`, with `minzlibbytes = 48`
+and `minbzip2bytes = 4096` at `:170-171`) chooses the type for each flush of the send
+buffer (`n` bytes before compression):
+
+| `n` | Type |
+|---|---|
+| below `0x30` (48) | `0x02` |
+| `0x30` to `0xFFF` | `0x04` zlib |
+| `0x1000` (4096) and above | `0x06` bzip2, only when `allowbzip2compression` and the per-connection flag allow it; otherwise `0x04` |
+
+The reference client has no "zlib if shorter" rule below 48 bytes: it always sends `0x02`
+there. The send buffer flushes at `0x1000` bytes (`TGraalConnection.cpp:1309,1320,1338`).
+
+The 55 and 8192 limits above are the reference server's GEN_5 send policy
+(gs2lib `src/CFileQueue.cpp:236-245`: `> 0x2000` bzip2, `> 55` zlib), which Reborn mirrors
+for game sessions; only the list-server column is Reborn's own. Any receiver accepts all
+three types, so either policy works on the wire.
+
+The following are reported in squirelworks' client-analysis notes
+(`protocol/client-versions.md` and `protocol/codec-and-framing.md`; static read and lab
+captures); they were not verified against the reference. The 2.22 client picks the type by
+the same 48 and 4096 thresholds, but sends `0x04` below 48 bytes when the zlib output is
+actually shorter. Real 2.22 sessions under Wine sent 580 `0x02` and 17 `0x04` frames. No
+`0x06` frame from a client has been captured yet. The Delphi RemoteControl RC socket uses
+the same per-flush choice.
+
 The two-tier list-server rule describes the client's historical behavior
 against the closed production list server; it is **not** a demonstrated
 server-side prohibition. The open reference list server accepts `0x06`, calls
