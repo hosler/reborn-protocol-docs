@@ -12,11 +12,28 @@ link moves the player to a different level. Reborn worlds use level links for na
 
 ### PLO_LEVELLINK (1)
 
-If `serverside = false`, the server sends level link data to clients:
+The server sends **one `PLO_LEVELLINK` packet per link**
+(`StaticLevelData::sendLinksToPlayer`, `server/src/level/Level.cpp:156-167`):
 
 ```
-[STRING: link_data] // Raw newline-terminated string
+[STRING: link_data] // Raw string, one link, ended by the packet's 0x0A terminator
 ```
+
+The server sends links only when it also sends the level's board data, that is when the
+client's cached copy is missing or older than the level, and only if one of these holds
+(`server/src/player/PlayerClient.cpp:1457-1482`):
+
+- the server has no NPC-server (`serverside = false`), or
+- the `clientsidelinks` option is set, or
+- the level is a sub-level on a bigmap. The server sends links there because a client
+  that waits for the warp can run past the level edge and overflow its position
+  (`PlayerClient.cpp:1479-1480`).
+
+When an NPC-server is present and none of the other conditions holds, the server tests
+links itself and warps the player (`PlayerClient.cpp:1843-1895`). It skips this on bigmaps
+(`:1855-1859`) and leaves out probable map links (see
+[Edge Link Filtering](#edge-link-filtering)) when the level is on a map. The pre-2.x client
+path sends links on every level entry (`PlayerClientOriginal.cpp:156`).
 
 **Critical Implementation Note**: This data is NOT a GSTRING (length-prefixed string).
 The server sends raw string data until a newline character (0x0A). This difference has
@@ -34,7 +51,17 @@ destlevel x y width height destx desty
 - **width, height**: Link area size in tiles
 - **destx, desty**: Destination coordinates (see special values below)
 
-The server sends multiple links as one string with newline separators.
+Each packet holds exactly one link. Do not expect several links per packet.
+
+The destination level name may contain spaces. The server parses the **last six**
+space-separated tokens as geometry and destination, and joins the rest into the level
+name (`server/src/level/LevelLink.cpp:78-90`). A client that reads `split()[0]` as the
+level name misreads such links.
+
+`destx` and `desty` are not always numbers. They may be `playerx`, `playery` or a GS1 math
+expression. The server evaluates an expression only when an NPC-server exists
+(`LevelLink.cpp:24-29`, `:117-129`), so a link that reaches a client may carry an
+expression that the client must not parse as a float.
 
 ### Coordinate Frame of a Link
 
@@ -44,6 +71,9 @@ Every link field is in the **local tile frame** of a single 64×64 level:
 - `width` and `height` are local tile spans, not an ending coordinate and not
   a world-space distance.
 - Numeric `destx` and `desty` are local coordinates in `destlevel`.
+  One exception: when `destlevel` ends in `.gmap` or names the gmap level itself, the
+  server reads the warp position as gmap-global, with origin (0, 0)
+  (`PlayerClientPackets.cpp:66-69`, `:85-88`). See [GMAP](gmap.md#which-frame-the-wire-carries).
 
 This rule also applies when the source or destination is a GMAP segment. Do not add
 the source segment origin to `x`/`y`, and do not serialize stored world
@@ -57,7 +87,7 @@ For collision, the rectangle is **inclusive on both ends**:
 X values 62, 63 and 64. It does not describe a world span starting at tile 62
 of the whole GMAP.
 
-The server test is `Level.cpp:2417`, which uses `>=` and `<=` on both axes.
+The server test is `server/src/level/Level.cpp:2541` and `:2566`, which use `>=` and `<=` on both axes on whole-tile positions.
 `pyreborn/client_warp.py` matches it. A half-open test misses the far edge tile
 of every link, so a player who steps onto the last row of a door triggers
 nothing.
@@ -68,7 +98,8 @@ The destination coordinates accept special values:
 
 - **"playerx"**: Keep player's current X coordinate
 - **"playery"**: Keep player's current Y coordinate
-- **"-1"**: Server converts to "playerx" or "playery" respectively
+- **"-1"**: Server converts to "playerx" or "playery" respectively when it parses the link
+  (`LevelLink.cpp:54-64`, `:102-111`), so `-1` never reaches the wire
 
 Example: A link with `destx="playerx" desty="32"` keeps the player's X position. It puts
 the player at Y=32 in the destination level.
@@ -84,10 +115,12 @@ to:
 
 ### Edge Link Filtering
 
-In GMAP mode, clients should usually ignore edge links between GMAP segments because:
-- GMAP system handles seamless transitions automatically
-- Edge links would interfere with smooth world navigation
-- Server still sends these for backward compatibility
+The reference server calls the edge links between segments *probable map links* and
+filters them itself: with an NPC-server present, its own link test skips them on a map
+(`PlayerClient.cpp:1864`). Reborn clients likewise ignore edge links between GMAP segments, because the
+GMAP system handles seamless transitions automatically. This client-side practice is
+unverified against the decompiled reference client. The server sends links to clients
+under the conditions in the Packet Structure section, not "for backward compatibility".
 
 ### Implementation Strategy
 
@@ -109,21 +142,21 @@ def should_process_link(link, current_level, gmap_manager):
     return True
 
 def is_edge_link(link):
-    """Check if a link sits against a level edge.
-
-    This mirrors the Reborn client's actual heuristic
-    (ActionsMixin._is_edge_link, pyreborn/game/actions.py). It is a
-    GameClient-only filter, and the base Client does not apply it:
-    a link is treated as an edge link if its rectangle touches any of the
-    four borders of the 64-tile level. The thresholds are <=1 / >=63 (not
-    an exact x==0 && width==1 match), so links one tile in from the border
-    still count.
+    """The reference's probable-map-link test (LevelLink::isProbableMapLink,
+    server/src/level/LevelLink.cpp:142-149): a one-tile-wide strip on the
+    left or right border that keeps the player's Y, or a one-tile-high
+    strip on the top or bottom border that keeps the player's X.
     """
-    return (link.x <= 1
-            or link.x + link.width >= 63
-            or link.y <= 1
-            or link.y + link.height >= 63)
+    return (((link.x == 0 or link.x == 63)
+             and link.width == 1 and link.dest_y == "playery")
+            or ((link.y == 0 or link.y == 63)
+                and link.height == 1 and link.dest_x == "playerx"))
 ```
+
+The Reborn client's own filter (`ActionsMixin._is_edge_link`, `pyreborn/game/actions.py`)
+is wider. It also treats a rectangle within one tile of any border as an edge link
+(`x <= 1`, `x + width >= 63`, and the same on Y). That is our heuristic, not the
+reference rule, and it drops ordinary doors close to a border.
 
 ## Complete Implementation Example
 
@@ -137,20 +170,19 @@ class LevelLinkManager:
         """Parse PLO_LEVELLINK packet data"""
         self.current_links.clear()
         
-        # Split by newlines (server sends all links in one string)
-        lines = link_data.strip().split('\n')
-        
-        for line in lines:
+        # One link per PLO_LEVELLINK packet. A level name may contain
+        # spaces, so the last six tokens are the geometry.
+        for line in link_data.strip().split('\n'):
             parts = line.strip().split()
             if len(parts) >= 7:
                 link = LevelLink(
-                    destination=parts[0],
-                    x=int(parts[1]),
-                    y=int(parts[2]),
-                    width=int(parts[3]),
-                    height=int(parts[4]),
-                    dest_x=parts[5],  # Keep as string for special values
-                    dest_y=parts[6]   # Keep as string for special values
+                    destination=" ".join(parts[:-6]),
+                    x=int(parts[-6]),
+                    y=int(parts[-5]),
+                    width=int(parts[-4]),
+                    height=int(parts[-3]),
+                    dest_x=parts[-2],  # Keep as string for special values
+                    dest_y=parts[-1]   # and for math expressions
                 )
                 
                 # Apply GMAP filtering if needed
@@ -172,7 +204,7 @@ class LevelLinkManager:
     def check_collision(self, player_x, player_y):
         """Check if player is touching any link"""
         for link in self.current_links:
-            # Inclusive on both ends, matching Level.cpp:2417.
+            # Inclusive on both ends, matching Level.cpp:2541 and :2566.
             if (link.x <= player_x <= link.x + link.width and
                 link.y <= player_y <= link.y + link.height):
                 return link
@@ -181,6 +213,8 @@ class LevelLinkManager:
     def calculate_destination_coords(self, link, current_x, current_y):
         """Calculate actual destination coordinates"""
         # Handle special values
+        # dest_x/dest_y may also be a GS1 math expression, which float()
+        # rejects. The server evaluates those only with an NPC-server.
         dest_x = current_x if link.dest_x == "playerx" else float(link.dest_x)
         dest_y = current_y if link.dest_y == "playery" else float(link.dest_y)
         
@@ -211,6 +245,15 @@ def send_warp_request(connection, link, current_player):
     
     connection.send(packet.build())
 ```
+
+### Warp Failure
+
+`PLI_LEVELWARPMOD` is `PLI_LEVELWARP` with a `GInt5` modtime before the position
+(`PlayerClientPackets.cpp:56-58`). If the destination level does not exist or cannot be
+entered, the server sends `PLO_WARPFAILED` with the level name
+(`PlayerClient.cpp:1211`, `:1294`). It then warps the player back to the current level and,
+if that also fails, to the `unstickmelevel` position (`PlayerClientPackets.cpp:92-104`).
+A client should expect to stay in, or return to, a level after a failed warp.
 
 ## Common Implementation Pitfalls
 

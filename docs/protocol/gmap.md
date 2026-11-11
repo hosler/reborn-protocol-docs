@@ -26,21 +26,45 @@ simply `x` and `y`.
 
 | Packet or field | Frame carried |
 |-----------------|---------------|
-| `PLI_LEVELWARP` / `PLI_LEVELWARPMOD` destination X/Y | **Local**, in the target level |
+| `PLI_LEVELWARP` / `PLI_LEVELWARPMOD` destination X/Y | **Local**, in the target level, when the destination is a named sub-level. The server adds that sub-level's origin (`PlayerClientPackets.cpp:75-83`). When the destination name ends in `.gmap`, or is the gmap level itself, the server takes the position with origin (0, 0), as **gmap-global** (`PlayerClientPackets.cpp:66-69`, `:85-88`) |
 | `PLO_PLAYERWARP` X/Y | **Local**, in the target level |
-| `PLO_PLAYERWARP2` X/Y | **Local**, plus separate `gmap_x`/`gmap_y` segment coordinates |
+| `PLO_PLAYERWARP2` X/Y | **Local**, then Z (`gchar z+50`), then separate `gmap_x`/`gmap_y` segment coordinates and the level name (`PlayerClient.cpp:1252`). The pre-2.x path never sends it (`PlayerClientOriginal.cpp:53`) |
 | Player `GMAPLEVELX` (43), `GMAPLEVELY` (44) | **Segment (grid)** |
 | NPC `GMAPLEVELX` (41), `GMAPLEVELY` (42) | **Segment (grid)** |
-| Player/NPC X/Y or X2/Y2 entity properties | Position coordinates whose frame is server/context dependent. Normally **local**, but X2/Y2 may legitimately be **world** on GMAP streams |
+| Player/NPC X/Y and X2/Y2 entity properties | **Local** to the current segment, always. The reference server stores and relays them as level-local pixels, and the grid position travels separately in `GMAPLEVELX`/`GMAPLEVELY` |
 | Level links, chests, signs, baddies, and board positions | **Local** |
 
-The trap is therefore not the numeric encoding alone. A level-warp coordinate
-must remain local even when the client stores the player in world coordinates,
-while an entity X2/Y2 property at or above 64 may already be a world coordinate.
-Keep accompanying segment properties and packet context until normalization.
-Blindly adding the current segment origin can double-offset a world property.
-The Reborn client normalizes this in the
-`handle_player_props` and `handle_npc_props` handlers.
+#### What the reference does with X/Y and X2/Y2
+
+All four of the player props X, Y, X2 and Y2 map to the same field,
+`character.localPixelX/Y` (`server/include/object/Player.h:707-708`, `:770-771`). The X2/Y2
+setter stores the received pixel value unchanged
+(`server/src/player/PlayerProps.cpp:1072-1100`). NPC X2/Y2 map to the same field
+(`server/include/object/NPC.h:702-703`). The server never writes a world value into X2/Y2.
+The segment comes only from `GMAPLEVELX`/`GMAPLEVELY`, which the server accepts only
+on a gmap level and reverts otherwise (`PlayerProps.cpp:905-967`).
+
+The reference client agrees. It sends `netSigned14(floor(getlocalx() * 16 + 0.5))`
+(`Preagonal/FourPlay/quattroplay/src/TPlayer.cpp:3336-3339`) and composes world as
+`local + (mapX << 6)` (`Preagonal/FourPlay/quattroplay/src/TGaniObject.cpp:1503-1504`).
+
+A live check against the reference server on a gmap level shows the same: the login
+self props carry local 30.0/30.5 with the grid sent separately in `PLO_PLAYERWARP2`.
+A client X2 of 31, 70.25 or -1.5 (local tiles) reaches other clients as only the X2 prop,
+with the same value. There is no wrapping, and no `GMAPLEVELX`/`GMAPLEVELY` is added.
+An out-of-range local is relayed as it is.
+
+So the trap is the pairing, not the encoding. A level-warp coordinate is local, except
+for the `.gmap` destinations in the table above. An entity X/Y or X2/Y2 is local to the segment named by
+the same entity's `GMAPLEVELX`/`GMAPLEVELY`. World is derived as `local + grid * 64`
+from a known grid, never read off the wire.
+
+**Our client.** The Reborn client's decode handlers (`handle_player_props` and
+`handle_npc_props` in pyReborn) still carry a heuristic from before this was checked
+against the reference: a received X2/Y2 at or above 64, or below 0, is treated as an
+already-world coordinate. Against the reference that guess is wrong, because such a value
+is a local position just beyond the segment edge. The heuristic is a client-side
+workaround and is under correction. Do not implement it from this document.
 
 ## World, Segment, and Local Conversion
 
@@ -137,7 +161,8 @@ for culling. Flooring matters when the camera can see negative world tiles.
 
 ## Wire Precision and Segment Selection
 
-Legacy X/Y and level-warp fields use half-tile precision. X2/Y2 properties use
+Legacy X/Y and level-warp fields use half-tile precision (a `GCHAR` of half-tiles, so
+`value * 8` pixels on the server). X2/Y2 properties use
 pixel precision, decoded as pixels divided by 16, or 1/16 tile. Segment
 selection must happen **after decoding to tiles**, using the full decoded value
 and `floor(world / 64)`.
@@ -145,6 +170,39 @@ and `floor(world / 64)`.
 Precision does not change boundary ownership: `63.5` and `63.9375` remain in
 segment 0, while `64.0` belongs to segment 1. Do not round a pixel-precision
 property to an integer tile before selecting its segment.
+
+## Server-Side Segment Handling
+
+- `PLO_LEVELNAME` is sent once per sub-level the server streams, with the sub-level
+  name, and then again with the gmap name, so the client's current level stays the gmap
+  (`PlayerClient.cpp:1446`, `:1504`).
+- A client crossing a seam sends `GMAPLEVELX`/`GMAPLEVELY`. The server reverts them when
+  the current level is not a gmap. Otherwise it leaves the old sub-level, sends the dynamic
+  data of the new one and marks the eight neighbours as recently used
+  (`PlayerProps.cpp:905-967`).
+
+## The `.gmap` File Format
+
+Parsed by `Map::Map(is_gmap_t, ...)` (`server/src/level/Map.cpp:88-257`). The first line
+is the header `GRMAP001`. After it, one `KEY value` pair per line:
+
+| Key | Meaning |
+|-----|---------|
+| `WIDTH`, `HEIGHT` | grid size in segments |
+| `LEVELNAMES` ... `LEVELNAMESEND` | one CSV row of level file names per grid row. An empty cell is a hole. Names are stored lower-cased. Rows or cells beyond `HEIGHT`/`WIDTH` are ignored |
+| `MAPIMG`, `MINIMAPIMG` | image names, stored on the map |
+| `NOAUTOMAPPING` | read and ignored by the server (client-side only) |
+| `LOADFULLMAP` | keep every segment loaded |
+| `LOADATSTART` ... `LOADATSTARTEND` | CSV rows of segment names to keep loaded |
+| `GENERATED`, `GENSEED`, `GENBASE`, `GENEVENBORDERS`, `GENHEIGHT`, `GENCHAOS`, `LEVHEIGHT`, `LEVCHAOS`, `HEIGHTMAP` ... `HEIGHTMAPEND`, `RANDOMSEEDS` ... `RANDOMSEEDSEND` | procedural terrain generation. When no `LEVELNAMES` is given, `GENERATED` supplies the last level name and the server names the levels itself |
+
+The older bigmap `.txt` form is the other branch of the same class (`Map.cpp:36-86`): no
+header, one CSV row of level names per line, empty cells are holes, and the size is
+derived from the rows.
+
+`PLO_BIGMAP` and `PLO_MINIMAP` are separate. They come from the `bigmap` and `minimap`
+server options, four comma-separated values each, and go to clients of version 2.1 and
+later during login after `PLO_RESETCLIENT` (`PlayerClient.cpp:494-512`).
 
 ## Loaded GMAP Versus Current Segment
 
