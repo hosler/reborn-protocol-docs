@@ -613,7 +613,9 @@ Stream walkers must also obey these rules:
 
 The ascending-order rule matters most for old clients. Each old client stops at the first
 prop id its parser does not know. It keeps the props before it and drops the rest of the
-packet. A static read of the clients' prop parsers gives these limits:
+packet. The table below and the notes after it are observations reported in squirelworks'
+client-analysis notes (`protocol/player-props.md`; static reads of the 1.35, 1.36, 2.05, 2.22
+and 2.31 clients). They are not verified against the reference, which holds no such client:
 
 | Client | `PLO_PLAYERPROPS` (self) | `PLO_OTHERPLPROPS` | `PLO_NPCPROPS` |
 |---|---|---|---|
@@ -621,25 +623,36 @@ packet. A static read of the clients' prop parsers gives these limits:
 | 2.22 | up to 74; stops at 50, 51, 53 | up to 76; stops at 1, 3-7, 14, 22, 25-29 | up to 73; stops at 48-52 |
 | 2.31 | up to 80; stops at 50, 51, 53, 75-77 | up to 80; stops at 1, 3-7, 14, 22, 25-29, 77 | up to 77; stops at 48-52 |
 
-Consequences:
+The reference server already avoids part of this in its login prop lists:
+`loginPropsClientOthers` omits 1-7, 14, 22, 23, 25-29, 42, 50-52, 75-77 and 81, and
+`loginPropsClientSelf` omits 50-53, 75-77 and 81, among others
+(`GServer-v2/server/include/player/PlayerProps.h:134-170` at `origin/beta4`). That is consistent
+with the table. The reference does not filter props by client version
+(`getPropsPacketFromList`, `server/src/player/PlayerProps.cpp:1325`), so it still sends
+props 43-49 and 52 and above to a 2.05 client.
+
+Consequences, as observed in those notes:
 
 - Do not send another player's MAXPOWER (1), RUPEES (3), ID (14), HORSEBUSHES (22) or
   counters (25-29) to a 2.x client in `PLO_OTHERPLPROPS`, or send them last.
 - No client up to 2.31 parses player prop 77 (ONLINESECS2) or 81 (PLAYERLISTCATEGORY).
-- 2.05 skips one byte after prop 51, although the prop has no payload. Do not put other
-  props after 51.
+- 2.05 is reported to skip one byte after prop 51, although the prop has no payload. Do not
+  put other props after 51. This is an observation of the 2.05 client, not confirmed.
 
-Two older forms also differ from the table above:
+Two older forms also differ from the table above (both are observations from the same
+notes, not confirmed against the reference):
 
 - **`PLO_OTHERPLPROPS` player id in 1.21-1.35.** The original 1.35 client reads a
   **one-byte** GCHAR player id before the prop stream, not a GSHORT. 1.36 and later read two
-  bytes.
+  bytes. The reference server writes a GSHORT id for every client version
+  (`server/src/player/PlayerClientOriginal.cpp:225,235`), so if the observation is right, the
+  reference does not match the 1.35 client.
 - **Prop 10 before 2.1.** It is BOWGIF, not GANI: `c(10 + len)` + image name, or a single
-  `c(bowpower)` byte when there is no image. 2.05 uses this form.
-
-Source: Graal_analysis
-[`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md)
-(static reads of the 1.35, 1.36, 2.05, 2.22 and 2.31 clients).
+  `c(bowpower)` byte when there is no image. The form is confirmed
+  (`server/src/utilities/PropertySerializers.cpp:223-258`), but the reference selects it by
+  server generation, not by client version (`PlayerProps.cpp:339-353`); its comments say
+  "1.411 and earlier" and "pre-2.x", which do not cover 2.05. That 2.05 uses this form is
+  an observation, not confirmed.
 
 ### Packet-context policy is intentional
 
