@@ -323,22 +323,23 @@ So a GEN_3 *client implementation* must:
   encryptor.
 - **Receiving**: plain zlib bundles. No decryption at all.
 
-What a real GEN_3 client does (Windows 2.05 rev 2 and 2.17, static read, checked on the
-wire in three lab 2.05 sessions with no mismatches):
+What a real GEN_3 client does, as reported in squirelworks' client-analysis notes (Windows
+2.05 rev 2 and 2.17, static read, checked on the wire in three lab 2.05 sessions with no
+mismatches; not verified against the reference):
 
 - The key is a random 7-bit value, sent once in the login line.
 - The login line itself goes out clean. Insertion starts with the **second** message,
   which can be in the same first bundle (for example `PLI_LANGUAGE`).
-- The inserted byte is `((iterator >> 16) & 0x7F) + 0x20`, not `)`. The server deletes it
-  without looking at it, so any value except `\n` works.
+- The inserted byte is `((iterator >> 16) & 0x7F) + 0x20`, not `)`. That is the real
+  client's behaviour; the reference encryptor's filler is `)` (gs2lib
+  `src/CEncryption.cpp:116`). The server deletes the byte without looking at it
+  (`removeI`, `src/CEncryption.cpp:54-61`), so any value except `\n` works.
 - The insertion position can be 0. In that case the filler byte comes **before the packet
   id**. A decoder must not read the id until it has removed the filler byte.
 - GEN_3 uses the same LCG step as GEN_4 and GEN_5, but only once per message.
 
-Source: Graal_analysis
-[`protocol/codec-and-framing.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/codec-and-framing.md),
-"Gen 3 (2.05)", and
-[`protocol/client-versions.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/client-versions.md).
+Source: squirelworks' client-analysis notes, `protocol/codec-and-framing.md` ("Gen 3 (2.05)")
+and `protocol/client-versions.md`.
 
 This exact behavior is implemented and live-verified in
 `reborn-protocol/reborn_protocol/codec.py` (`Gen3Codec`). Tests probed it against GServer with a
