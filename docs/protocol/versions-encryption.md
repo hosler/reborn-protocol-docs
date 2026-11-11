@@ -102,6 +102,33 @@ Lookup is a linear string scan: `getVersionID()` (`IUtil.cpp:234-244`) matches t
 identifier against `clientVersions[]`. `getVersionString()` (`IUtil.cpp:246-277`) resolves
 the display string and dispatches between the client/RC/NC arrays by `PLTYPE_*` bitmask.
 
+### Tokens from real clients that the table does not list
+
+Static reads and lab logins of original client builds show tokens that are not in
+`clientVersions[]`. Each one resolves to `CLVER_UNKNOWN` on a stock server:
+
+| Token | Client build | Login type | Effect on a stock server |
+|---|---|---|---|
+| `GNW03081` | 2.05 rev 2 (Windows) | 0 | Treated as a 1.41-style client: GEN_3. Version gates see `CLVER_UNKNOWN`, which is below `CLVER_2_1` |
+| `G3D15010` | 5.24r3, 5.24r4, 6.00 beta2 (Windows) | 5 | GEN_5, but every `CLVER_*` gate sees "unknown" |
+| `G3D03048` | 6.00 beta1 (Windows) | 5 | Same |
+| `G3D0108A` | 6.01r1 (Linux) | 5 | Same |
+| `G3D19026` | 4.04r2 (Linux); Windows 4.04r2 sends the listed `G3D17026` | 5 | Same |
+| `G3D27076` | 4.20r6 (Mac) | 5 | Same |
+| `G3D22126` | 4.20 (Linux, both builds); Windows 4.20r8 sends the listed `G3D20126` | 5 | Same |
+
+So a server must list each platform's token, not one token per version number. The token
+is a constant in each build. The client does not compute it. Every build from 3.04 to
+6.03 sends login type 5, a key byte, then its token. The 3.x tokens reuse the 2.x date
+stamps: 3.04 sends `G3D03014` (2.22's stamp) and 3.153 sends `G3D28015` (2.31's stamp).
+2.17 still sends login type 0 and uses GEN_3, like 2.05.
+
+Source: Graal_analysis
+[`protocol/login-tokens-3x-7x.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/login-tokens-3x-7x.md),
+[`protocol/v5v6-lab-play.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5v6-lab-play.md)
+and
+[`protocol/client-versions.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/client-versions.md).
+
 ### RC versions
 
 Separate dedicated enum `RCVER_*` (`IUtil.h:227-233`) with its own parallel arrays
@@ -258,6 +285,18 @@ Field order as read in `handleLogin` (`PlayerClient.cpp:303-378`):
 7. **Identity string**. `readString("")` reads to the end of the packet. The value is comma-delimited:
    `{platform},{mobile 'dc:id2'},{md5:harddisk-id},{md5:network-id},{uname release/version},{android-id}`.
    Only the platform token is actually consumed by the server.
+
+### The login frame itself is not GEN_5
+
+A GEN_4 or GEN_5 client sends the login packet in a frame that is plain zlib:
+`[uint16 big-endian length][zlib data]`, with **no compression-type byte and no XOR**. The
+key travels inside this frame, so the frame cannot be encrypted with it. The client
+switches to the generation's normal framing for every frame after the login. The same
+holds for RC2 (type 6). The NC socket (type 3) never leaves this plain zlib mode.
+Source: static reads of the 2.22 and 2.31 clients and the Delphi RemoteControl, and lab
+captures of real 2.22 sessions (Graal_analysis
+[`protocol/codec-and-framing.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/codec-and-framing.md),
+[`tools/remotecontrol.md`](https://github.com/squirelworks/Graal_analysis/blob/main/tools/remotecontrol.md)).
 
 ## Per-Generation Wire Framing
 
