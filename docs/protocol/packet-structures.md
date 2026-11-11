@@ -1672,23 +1672,33 @@ this comment: `// Unhandled by 6.037.`
 [SHOOT_DATA...]      // constructShootV1() body — format not documented here
 ```
 
-### PLO_DISABLECLASSICMODE (176) - Disable Classic Mode
-**Trigger**: The server tells the client to turn off old client-side mechanics.
-`Player.cpp:701` sends it once, unconditionally, to every login-server client.
+### PLO_KINGDOMSMODE (176) - Server Mode: Kingdoms
+**Trigger**: The server option `servermode = kingdoms`. `Player::sendLogin`
+sends it right after `PLO_SIGNATURE` (`Player.cpp:746-752`, origin/beta4), to
+every login type (client, RC and NC) with no client-version test. It comes
+before `PLO_HASNPCSERVER`, `PLO_ONLINEMODE` and the first `PLO_PLAYERPROPS`.
 ```
 // No additional data
 ```
+Wire bytes: `D0 0A`.
 
-Older sources call packet 176 `PLO_FULLSTOP`. That name and the
-freeze-input-and-hide-HUD behavior belong to packet **177**. Do not freeze the
-client on 176, because every login-server connection receives it.
+Older sources call packet 176 `PLO_DISABLECLASSICMODE` or `PLO_FULLSTOP`.
+Neither name describes what the reference sends. Nothing sends a
+classic-mode-disable or full-stop packet. A client must not freeze input on 176.
 
-### PLO_FULLSTOP2 (177) - Full Stop
-**Trigger**: The client stops responding to normal input and hides the HUD.
-Clients 5.07 and later do not handle it.
+### PLO_NEWWORLDMODE (177) - Server Mode: New World
+**Trigger**: The server option `servermode = newworld`, sent at the same place
+as 176 (`Player.cpp:750-751`). The two are exclusive: an `if` / `else if`
+chooses at most one, and `servermode = normal` (the default) sends neither.
+`servermode` is read once at startup (`Server.cpp:196-200`).
 ```
 // No additional data
 ```
+Wire bytes: `D1 0A`.
+
+New-world mode also widens `PLPROP_COLORS` from 5 to 8 bytes
+(`PropertySerializers.h:793-796`). Older sources call packet 177
+`PLO_FULLSTOP2` (stop input and hide the HUD); the reference does not do that.
 
 ### PLO_SERVERWARP (178) - Server Warp
 **Trigger**: Warp to different server
