@@ -105,6 +105,19 @@ def decode_gshort(data):
     return (data[0] << 7) + data[1] - 0x1020
 ```
 
+#### Canonical Maximum Versus the Server Clamp
+
+The cap of 28767 makes a non-canonical encoding. For values 28672-28767 the high byte is
+already at 223, so the low byte carries 128-223 instead of a 7-bit group. The decode
+formula still gives the right value. The clients examined so far cap at the canonical
+maximum instead: the 5.x and 6.x Windows GSHORT writer stops at **28671**
+(`223 << 7 | 127`). An encoder that must interoperate with clients should not exceed
+28671. A decoder should accept a low byte above `0x9F` (127 + 32).
+
+Source: Graal_analysis
+[`protocol/shoot-5007.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/shoot-5007.md)
+(static read of the client GSHORT writer).
+
 ### GINT (GINT3): Three Bytes, Same Energy
 
 GINT extends the pattern to 3 bytes. Documentation often calls it **GINT3** to distinguish it from GINT4 and GINT5.
@@ -127,6 +140,12 @@ Bit layout (high byte carries the top of the value):
 > not `2^21 − 1`. For values ≤ 2,097,151 the bytes are identical either way, which is why
 > this error rarely occurs. However, a strict 7-bit-mask encoder truncates large rupee or online
 > counts.
+
+The same applies here. The canonical maximum, with every group 7 bits, is
+`223 << 14 | 0x3FFF` = **3,670,015**. The v7 client caps its raw-data length at exactly
+that value (Graal_analysis
+[`protocol/v7-graal3d-framing-and-packet-tables.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v7-graal3d-framing-and-packet-tables.md),
+static read). Values from 3,670,016 to 3,682,399 need a low group above 127.
 
 ```python
 # Decode: the GSHORT trick extended one more byte (combined +32 bias removal)
@@ -188,9 +207,9 @@ def decode_gint5(data):
 |------|------|-----------|----------------|
 | GCHAR | 1 byte | 223 | `byte - 32` |
 | GUCHAR | 1 byte | 223 | `byte - 32` |
-| GSHORT | 2 bytes | 28,767 | `(b1 << 7) + b2 - 0x1020` |
+| GSHORT | 2 bytes | 28,767 (canonical 28,671) | `(b1 << 7) + b2 - 0x1020` |
 | GUSHORT | 2 bytes | 28,767 | same as `GSHORT` |
-| GINT / GINT3 | 3 bytes | 3,682,399 | `((b1 << 7) + b2 << 7) + b3 - 0x81020` |
+| GINT / GINT3 | 3 bytes | 3,682,399 (canonical 3,670,015) | `((b1 << 7) + b2 << 7) + b3 - 0x81020` |
 | GINT4 | 4 bytes | 471,347,295 | byte-shift, bias `0x4081020` |
 | GINT5 / GUINT5 | 5 bytes | 4,294,967,295 | 7-bit unpack, subtract 32 each |
 
