@@ -59,12 +59,12 @@ for the `.gmap` destinations in the table above. An entity X/Y or X2/Y2 is local
 the same entity's `GMAPLEVELX`/`GMAPLEVELY`. World is derived as `local + grid * 64`
 from a known grid, never read off the wire.
 
-**Our client.** The Reborn client's decode handlers (`handle_player_props` and
-`handle_npc_props` in pyReborn) still carry a heuristic from before this was checked
-against the reference: a received X2/Y2 at or above 64, or below 0, is treated as an
-already-world coordinate. Against the reference that guess is wrong, because such a value
-is a local position just beyond the segment edge. The heuristic is a client-side
-workaround and is under correction. Do not implement it from this document.
+**Our client.** pyReborn resolves a player's world position as local plus that
+player's own segment (`_resolve_player_world` in `pyreborn/handlers/entities.py`).
+A value at or above 64, or below 0, is a local position just beyond the segment
+edge, and both servers send it for the step that crosses a seam. The NPC decode
+(`handle_npc_props`) still treats such a value as an already-world coordinate.
+Against the reference that guess is wrong. Do not implement it from this document.
 
 ## World, Segment, and Local Conversion
 
