@@ -250,7 +250,7 @@ The reference client has no "zlib if shorter" rule below 48 bytes: it always sen
 there. The send buffer flushes at `0x1000` bytes (`TGraalConnection.cpp:1309,1320,1338`).
 
 The 55 and 8192 limits above are the reference server's GEN_5 send policy
-(gs2lib `src/CFileQueue.cpp:236-245`: `> 0x2000` bzip2, `> 55` zlib), which Reborn mirrors
+(gs2lib `CFileQueue.cpp:236-245`: `> 0x2000` bzip2, `> 55` zlib), which Reborn mirrors
 for game sessions; only the list-server column is Reborn's own. Any receiver accepts all
 three types, so either policy works on the wire.
 

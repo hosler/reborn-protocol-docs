@@ -31,7 +31,7 @@ byte 0 never selects GEN_5. See
 The GEN_2 rows for legacy RC and NC are the current source
 (`GServer-v2/server/src/player/PlayerRC.cpp:146-156`,
 `GServer-v2/server/src/player/PlayerNC.cpp:111-117`). The older monolithic `TPlayer`
-login (`GServer-v2` `master`, `server/src/TPlayer/TPlayer.cpp:2285-2328`) selects
+login (`GServer-v2` `master`, `TPlayer.cpp` lines 2285-2328) selects
 **GEN_3** for `PLTYPE_RC`, `PLTYPE_NC` and `PLTYPE_NPCSERVER`. NC sends no key byte in
 either version.
 

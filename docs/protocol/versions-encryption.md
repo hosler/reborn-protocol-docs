@@ -239,7 +239,7 @@ switch (m_type)
 
 In the current source (`PlayerClient.cpp:300-316`), `default:` shares the
 `PLTYPE_CLIENT3` case, so an unknown login type gets **GEN_5**. The older monolithic
-`TPlayer` login (`master`, `server/src/TPlayer/TPlayer.cpp:2322-2327`) disconnects an
+`TPlayer` login (`master`, `TPlayer.cpp` lines 2322-2327) disconnects an
 unknown type with "Your client type is unknown." Do not depend on either behavior.
 
 | PLTYPE | Encryption gen (initial) | Client range |
@@ -321,7 +321,7 @@ switches to the generation's normal framing for every frame after the login. The
 holds for RC2 (type 6). The NC socket (type 3) never leaves this plain zlib mode.
 
 Server side, confirmed against the reference: a new connection's `CEncryption` starts at
-GEN_3 (pinned gs2lib `src/CEncryption.cpp:26-30`), and the GEN_3 branch of
+GEN_3 (pinned gs2lib `CEncryption.cpp:26-30`), and the GEN_3 branch of
 `processPacketBundle` only inflates the bundle (`IPacketHandler.h:266-269`). The first
 packet goes to `parseLoginPacket`, which reads it to the newline with no decrypt step
 (`IPacketHandler.h:227-235`, `:375-395`). The generation is chosen only while that login is
@@ -407,8 +407,8 @@ mismatches; not verified against the reference):
   which can be in the same first bundle (for example `PLI_LANGUAGE`).
 - The inserted byte is `((iterator >> 16) & 0x7F) + 0x20`, not `)`. That is the real
   client's behaviour; the reference encryptor's filler is `)` (gs2lib
-  `src/CEncryption.cpp:116`). The server deletes the byte without looking at it
-  (`removeI`, `src/CEncryption.cpp:54-61`), so any value except `\n` works.
+  `CEncryption.cpp:116`). The server deletes the byte without looking at it
+  (`removeI`, `CEncryption.cpp:54-61`), so any value except `\n` works.
 - The insertion position can be 0. In that case the filler byte comes **before the packet
   id**. A decoder must not read the id until it has removed the filler byte.
 - GEN_3 uses the same LCG step as GEN_4 and GEN_5, but only once per message.
@@ -497,7 +497,7 @@ clients do speak a newer framing, as reported in squirelworks' client-analysis n
 `protocol/v6113-list-capture.md`: static reads, one capture and offline lab replays). The
 per-build facts for those two builds are not verified against the reference. The packet ids
 match `PLI_SET_ENC_KEY` (252) and `PLI_BUNDLE` (253), and the same ids exist as
-`PLO_SET_ENC_KEY` and `PLO_BUNDLE` (pinned gs2lib `include/IEnums.h:163-164`, `:319-320`).
+`PLO_SET_ENC_KEY` and `PLO_BUNDLE` (pinned gs2lib `IEnums.h:163-164`, `:319-320`).
 The mechanisms below are corroborated by the decompiled reference client
 (`Preagonal/FourPlay/quattroplay/src/`, a v6-era mobile engine, not the 6.11 desktop
 builds) and the Kotlin headless client (`Preagonal/Preagonal.Client.Headless/`).
@@ -578,7 +578,7 @@ roles (`TClientProperties.cpp:159-178`). The headless client hard-codes them
 
 The GServer-v2 branch `feature/newprotocol` (`c3cc0d8`, January 2026) has a partial
 implementation. It detects `GNP1905C` as the first 8 bytes
-(`feature/newprotocol:server/src/Player/Player.cpp:582`). On a match it switches the
+(`Player.cpp` line 582 on `feature/newprotocol`). On a match it switches the
 input codec and the file queue to `ENCRYPT_GEN_6`, then sends every weapon as its
 `CLVER_4_0211` weapon packets plus a `PLO_NPCWEAPONSCRIPT` with its bytecode
 (`Player.cpp:585-596`). It writes packets as `00`, a running counter, a
@@ -586,7 +586,7 @@ input codec and the file queue to `ENCRYPT_GEN_6`, then sends every weapon as it
 (`Player.cpp:973-997`). It skips the `PLO_RAWDATA` announcements. It does not parse
 anything the client sends, and it has no RC4 or RSA step. The same branch answers a
 `G3D2204D` (Worlds) login only with
-`PLO_SERVERWARP "Offline,Offline,127.0.0.1,14915"` (`Player.cpp:2713-2715`).
+`PLO_SERVERWARP "Offline,Offline,127.0.0.1,14915"` (`Player.cpp` lines 2713-2715 on that branch).
 
 ### v7 (Worlds) engine builds
 

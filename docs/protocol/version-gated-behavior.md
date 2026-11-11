@@ -198,7 +198,7 @@ if (isClient() && m_versionId < CLVER_2_14)
 > side is confirmed: below `CLVER_2_1` the server sends `PLO_FILE` as
 > `[id][namelen][name][data]` without the modification time (`server/src/player/Player.cpp:638-641`
 > at `origin/beta4`), and it counts the trailing newline inside the `PLO_RAWDATA` length
-> (gs2lib `src/CFileQueue.cpp:95-103`). The client side below is reported in squirelworks'
+> (gs2lib `CFileQueue.cpp:95-103`). The client side below is reported in squirelworks'
 > client-analysis notes (`protocol/file-205r2-prefix-lf.md`); it was not verified against the
 > reference. A static read of the original Windows 2.05 rev 2 client reports that its
 > `PLO_FILE` handler behind `PLO_RAWDATA` **always** consumes five metadata bytes, then a
@@ -206,7 +206,7 @@ if (isClient() && m_versionId < CLVER_2_14)
 > N − 7 − name_length. The handler does not drop a final `0x0A` inside the raw count. So a
 > newline that the server adds inside the count becomes the last byte of the saved file.
 > 2.05 sends the token `GNW03081`. The pinned gs2lib lists that token as `CLVER_2_052`
-> (`src/IUtil.cpp:92`), directly below `CLVER_2_1` in the enum, so it does not resolve to
+> (`IUtil.cpp:92`), directly below `CLVER_2_1` in the enum, so it does not resolve to
 > `CLVER_UNKNOWN` (only older gs2lib tables lack it). `CLVER_2_052` is still below
 > `CLVER_2_1`, so 2.05 gets the shorter form and, as reported, reads the wrong bytes.
 > In a local lab, the server was changed to send the prefix and to keep the newline out of

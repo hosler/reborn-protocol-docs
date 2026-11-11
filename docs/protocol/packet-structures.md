@@ -1827,7 +1827,7 @@ The reference server does not build this packet. It relays the list server's
 `name`, `name`, `ip`, `port` joined with `gtokenize()`
 (`graal-serverlist/server/src/ServerConnection.cpp:1345-1346`). So the fields are
 gtokenized (a field with a space, comma, slash or non-ASCII byte is quoted; pinned gs2lib
-`src/CString.cpp:1220-1227`), and field 0 repeats the server name.
+`CString.cpp:1220-1227`), and field 0 repeats the server name.
 The decompiled reference client needs more than three fields and uses field 1 as the
 name, field 2 as the host and field 3 as the port (`TServerList.cpp:131-170`).
 
