@@ -17,10 +17,23 @@ computes `m_type = (1 << readGChar())`:
 
 | Connection | Login byte | Resulting PLTYPE | Encryption |
 |------------|-----------|------------------|------------|
-| Game client | 0 | `PLTYPE_CLIENT` (1<<0) | GEN_5 |
+| Classic game client (1.x–2.17) | 0 | `PLTYPE_CLIENT` (1<<0) | GEN_2, or GEN_3 when the version token is unknown |
+| Game client 2.19–2.21, 3.0–3.01 | 4 | `PLTYPE_CLIENT2` (1<<4) | GEN_4 |
+| Game client 2.22 and later | 5 | `PLTYPE_CLIENT3` (1<<5) | GEN_5 |
 | Legacy RC | 1 | `PLTYPE_RC` (1<<1) | **GEN_2** |
 | NC | 3 | `PLTYPE_NC` (1<<3) | **GEN_2** |
 | RC2 (modern) | 6 | `PLTYPE_RC2` (1<<6) | GEN_5 |
+
+An earlier revision of this table gave the game client as login byte 0 with GEN_5. Login
+byte 0 never selects GEN_5. See
+[Client Versions & Encryption](versions-encryption.md#generation-selection-switch).
+
+The GEN_2 rows for legacy RC and NC are the current source
+(`GServer-v2/server/src/player/PlayerRC.cpp:146-156`,
+`GServer-v2/server/src/player/PlayerNC.cpp:111-117`). The older monolithic `TPlayer`
+login (`GServer-v2` `master`, `server/src/TPlayer/TPlayer.cpp:2285-2328`) selects
+**GEN_3** for `PLTYPE_RC`, `PLTYPE_NC` and `PLTYPE_NPCSERVER`. NC sends no key byte in
+either version.
 
 pyReborn's `RCClient` sends type **6** (RC2 → GEN_5). `NCClient` sends type **3**
 (NC → GEN_2).
