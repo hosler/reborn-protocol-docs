@@ -1693,8 +1693,17 @@ Clients 5.07 and later do not handle it.
 ### PLO_SERVERWARP (178) - Server Warp
 **Trigger**: Warp to different server
 ```
-[STRING: server_info] // Server connection info
+[STRING: server_info] // Comma text, read to end: unused,name,host,port[,...]
 ```
+The 2.31 client needs at least four comma fields. Field 0 is not used, field 1 is the
+server name, field 2 the host and field 3 the port. The client closes the connection and
+logs in again to the new host with a fresh login, with no list-server step. A lab test
+with a real 2.31 client confirmed this. While a 4.x-6.x client is connected to a server
+whose name starts with "login", it draws no characters and no HUD. A `PLO_SERVERWARP` to a
+server with another name ends that mode. Source: Graal_analysis
+[`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md)
+and
+[`protocol/v5v6-lab-play.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5v6-lab-play.md).
 
 ### PLO_RPGWINDOW (179) - RPG Window
 **Trigger**: Display RPG-style window
@@ -1818,6 +1827,30 @@ If there is no such prefix, use the length-prefixed read. Header fields:
 `type,name,saveToDisk[0/1],desKey
 (two GINT5s = 64-bit hash),crc32 (GINT5)` per the `IEnums.h:317` comment and
 `Weapon.cpp:242-257` / `ScriptClass.cpp:44-54` header construction.
+
+## Ids the Reference Server Leaves Unknown or Unused
+
+GServer-v2 and gs2lib name these ids but do not give a full layout, or never send them.
+Static reads of the original clients give the layouts below. Names follow upstream gs2lib.
+`c` = GCHAR, `s` = GSHORT, `i5` = GINT5, `str` = GCHAR length + bytes. Source for this
+whole section: Graal_analysis
+[`protocol/unknown-ids-2026-11-06.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/unknown-ids-2026-11-06.md)
+and
+[`client-internals/serveroptions-198.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/serveroptions-198.md).
+
+| Id | Name | Layout | Clients | What the client does |
+|---|---|---|---|---|
+| PLI 25 | `PLI_TOWEAPON` | as `PLO_NPCWEAPONADD`: name, image, script | sent by 1.21-1.37 | Uploads each weapon the player holds. 1.38 replaced it with `PLI_WEAPONADD (33)`. GServer-v2 beta4 kicks a 1.33 client for it ("Unknown Player Packet: 25") |
+| PLO 104 | `PLO_FILEDECRYPTKEY` | `str filename`, `c a`, `i5 lo`, `i5 hi` | 3.153 to 6.03r7 | Stores an 8-byte DES key (`lo`, `hi` little-endian) for the encrypted package or file with that name. The gs2lib comment leaves out the leading file name |
+| PLO 108 | `PLO_PING` | `c sub`, `s value` | 4.20, 6.01, 6.03 (not 5.x) | `sub` 0: the client answers `PLI 162` with `!` + `s min(value, 0x6FFF)`. `sub` 1: the client stores `value`. Handled before the main dispatch, like 100 |
+| PLI 162 | `PLI_PONG` | game clients: `!` + `s value`; RC3: empty | as above | The answer to PLO 108. RC3 and the 2010 Linux RC send it empty every 60 s |
+| PLO 109 | `PLO_HTTPDOWNLOAD` | `i5 modtime`, `str localname`, `str url` | 5.24r4 to 6.03r7 | Downloads the URL over HTTP and stores it under the local name. The gs2lib comment leaves out the local name |
+| PLO 168 | `PLO_ONLINEMODE` | empty | 2.05 to 6.03r7 | Sets a one-time flag on the local player. The server sends it after the login burst |
+| PLO 181 | (unnamed) | `s player_id`, `c toggle` | 2.17 to 5.24r4 | Sets a boolean on that player to `toggle > 0`. What the boolean does is not known |
+| PLO 193 | `PLO_WEAPONHASH` | `i5 crc32`, rest = weapon name | 4.04r2 to 5.12 | Loads the cached `weblevels/weapons/<name>.code` if its zlib CRC32 matches. If not, the client asks for the script with `PLI_UPDATESCRIPT (158)`. The `i5` is a CRC, not a modtime |
+| PLO 198 | `PLO_SERVEROPTIONS` | `i5 value` | 5.24 / 6.00 beta and later | Stored, and not read anywhere up to 6.03 |
+
+No client of any age handles PLO 60, 81, 83 or 110, and that includes the staff clients.
 
 ## Encryption Implementation Details
 
