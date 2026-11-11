@@ -107,12 +107,16 @@ removes only `SCRIPTER` (49), `NAME` (50) and `TYPE` (51), plus every prop above
 modern server **prop 52 goes to every game client** in `PLO_NPCPROPS`. No client version
 check applies.
 
-This matters for old clients. A static read of the 2.22 and 2.31 NPC prop parsers shows that
-both stop at ids 48-52. An unknown id ends the stream, so these clients lose every prop
-after 52 in that packet: GATTRIB10-30, CLASS and X2/Y2/Z2. Source: Graal_analysis
-[`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md),
-"Highest ids parsed by later clients" (static read, not lab-tested). A server that serves
-2.x clients should leave out prop 52 or send it last.
+This may matter for old clients. Static reads of the 2.22 and 2.31 NPC prop parsers
+reported in squirelworks' client-analysis notes (`protocol/player-props.md`, "Highest ids
+parsed by later clients"; static read, not lab-tested) say both stop at ids 48-52, so these
+clients would lose every prop after 52 in that packet: GATTRIB10-30, CLASS and X2/Y2/Z2.
+This is not verified against the reference. The decompiled reference client behaves
+differently: `Preagonal/FourPlay/quattroplay/src/TServerNPC.cpp:1372-1376` skips unknown
+ids 0 to 0x53 as exactly 2 bytes (id plus one byte), with no case for ids 0x30-0x34. A
+length-prefixed string such as prop 52 would therefore desynchronize that parser instead
+of ending the stream. Advice, not reference behavior: a server that serves 2.x clients may
+prefer to leave out prop 52 or send it last.
 
 The NC sub-protocol also uses these props. `PLO_NC_NPCADD` carries NAME=50, TYPE=51 and
 LEVEL=52. See [RC & NC Protocols](rc-nc-protocols.md).
