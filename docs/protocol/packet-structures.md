@@ -451,7 +451,9 @@ Player properties use the following format:
 > **Do not assume "a count fits in a byte."**
 
 **NICKNAME (0)**: `[GCHAR: length][string]`
-**MAXPOWER (1)**: `[GCHAR: hearts * 2]` (1 byte, half-hearts; 1 heart = 2)
+**MAXPOWER (1)**: `[GCHAR: full_hearts]` (1 byte, whole hearts, not half-hearts). The
+reference list binds `FULLHEARTS` to `account.maxHitpoints`
+(`GServer-v2/server/include/object/Player.h:693`). Only CURPOWER (2) uses half-hearts.
 **CURPOWER (2)**: `[GCHAR: current_power]` (1 byte, half-hearts)
 **RUPEESCOUNT (3)**: `[GINT3: rupee_count]` (**3 bytes**, not 1)
 **ARROWSCOUNT (4)**: `[GCHAR: arrow_count]`

@@ -69,11 +69,11 @@ For the canonical wire-width and encoding notes, see
 | 42 | GMAPLEVELY | `[GCHAR]` |
 | 43 | Z | `[GCHAR]` `(z_tile + 50)` |
 | 44-47 | GATTRIB6-9 | `[GCHAR len][string]` |
-| 48 | UNKNOWN48 | `PropertyVoid`, 0 bytes (*not sent to client*) |
-| 49 | SCRIPTER | string (*server-internal, not sent to client*) |
-| 50 | NAME | string (*server-internal, not sent to client*) |
-| 51 | TYPE | string (*server-internal, not sent to client*) |
-| 52 | CURLEVEL | string (*server-internal, not sent to client*) |
+| 48 | UNKNOWN48 | `PropertyVoid`, 0 bytes (nothing sets it, so it is not sent) |
+| 49 | SCRIPTER | string (*filtered by `canSendProp()`, not sent to game clients*) |
+| 50 | NAME | string (*filtered by `canSendProp()`, not sent to game clients*) |
+| 51 | TYPE | string (*filtered by `canSendProp()`, not sent to game clients*) |
+| 52 | LEVEL (CURLEVEL) | string. **Sent to game clients** on non-classic servers. See below |
 | 53-73 | GATTRIB10-30 | `[GCHAR len][string]` |
 | 74 | CLASS | **`PropertyLongString`: `[GSHORT len][string]`** (2-byte length) |
 | 75 | X2 | `[GSHORT]` PixelCoordinate: `pixel = val>>1`, negative if `val&1`, `tile = pixel/16` |
@@ -96,13 +96,26 @@ output can make a strict receiver stop after IMAGE/X/Y and silently discard GANI
 NICKNAME, COLORS, SWORDIMAGE, SHIELDIMAGE, HEADIMAGE, IMAGEPART, and GATTRIBs. Sort the
 pairs numerically before writing them.
 
-### Server-internal props (48-52)
+### Props 48-52
 
-The server keeps `UNKNOWN48`, `SCRIPTER`, `NAME`, `TYPE`, `CURLEVEL` on itself and **never
-sends** them to a game client in `PLO_NPCPROPS`. (It *does* exchange them over the NC
-sub-protocol. `PLO_NC_NPCADD` carries NAME=50/TYPE=51/CURLEVEL=52. See
-[RC & NC Protocols](rc-nc-protocols.md).) A client parser should still skip them gracefully
-if encountered.
+`NPC.h` marks 48-52 "NOT HANDLED BY CLIENT, DO NOT SEND"
+(`GServer-v2/server/include/object/NPC.h:108-114`). The send filter does not follow
+that comment completely. `canSendProp()` (`GServer-v2/server/src/object/NPC.cpp:64-78`)
+removes only `SCRIPTER` (49), `NAME` (50) and `TYPE` (51), plus every prop above
+`BODYIMAGE` (35) on a CLASSIC server. Nothing sets `UNKNOWN48`, so it is not sent.
+`NPC::warp()` sets `LEVEL` (52) on every level change (`NPC.cpp:213`), so on a newmain or
+modern server **prop 52 goes to every game client** in `PLO_NPCPROPS`. No client version
+check applies.
+
+This matters for old clients. A static read of the 2.22 and 2.31 NPC prop parsers shows that
+both stop at ids 48-52. An unknown id ends the stream, so these clients lose every prop
+after 52 in that packet: GATTRIB10-30, CLASS and X2/Y2/Z2. Source: Graal_analysis
+[`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md),
+"Highest ids parsed by later clients" (static read, not lab-tested). A server that serves
+2.x clients should leave out prop 52 or send it last.
+
+The NC sub-protocol also uses these props. `PLO_NC_NPCADD` carries NAME=50, TYPE=51 and
+LEVEL=52. See [RC & NC Protocols](rc-nc-protocols.md).
 
 ## Worked Example
 

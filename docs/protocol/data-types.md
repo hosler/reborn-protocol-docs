@@ -347,7 +347,7 @@ wire widths.
 |-------|-------|----------|-------|
 | 0 | IMAGE | GCHAR length + string | Length-prefixed image name |
 | 1 | SCRIPT | GSHORT length + raw bytes | Modern servers may send length 0 |
-| 2-3 | X/Y | GCHAR | Tile coordinates encoded as Reborn chars |
+| 2-3 | X/Y | GCHAR | Signed **half-tiles** (`pixel / 8`), the same as player X/Y; the writer replaces 223 with 224 (`PropertySerializers.cpp:473-485`) |
 | 4 | POWER | GCHAR | Hit points in half-hearts |
 | 5 | RUPEES | GINT3 | 3-byte value, not a direction byte |
 | 6-7 | ARROWS/BOMBS | GCHAR | Single-byte counts |
