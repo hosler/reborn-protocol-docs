@@ -609,6 +609,38 @@ Stream walkers must also obey these rules:
 - Do not infer a shape for player prop 83: it is absent from
   `FOR_LIST_OF_PLAYER_PROPS` (`GServer-v2/server/include/object/Player.h:613-696`).
 
+### What old clients parse
+
+The ascending-order rule matters most for old clients. Each old client stops at the first
+prop id its parser does not know. It keeps the props before it and drops the rest of the
+packet. A static read of the clients' prop parsers gives these limits:
+
+| Client | `PLO_PLAYERPROPS` (self) | `PLO_OTHERPLPROPS` | `PLO_NPCPROPS` |
+|---|---|---|---|
+| 2.05 | 0-42 | stops at 1, 3-7, 14, 22, 23, 25-29, 43-49 and 52 up | 0-40 |
+| 2.22 | up to 74; stops at 50, 51, 53 | up to 76; stops at 1, 3-7, 14, 22, 25-29 | up to 73; stops at 48-52 |
+| 2.31 | up to 80; stops at 50, 51, 53, 75-77 | up to 80; stops at 1, 3-7, 14, 22, 25-29, 77 | up to 77; stops at 48-52 |
+
+Consequences:
+
+- Do not send another player's MAXPOWER (1), RUPEES (3), ID (14), HORSEBUSHES (22) or
+  counters (25-29) to a 2.x client in `PLO_OTHERPLPROPS`, or send them last.
+- No client up to 2.31 parses player prop 77 (ONLINESECS2) or 81 (PLAYERLISTCATEGORY).
+- 2.05 skips one byte after prop 51, although the prop has no payload. Do not put other
+  props after 51.
+
+Two older forms also differ from the table above:
+
+- **`PLO_OTHERPLPROPS` player id in 1.21-1.35.** The original 1.35 client reads a
+  **one-byte** GCHAR player id before the prop stream, not a GSHORT. 1.36 and later read two
+  bytes.
+- **Prop 10 before 2.1.** It is BOWGIF, not GANI: `c(10 + len)` + image name, or a single
+  `c(bowpower)` byte when there is no image. 2.05 uses this form.
+
+Source: Graal_analysis
+[`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md)
+(static reads of the 1.35, 1.36, 2.05, 2.22 and 2.31 clients).
+
 ### Packet-context policy is intentional
 
 The shared wire descriptor table does not give each packet context the same semantics.
