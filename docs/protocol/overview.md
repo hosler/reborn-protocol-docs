@@ -41,7 +41,7 @@ The Reborn protocol supports multiple connection types:
 | **Game Client** | Standard players | GEN_5 | Most common |
 | **RC (Remote Control)** | Server administration | GEN_5 (RC2) / GEN_2 (legacy RC) | Admin access |
 | **NC (NPC Control)** | Content management | **GEN_2** | NPC scripting; no key byte |
-| **NPC-Server** | Dedicated NPC server | Not determined | GS1/GS2 (V8 optional); the beta4 server runs it in-process (`server/src/player/PlayerNPCServer.cpp:39-42`), so no cipher selection was found |
+| **NPC-Server** | Dedicated NPC server | Not determined | GS1/GS2 (V8 optional); the beta4 server runs it in-process (`server/src/npcserver/PlayerNPCServer.cpp:39-42`), so no cipher selection was found |
 | **Listserver** | Server discovery | GEN_2 init → GEN_5 session | First request switches codecs |
 
 See [RC & NC Protocols](rc-nc-protocols.md) for the admin sub-protocol login handshakes.
