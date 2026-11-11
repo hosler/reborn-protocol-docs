@@ -372,36 +372,87 @@ byte after the sender player ID.
 ### PLI_SHOOT (40) - Shoot Projectile (v1)
 **Trigger**: Player fires a projectile
 ```
-[GINT: unknown]      // Unknown parameter (always 0 in tests)
-[GCHAR: pixel_x]     // X position in pixels/16
-[GCHAR: pixel_y]     // Y position in pixels/16
-[GCHAR: pixel_z]     // Z position in pixels/16 + 50
-[GUCHAR: angle]      // Horizontal angle (0-220 maps to 0-π)
-[GUCHAR: z_angle]    // Z angle (0-220 maps to 0-π)
-[GUCHAR: speed]      // Speed in pixels per 0.05s
+[GINT3: shooter]     // Always 0 from the GS2 `shoot` path; the server ignores it
+[GCHAR: x]           // Half-tiles, level-local (server: readGChar() * 8 pixels)
+[GCHAR: y]           // Half-tiles, level-local
+[GCHAR: z]           // Whole tiles + 50 (server: 16 * (byte - 50) pixels)
+[GUCHAR: angle]      // 0-220 maps to 0-2π (step 2π/220)
+[GUCHAR: z_angle]    // 0-220 maps to -π/2..π/2 (step π/220)
+[GUCHAR: power]      // 1/44 tile per 0.05 s step; 220 = 5 tiles per step
 [GCHAR: gani_len]    // Length of GANI string
-[STRING: gani]       // GANI animation name
+[STRING: gani]       // GANI name, optionally ",aniparams"
 [GUCHAR: param_len]  // Length of shoot parameters
 [STRING: shoot_params] // Shoot parameters
 ```
+**Source**: `PlayerClient::msgPLI_SHOOT`
+(`GServer-v2/server/src/player/packets/PlayerClientPackets.cpp:1329-1377`). The server
+comments give the angle as "0 to 2*pi = 0-220" and the power as "44 parts of a tile, up
+to 5 whole tiles (220)". An earlier revision of this page gave x/y as pixels/16, the
+angle as 0-π, and the power as pixels. Those units are wrong.
+
+The server does not read a gravity field here. It sets the relayed gravity from the
+script variable `gravity` cast to a byte (`PlayerClientPackets.cpp:1357`). So the
+default 2.0 is relayed as the byte value 2. See [Gravity units](#shoot-gravity-units).
 
 ### PLI_SHOOT2 (48) - Shoot Projectile (v2)
-**Trigger**: Player fires a projectile (v5.07+ clients)
+**Trigger**: Player fires a projectile (5.1x and later clients)
+
+> ⚠️ **Server and client disagree on this layout.** The table below is what GServer-v2
+> reads (`PlayerClientPackets.cpp:1379-1410`). The Windows 5.12, 5.24r4, 6.00b1 and
+> 6.03r7 clients send a different body. See
+> [Client-side SHOOT2 layout](#client-side-shoot2-layout).
+
 ```
-[GUSHORT: pixel_x]   // X position in pixels
-[GUSHORT: pixel_y]   // Y position in pixels
-[GUSHORT: pixel_z]   // Z position in pixels
-[GCHAR: offset_x]    // Level offset X
-[GCHAR: offset_y]    // Level offset Y
-[GUCHAR: angle]      // Horizontal angle (0-220)
-[GUCHAR: z_angle]    // Z angle (0-220)
-[GUCHAR: speed]      // Speed in pixels per 0.05s
-[GUCHAR: gravity]    // Gravity factor
-[GUSHORT: gani_len]  // Length of GANI string
+[GUSHORT: pixel_x]   // Server reads plain pixels
+[GUSHORT: pixel_y]
+[GUSHORT: pixel_z]
+[GCHAR: offset_x]    // Gmap level offset X
+[GCHAR: offset_y]    // Gmap level offset Y
+[GUCHAR: angle]      // 0-220 maps to 0-2π
+[GUCHAR: z_angle]    // 0-220 maps to -π/2..π/2
+[GUCHAR: power]      // 1/44 tile per 0.05 s step
+[GUCHAR: gravity]    // Server reads one byte
+[GUSHORT: gani_len]  // Server reads a GSHORT length
 [STRING: gani]       // GANI animation name
-[GUCHAR: param_len]  // Length of shoot parameters
-[STRING: shoot_params] // Shoot parameters
+[GUCHAR: param_len]  // The server ignores this value and reads to the end
+[STRING: shoot_params] // Shoot parameters, read to end of packet
 ```
+
+#### Client-side SHOOT2 layout
+
+Static reads of the clients (5.0.0.7 receiver; 5.12, 5.24r4, 6.00b1 and 6.03r7 senders)
+give this body for both `PLI_SHOOT2 (48)` and the part of `PLO_SHOOT2 (191)` after the
+player id:
+
+| # | Field | Bytes | Encoding |
+|---|---|---|---|
+| 1-3 | x, y, z | 2 each | X2-style GSHORT: `(abs(pixels) << 1) \| sign`, level-local pixels |
+| 4-5 | offset x, y | 1 each | GCHAR, signed gmap level offset (adds 64 tiles per step) |
+| 6 | angle | 1 | GCHAR, step 2π/220 |
+| 7 | zangle | 1 | GCHAR, `b × π/220 − π/2` |
+| 8 | power | 1 | GCHAR, `b / 44` |
+| 9 | gravity | **2** | X2-style GSHORT, value `/ 256` |
+| 10 | gani | 1 + n | **GCHAR** length, then `gani[,aniparams]` |
+| 11 | shoot params | 1 + n | GCHAR length, then the string; optional at end of packet |
+
+The GServer-v2 gravity byte plus GSHORT gani length is 3 bytes, and the client gravity
+GSHORT plus GCHAR gani length is also 3 bytes. So the later fields stay aligned, but
+the positions and the gravity decode differently. No lab test confirms the effect yet.
+Source: Graal_analysis
+[`protocol/shoot-5007.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/shoot-5007.md)
+(static reads, not lab-tested).
+
+#### Shoot gravity units
+
+GServer-v2 uses three different gravity units:
+
+| Path | Gravity sent in `PLO_SHOOT2` | Source |
+|---|---|---|
+| `PLI_SHOOT (40)` relay | script `gravity` cast to a byte (2.0 → 2) | `PlayerClientPackets.cpp:1357` |
+| `PLI_SHOOT2 (48)` relay | the received byte, unchanged; the NPC-server hook divides it by 16 | `PlayerClientPackets.cpp:1392,1406` |
+| NPC-server shot | `gravity * 16` (2.0 → 32) | `GServer-v2/server/src/Server.cpp:2532` |
+
+The clients read so far use a fourth form: the 2-byte ×256 value above.
 
 ### PLI_SERVERWARP (41) - Server Warp Request
 **Trigger**: Player requests to warp to another server
@@ -1663,13 +1714,21 @@ version gate and send site. `IEnums.h` has a maintainer comment: `// Unhandled b
 ### PLO_SHOOT (175) - Shoot Projectile (v1, < CLVER_5_07)
 **Trigger**: Projectile broadcast to clients below `CLVER_5_07`. See
 [Version-Gated Behavior](version-gated-behavior.md#projectiles-plo_shoot-vs-plo_shoot2).
-The server builds the packet with `newPacket.constructShootV1()`
-(`Server.cpp:2283-2292`) and prefixes it with `[GSHORT: owner_id]`. This document does
-not independently derive the exact `constructShootV1()` field layout. `IEnums.h` has
-this comment: `// Unhandled by 6.037.`
+`IEnums.h` has this comment: `// Unhandled by 6.037.`
+
+`ShootPacketWrapper::constructShootV1()`
+(`GServer-v2/server/src/player/Player.cpp:239-254`) builds the body:
 ```
 [GSHORT: owner_id]
-[SHOOT_DATA...]      // constructShootV1() body — format not documented here
+[GINT3: source]      // NPC id, or 0 for a player shot
+[GCHAR: x]           // (pixel_x % 1024) / 8 = level-local half-tiles
+[GCHAR: y]           // (pixel_y % 1024) / 8
+[GCHAR: z]           // pixel_z / 16 + 50
+[GCHAR: angle]
+[GCHAR: z_angle]
+[GCHAR: power]
+[GCHAR: gani_len][gani]
+[GCHAR: param_len][shoot_params]
 ```
 
 ### PLO_DISABLECLASSICMODE (176) - Disable Classic Mode
@@ -1762,14 +1821,29 @@ form), sent via `NPC::sendMoveQueueToLevel`/`sendMoveQueueToPlayer` (`NPC.cpp:44
 ### PLO_SHOOT2 (191) - Shoot Projectile (v2, >= CLVER_5_07)
 **Trigger**: Projectile broadcast to clients at or above `CLVER_5_07`. See
 [Version-Gated Behavior](version-gated-behavior.md#projectiles-plo_shoot-vs-plo_shoot2).
-The server builds the packet with `newPacket.constructShootV2()`
-(`Server.cpp:2283-2292`) and prefixes it with `[GSHORT: owner_id]`. This document does
-not independently derive the exact `constructShootV2()` field layout. `IEnums.h` has
-this comment: "Valid message in 5.07 and 6.037. The code it uses is unique."
+`IEnums.h` has this comment: "Valid message in 5.07 and 6.037. The code it uses is unique."
+
+`ShootPacketWrapper::constructShootV2()`
+(`GServer-v2/server/src/player/Player.cpp:256-273`) builds the body:
 ```
 [GSHORT: owner_id]
-[SHOOT_DATA...]      // constructShootV2() body — format not documented here
+[GSHORT: pixel_x]    // plain GSHORT
+[GSHORT: pixel_y]
+[GSHORT: pixel_z]
+[BYTE: offset_x + 32]
+[BYTE: offset_y + 32]
+[GCHAR: angle]
+[GCHAR: z_angle]
+[GCHAR: power]
+[GCHAR: gravity]     // see the gravity units table under PLI_SHOOT2
+[GSHORT: gani_len][gani]
+[GCHAR: param_len][shoot_params]
 ```
+
+> ⚠️ The 5.0.0.7 client reads x/y/z and gravity in a different form. See
+> [Client-side SHOOT2 layout](#client-side-shoot2-layout). With the server body, a static
+> read predicts positions at half value (an odd value flips the sign) and gravity at 4×
+> the intended value for gani names under 128 bytes. No lab test confirms this yet.
 
 ### PLO_RESETCLIENT (194) - Clear Weapons
 **Trigger**: Remove all weapons from player
