@@ -176,6 +176,7 @@ switch (m_type)
     case PLTYPE_CLIENT2:                 // 2.19 - 2.21, 3 - 3.01
         Encryption.setGen(ENCRYPT_GEN_4);
         break;
+    default:
     case PLTYPE_CLIENT3:                 // 2.22+
         Encryption.setGen(ENCRYPT_GEN_5);
         break;
@@ -183,11 +184,13 @@ switch (m_type)
         Encryption.setGen(ENCRYPT_GEN_1);
         m_fileQueue.setCodec(ENCRYPT_GEN_1, 0);
         break;
-    default:
-        // disconnect: "Your client type is unknown."
-        return false;
 }
 ```
+
+In the current source (`PlayerClient.cpp:300-316`), `default:` shares the
+`PLTYPE_CLIENT3` case, so an unknown login type gets **GEN_5**. The older monolithic
+`TPlayer` login (`master`, `server/src/TPlayer/TPlayer.cpp:2322-2327`) disconnects an
+unknown type with "Your client type is unknown." Do not depend on either behavior.
 
 | PLTYPE | Encryption gen (initial) | Client range |
 |---|---|---|
