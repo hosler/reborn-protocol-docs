@@ -194,6 +194,22 @@ if (isClient() && m_versionId < CLVER_2_14)
   `Player.cpp:584-594`: the pre-2.1 branch sends plain `PLO_FILE >> filename` with no
   `(long long)modTime`, the >=2.1 branch includes it).
 
+> ⚠️ **The pre-2.1 branch does not match the 2.05 client.** A static read of the original
+> Windows 2.05 rev 2 client shows that its `PLO_FILE` handler behind `PLO_RAWDATA`
+> **always** consumes five metadata bytes, then a GCHAR name length, the name, and the
+> content. With N raw bytes, the content is N − 7 − name_length. The handler does not drop
+> a final `0x0A` inside the raw count. So a newline that the server adds inside the count
+> becomes the last byte of the saved file. 2.05 sends the token `GNW03081`. That token is
+> not in `clientVersions[]`, so the server resolves it to `CLVER_UNKNOWN`. That value is
+> below `CLVER_2_1`, so 2.05 gets the shorter form and reads the wrong bytes.
+> In a local lab, the server was changed to send the prefix and to keep the newline out of
+> the count. The unmodified 2.05r2 client then saved three of five test files byte for byte
+> (no newline, one newline, binary with a newline). The empty and two-newline cases are
+> still open. Source:
+> Graal_analysis
+> [`protocol/file-205r2-prefix-lf.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/file-205r2-prefix-lf.md).
+> Clients older than 2.05 were not checked.
+
 ## PLPROP_COLORS Width: Two Independent Switches
 
 There are **two separate mechanisms** here, easy to conflate into one:
