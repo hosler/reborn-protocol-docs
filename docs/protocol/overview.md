@@ -18,9 +18,11 @@ represents zero. Newlines (10) separate packets.
 
 For details, see [Data Types: The +32 Obsession](data-types.md#the-32-obsession-why-everything-adds-32).
 
-### Why Three String Types
+### Why Two String Types
 
-The protocol uses three string types. See [String Types](strings.md) for details.
+The protocol uses two string encodings: length-prefixed strings and read-to-end strings.
+See [String Types](strings.md) for details, including the packet newline that causes
+confusion.
 
 ### Why Partial Encryption
 
@@ -39,7 +41,7 @@ The Reborn protocol supports multiple connection types:
 | **Game Client** | Standard players | GEN_5 | Most common |
 | **RC (Remote Control)** | Server administration | GEN_5 (RC2) / GEN_2 (legacy RC) | Admin access |
 | **NC (NPC Control)** | Content management | **GEN_2** | NPC scripting; no key byte |
-| **NPC-Server** | Dedicated NPC server | Varies | GS1/GS2 (V8 optional) |
+| **NPC-Server** | Dedicated NPC server | Not determined | GS1/GS2 (V8 optional); the beta4 server runs it in-process (`server/src/player/PlayerNPCServer.cpp:39-42`), so no cipher selection was found |
 | **Listserver** | Server discovery | GEN_2 init → GEN_5 session | First request switches codecs |
 
 See [RC & NC Protocols](rc-nc-protocols.md) for the admin sub-protocol login handshakes.
@@ -77,10 +79,10 @@ For GEN_5 (the current standard):
 
 ```
 SENDING:
-  Raw Packets → Bundle → Compress → Encrypt → Length Prefix → Send
+  Raw Packets → Bundle → Compress → Encrypt → Type Byte → Length Prefix → Send
 
 RECEIVING:
-  Receive → Strip Length → Decrypt → Decompress → Split → Parse
+  Receive → Strip Length → Strip Type Byte → Decrypt → Decompress → Split → Parse
 ```
 
 See [Encryption: The Packet Lifecycle](encryption.md#the-packet-lifecycle) for detailed diagrams.
@@ -91,9 +93,9 @@ The protocol uses multiple encryption "generations":
 
 | Gen | Encryption | Compression | Use |
 |-----|------------|-------------|-----|
-| GEN_1 | None | None | Ancient |
-| GEN_2 | None | Zlib | Live: NC + listserver |
-| GEN_3 | Weak XOR | Zlib | Legacy |
+| GEN_1 | None | None | Web clients; first leg of server-to-listserver registration |
+| GEN_2 | None | Zlib | Live: NC, legacy 1.x clients and RC, listserver bootstrap |
+| GEN_3 | Single-byte insertion | Zlib | Legacy |
 | GEN_4 | Weak XOR | BZ2 | Legacy |
 | **GEN_5** | **Weak XOR** | **Multi** | **Current** |
 
@@ -101,9 +103,10 @@ Use GEN_5. "Weak XOR" supplies obfuscation, not cryptographic security.
 
 See [Encryption Details](encryption.md) for implementation specifics.
 
-GEN_5 compression selection is session-specific. Game sessions use
-uncompressed/zlib/bzip2 tiers at 55 and 8192 bytes; list-server sessions use
-only uncompressed/zlib with the 55-byte boundary. See
+GEN_5 compression selection is implementation-specific. The reference server uses
+uncompressed/zlib/bzip2 tiers at 55 and 8192 bytes for every session; Reborn mirrors that
+for game sessions and uses only uncompressed/zlib with the 55-byte boundary for list-server
+sessions. The reference client uses 48 and 4096. See
 [Outbound Compression Is a Session Contract](encryption.md#outbound-compression-is-a-session-contract).
 
 ## Data Encoding
@@ -119,8 +122,10 @@ Use this basic sequence to connect and authenticate:
 
 ```
 1. TCP connect to server:port
-2. Receive server greeting (PLO_* packets with server info)
-3. Send PLI_LOGIN with credentials
+2. Send the login packet: [GCHAR login type][key byte, if the type's generation uses one]
+   [8-byte version][GUCHAR len][account][GUCHAR len][password][identity string]
+   (the first packet has no PLI_* id; see Client Versions & Encryption)
+3. The server sends nothing before it has parsed the login
 4. Receive PLO_PLAYERPROPS with your player data
 5. Receive PLO_LEVELBOARD + PLO_LEVELNAME for starting level
 6. Start handling game packets
@@ -131,7 +136,7 @@ Use this basic sequence to connect and authenticate:
 | Document | Contents |
 |----------|----------|
 | [Data Types](data-types.md) | G-type encoding, coordinates, property types |
-| [String Types](strings.md) | The three string types and their gotchas |
+| [String Types](strings.md) | The two string encodings and their gotchas |
 | [Encryption](encryption.md) | Packet lifecycle, encryption algorithm, magic constants |
 | [Packet Structures](packet-structures.md) | Individual packet formats (PLI_* and PLO_*) |
 | [GServer Behavior](gserver-behavior.md) | Server implementation notes |
@@ -142,10 +147,11 @@ Use this basic sequence to connect and authenticate:
 1. **Forgetting the +32**: Every numeric value has an offset of 32. Without this offset,
    the data is invalid.
 
-2. **Wrong string type**: PLO_LEVELLINK uses newline-terminated strings, not GSTRING.
-   Multiple implementations have used the wrong type.
+2. **Wrong string type**: PLO_LEVELLINK is a read-to-end string, not a GSTRING. Multiple
+   implementations have used the wrong type.
 
-3. **GEN_5 order of operations**: Encrypt *after* compress. GEN_3 did it the other way around.
+3. **GEN_5 order of operations**: Encrypt *after* compress, then add the unencrypted type
+   byte. GEN_3 works on single packets instead of the compressed bundle.
 
 4. **Partial encryption**: Only the first N bytes are encrypted (N depends on compression type).
 
