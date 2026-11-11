@@ -105,6 +105,18 @@ def decode_gshort(data):
     return (data[0] << 7) + data[1] - 0x1020
 ```
 
+#### Canonical Maximum Versus the Server Clamp
+
+The cap of 28767 makes a non-canonical encoding. For values 28672-28767 the high byte is
+already at 223, so the low byte carries 128-223 instead of a 7-bit group. The decode
+formula still gives the right value. The reference client caps at the canonical maximum
+instead: its GSHORT writers clamp the encoded value to `0x6fff` (`223 << 7 | 127` =
+**28671**; `Preagonal/FourPlay/quattroplay/src/TPlayer.cpp` `netSigned14`, `TClient.cpp`,
+`TShowImg.cpp`). An encoder that must interoperate with clients should not exceed 28671.
+A decoder should accept a low byte above `0x9F` (127 + 32). The same stop at 28671 is
+reported for the 5.x and 6.x Windows clients in squirelworks' client-analysis notes
+(`protocol/shoot-5007.md`, static read); not verified against the reference.
+
 ### GINT (GINT3): Three Bytes, Same Energy
 
 GINT extends the pattern to 3 bytes. Documentation often calls it **GINT3** to distinguish it from GINT4 and GINT5.
@@ -127,6 +139,15 @@ Bit layout (high byte carries the top of the value):
 > not `2^21 − 1`. For values ≤ 2,097,151 the bytes are identical either way, which is why
 > this error rarely occurs. However, a strict 7-bit-mask encoder truncates large rupee or online
 > counts.
+
+The same applies here. The canonical maximum, with every group 7 bits, is
+`223 << 14 | 0x3FFF` = **3,670,015**. The reference client caps its raw-data length at
+exactly that value (`Preagonal/FourPlay/quattroplay/src/TGraalConnection.cpp` sendData
+RAWDATA clamp to `0x37ffff`; `TPlayer.cpp` `netUnsigned21`). The same cap is reported for
+the v7 client in squirelworks' client-analysis notes (its v7 framing and packet-tables
+file, static read); not verified against the reference. Values from 3,670,016 to 3,682,399 need a lower group above 127: the middle
+group overflows first (3,670,016 encodes as 223, 128, 0), and the low group too from
+3,682,304 (223, 223, 128) upward.
 
 ```python
 # Decode: the GSHORT trick extended one more byte (combined +32 bias removal)
@@ -188,9 +209,9 @@ def decode_gint5(data):
 |------|------|-----------|----------------|
 | GCHAR | 1 byte | 223 | `byte - 32` |
 | GUCHAR | 1 byte | 223 | `byte - 32` |
-| GSHORT | 2 bytes | 28,767 | `(b1 << 7) + b2 - 0x1020` |
+| GSHORT | 2 bytes | 28,767 (canonical 28,671) | `(b1 << 7) + b2 - 0x1020` |
 | GUSHORT | 2 bytes | 28,767 | same as `GSHORT` |
-| GINT / GINT3 | 3 bytes | 3,682,399 | `((b1 << 7) + b2 << 7) + b3 - 0x81020` |
+| GINT / GINT3 | 3 bytes | 3,682,399 (canonical 3,670,015) | `((b1 << 7) + b2 << 7) + b3 - 0x81020` |
 | GINT4 | 4 bytes | 471,347,295 | byte-shift, bias `0x4081020` |
 | GINT5 / GUINT5 | 5 bytes | 4,294,967,295 | 7-bit unpack, subtract 32 each |
 
