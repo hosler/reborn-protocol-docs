@@ -22,7 +22,8 @@ The sender puts all packets in bundles that have this structure:
 ```
 
 Where:
-- `UINT16 packet_size`: Size of the bundle data in bytes (little-endian)
+- `UINT16 packet_size`: Size of the bundle data in bytes, **big-endian** (high byte first).
+  For GEN_5 the size includes the compression-type byte.
 - `PACKET_BUNDLE_DATA`: Encrypted/compressed packet bundle
 
 ### Bundle Processing (GEN_5 Protocol)
@@ -53,9 +54,11 @@ Newlines (`\n`) separate the packets in each bundle. Raw data packets are the ex
 
 Special case for raw data:
 ```
-[UINT8: PLI_RAWDATA][UINT32: data_length]
-[RAW_DATA_BYTES]
+[GCHAR: PLO_RAWDATA (100) or PLI_RAWDATA (50)][GINT3: data_length]\n
+[RAW_DATA_BYTES]     // exactly data_length bytes, newlines included
 ```
+The length is a GINT3 (3 bytes), not a UINT32. See
+[Data Types: GINT3](data-types.md#gint-gint3-three-bytes-same-energy).
 
 ## Data Encoding Types
 
@@ -911,22 +914,17 @@ server (`hasNPCServer()`). Otherwise, the server ignores it.
 
 ## Encryption Details (ENCRYPT_GEN_5)
 
-### Key Generation
-- Initial key set via PLI_SET_ENC_KEY or login
-- Iterator starts at predefined value based on generation
-- Key stream generated using: `key = (key + iterator++) & 0xFF`
+[Encryption](encryption.md) is the reference for GEN_5. In summary:
 
-### Encryption Limits
-The compression type sets the encryption limit:
-- COMPRESS_UNCOMPRESSED: 40 bytes
-- COMPRESS_ZLIB: 4096 bytes  
-- COMPRESS_BZ2: 65536 bytes
+- The login packet sets the one-byte key.
+- The iterator starts at `0x4A80B38`. Each 4-byte group advances it once:
+  `iterator = iterator * 0x8088405 + key`. The data is XORed with the little-endian
+  bytes of the iterator.
+- The compression-type byte sets the limit in **4-byte groups**: 12 groups (48 bytes) for
+  `0x02`, 4 groups (16 bytes) for `0x04` and `0x06`.
 
-### Decryption Process
-1. Extract compression type (first byte)
-2. Apply XOR decryption with generated key stream
-3. Decompress using appropriate algorithm
-4. Parse individual packets
+An earlier revision of this section gave `key = (key + iterator++) & 0xFF` and limits of
+40, 4096 and 65536 bytes. Those values do not match `CEncryption.cpp` and are wrong.
 
 ## Data Type Reference
 
@@ -1917,58 +1915,12 @@ If there is no such prefix, use the length-prefixed read. Header fields:
 
 ## Encryption Implementation Details
 
-### ENCRYPT_GEN_5 Key Stream Generation
-
-The GEN_5 encryption uses an XOR-based stream cipher:
-
-```c++
-class CEncryption {
-    uint8_t m_key;           // Current encryption key
-    uint32_t m_iterator;     // Iterator for key generation
-    int32_t m_limit;         // Encryption byte limit
-    uint32_t m_gen;          // Encryption generation (5)
-    
-    static const uint32_t ITERATOR_START[6] = {
-        0, 0, 0x4A80B38, 0x481C622, 0x481C6A2, 0x12345678
-    };
-};
-
-void decrypt(CString& buffer) {
-    for (int i = 0; i < m_limit && i < buffer.length(); i++) {
-        buffer[i] ^= (m_key + m_iterator++);
-        m_iterator &= 0xFF;
-    }
-}
-```
-
-### Compression Integration
-
-GEN_5 protocol supports multiple compression methods:
-
-1. **COMPRESS_UNCOMPRESSED (0x02)**: No compression, 40-byte encryption limit
-2. **COMPRESS_ZLIB (0x04)**: Zlib compression, 4096-byte encryption limit  
-3. **COMPRESS_BZ2 (0x06)**: Bzip2 compression, 65536-byte encryption limit
-
-The compression type sets the compression algorithm and the encryption limit.
-
-### Packet Bundle Processing
-
-```
-Outgoing (Client → Server):
-1. Create packet bundle with individual packets
-2. Compress bundle using specified method
-3. Prepend compression type byte
-4. Encrypt first N bytes (based on compression type)
-5. Send with 2-byte length prefix
-
-Incoming (Server → Client):
-1. Read 2-byte length prefix
-2. Read bundle data
-3. Extract compression type (first byte)
-4. Decrypt first N bytes using key stream
-5. Decompress using specified method
-6. Parse individual packets (newline-separated)
-```
+See [Encryption](encryption.md) for the GEN_5 cipher and the bundle processing order, and
+[Encryption Details (ENCRYPT_GEN_5)](#encryption-details-encrypt_gen_5) above for a summary.
+An earlier revision of this section had a different `ITERATOR_START` table
+(`0x481C622`, `0x481C6A2`, `0x12345678`), a byte-wise `m_key + m_iterator++` key stream and
+byte limits of 40, 4096 and 65536. None of these match `CEncryption.cpp`. GEN_3, GEN_4 and
+GEN_5 all start at `0x4A80B38`, and the limits are 12 or 4 four-byte groups.
 
 This document describes the core packet structures that the Reborn protocol uses.
 Implementations must use these exact formats for compatibility with existing servers
