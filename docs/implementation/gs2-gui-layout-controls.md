@@ -14,7 +14,7 @@ Corpus for the bottom-up half: `Preagonal/graal-{lttp,loginserver,
 loginserver-dev,loginserver-mobile,bomber-gs2,gta}` ("the corpora"). Counts are
 **distinct files**.
 
-Diff target: `pyReborn/pyreborn/game/gs2_gui/` (package, read, not edited).
+Diff target: `pyReborn/pyreborn/game/gs2_gui/` (package, read, not edited). pyReborn cites below are file + symbol; the pre-split line numbers are gone.
 
 > **Counting method. Read this before trusting any number below.** GUI
 > properties are overwhelmingly written **bare inside construction blocks**
@@ -123,12 +123,14 @@ Corpus (`border = <n>` literals): `1`×35, `0`×24, `3`×12, **`5`×10**, `4`×4
 `borderthickness = 1` occurs ×4. So the skinned mode is in live use.
 
 **Fixed 2026-07-26.** `_profile_from_fields` now stores the raw enum value
-as `border_style` (`game/gs2_gui/profiles.py:304-306`) and `_draw_border`
-(`:370-410`) switches on it: `1` flat, `2`/`3`/`4` the bevel pairs, `5` the
+as `border_style` (`game/gs2_gui/profiles.py` `_profile_from_fields`) and `_draw_border`
+switches on it: `1` flat, `2`/`3`/`4` the bevel pairs, `5` the
 skinned nine-patch fallback, matching `TGUIRender::renderBorder`'s five
-cases. `borderthickness` is read separately as `border_thickness`
-(`:307-309`, `_STYLE_FIELDS` `:217-221`) and used as the layout inset, not
-the drawn line width. Previously `_profile_from_fields` clamped `border` to
+cases. `borderthickness` is read separately into `GuiProfile.border_thickness`
+(`_profile_from_fields`, listed in `_STYLE_FIELDS`) but **nothing reads it
+back**: the slot is stored only, so it is neither a layout inset nor the
+drawn line width (`_draw_border` switches on `border_style` alone).
+Previously `_profile_from_fields` clamped `border` to
 0..3 and drew it as a solid rectangle outline, so `border = 5`/`4` drew a
 3px solid border and `border = 2/3` drew a flat line instead of a bevel.
 
@@ -142,9 +144,9 @@ getter and setter pointers** as `align` (`:550`):
 
 Corpus: `justify` appears in **5** files (23 `justify = "center"` assignments),
 and `align` appears in **1**. **Fixed 2026-07-26.** Our `_STYLE_FIELDS`
-(`game/gs2_gui/profiles.py:217-221`) now contains both `justify` and `align`,
-and `_STYLE_ALIASES = {"justify": "align"}` (`:228`) collapses the alias
-during profile-chain merge (`_profile_fields`, `:267`), before
+(`game/gs2_gui/profiles.py`) now contains both `justify` and `align`,
+and `_STYLE_ALIASES = {"justify": "align"}` collapses the alias
+during profile-chain merge (`_profile_fields`), before
 `_profile_from_fields` ever reads the field. Previously `_STYLE_FIELDS`
 claimed only `align` and every `justify = "center"` in the Login/IRC content
 was silently dropped.
@@ -170,10 +172,10 @@ And **`setbitmap` has two incompatible signatures** depending on the class:
 body `:52-55`) vs `GuiBitmapButtonCtrl.setbitmap(s,i)`
 (`GuiBitmapButtonCtrlProperties.cpp:70-80`, body `:35-38`).
 
-**Fixed 2026-07-26**: `game/gs2_gui/image_controls.py:156` declares
+**Fixed 2026-07-26**: `game/gs2_gui/image_controls.py` declares
 `class GuiBitmapButtonCtrl(GuiButtonCtrl)`, now with `normalbitmap` /
-`mouseoverbitmap` / `pressedbitmap` all claimed (`_BITMAP_SLOTS`, `:169-171`)
-and a two-argument `setbitmap(s,i)` (`:210-217`). `face()` (`:186-190`) picks
+`mouseoverbitmap` / `pressedbitmap` all claimed (`_BITMAP_SLOTS`)
+and a two-argument `setbitmap(s,i)` (`_m_setbitmap`). `GuiBitmapButtonCtrl.face()` picks
 the hover/press bitmap, falling back to the normal one. Previously the class
 had only a single `bitmap` property and the three named slots were unclaimed,
 so the hover/press faces never differed.
@@ -231,9 +233,10 @@ lines 28-53).
 
 **Fixed 2026-07-26 (additional finding beyond this doc's own list, verified
 against commit a392de1).** `_m_reflow`
-(`game/gs2_gui/text_controls.py:74-90`) now resizes the control from the
-laid-out content extent (height always, width `+1` when word-wrap is off,
-`:84-88`) and fires `onreflow(width, height)` (`:89`), matching
+(`game/gs2_gui/text_controls.py` `GuiMLTextCtrl._m_reflow`) now resizes the control from the
+last laid-out content extent (height always, width `+1` when word-wrap is off;
+the extent is measured at paint time, so a `reflow` before the first paint keeps
+the size) and fires `onreflow(width, height)`, matching
 `reflowResize`. Previously it only invalidated the layout cache and returned
 `0.0`, never resizing and never firing the event; no corpus handler for
 `onReflow` was found either way (see §7).
@@ -301,7 +304,7 @@ content last set on `GuiDefaultProfile`. Corpus: `GuiDefaultProfile` appears in
 8 files, 52 references, including 10 `new GuiDefaultProfile(` derivations.
 
 We model this: `_BUILTIN_PROFILE_FIELDS["guidefaultprofile"]`
-(`game/gs2_gui/profiles.py:97-100`) and `_DEFAULT_PROFILE_NAME` (`:82`). But our seed is a
+(`game/gs2_gui/profiles.py`) and `_DEFAULT_PROFILE_NAME`. But our seed is a
 static dict, not the live object, so a script that *mutates*
 `GuiDefaultProfile` after startup does not affect profiles created later. In
 the reference it does, for profiles created after the mutation. No corpus case
@@ -352,8 +355,8 @@ Corpus derivations (top): `new GuiControlProfile(`×36, `new IRC_TextProfile(`×
 `new GuiBlueTransScrollProfile(`×10, plus ~15 more at ×5.
 
 **Our rule is a name heuristic, not the oracle's rule.**
-`make_control` (`game/gs2_gui/factory.py:57-82`) treats an unknown class as a profile
-iff `classname.lower().endswith("profile")` (`:60`). Every derivation in the
+`make_control` (`game/gs2_gui/factory.py`) treats an unknown class as a profile
+iff `classname.lower().endswith("profile")`. Every derivation in the
 corpora happens to end in `Profile`, so this is correct *in practice*. It would
 diverge for a profile whose name does not, and it would also (wrongly) make a
 profile out of a non-profile object whose name does.
@@ -366,11 +369,11 @@ profile out of a non-profile object whose name does.
 yields Number `0.0`.
 
 We model it as `class GuiControlProfile(GuiControl)`
-(`game/gs2_gui/profiles.py:471`) with
-`has()` returning `True` for everything (`:497-498`), so
-`someProfile.width` answers `100.0` (the `GuiControl.__init__` default,
-`game/gs2_gui/base.py:178`). This is deliberate: the blanket `has()` is what
-makes existence-gated construction-block writes land (documented `:482-487`).
+(`game/gs2_gui/profiles.py` `GuiControlProfile`) with
+`GuiControlProfile.has()` returning `True` for everything, so
+`someProfile.width` answers the `GuiControl.__init__` default
+(`game/gs2_gui/base.py`; `GuiControlProfile.__init__` only sets `visible = False`). This is deliberate: the blanket `has()` is what
+makes existence-gated construction-block writes land (see the `GuiControlProfile` docstring).
 But it is still a
 divergence, and `width`/`height`/`visible` specifically now answer a plausible
 non-zero number instead of nothing.
@@ -602,24 +605,25 @@ this for whoever takes them.
 
 | Member | Corpus files | Status |
 | --- | ---: | --- |
-| `transparency` | 19 | IMPLEMENTED (`_STYLE_FIELDS`, clamped 0..1 `:316-318`) |
+| `transparency` | 19 | IMPLEMENTED (`_STYLE_FIELDS`, clamped 0..1 in `_profile_from_fields`) |
 | `border` | 17 | **IMPLEMENTED, fixed 2026-07-26**, full style enum (§1.1) |
-| `fillcolor` | 12 | IMPLEMENTED (`:305`) |
-| `opaque` | 11 | IMPLEMENTED (`:319`) |
-| `fontsize` | 10 | IMPLEMENTED, clamped 9..28 (`:314-315`) |
-| `fontcolor` | 9 | IMPLEMENTED (`:306`) |
-| `bitmap` | 8 | IMPLEMENTED (skin sheet, `:325`), `.png` auto-suffix not modelled |
-| `tab` | 8 | MISSING (retained on the object, not consulted) |
-| `fontstyle` | 7 | IMPLEMENTED, `"b"` substring → bold only (`:323`) |
-| `modal` | 6 | MISSING |
+| `fillcolor` | 12 | IMPLEMENTED (`_profile_from_fields`) |
+| `opaque` | 11 | IMPLEMENTED (`_profile_from_fields`) |
+| `fontsize` | 10 | IMPLEMENTED, clamped 9..28 (`_profile_from_fields`) |
+| `fontcolor` | 9 | IMPLEMENTED (`_profile_from_fields`) |
+| `bitmap` | 8 | IMPLEMENTED (skin sheet, `_profile_from_fields`), `.png` auto-suffix not modelled |
+| `tab` | 8 | IMPLEMENTED as a tab-stop flag: not in `_STYLE_FIELDS`, but `GuiControl._find_first_tabable` (`base.py`) and the tab-order walk in `GS2GuiManager` (`manager.py`) read it from the control's profile object |
+| `fontstyle` | 7 | IMPLEMENTED, `"b"` substring → bold only (`_profile_from_fields`) |
+| `modal` | 6 | **IMPLEMENTED** (`_STYLE_FIELDS`, `GuiProfile.modal`; read by `GS2GuiManager` in `manager.py`) |
 | `justify` | **5** | **IMPLEMENTED, fixed 2026-07-26**, alias of `align` (§1.2) |
-| `fontcolorhl` | 5 | MISSING |
-| `fonttype` | 5 | MISSING (we always use the game font) |
-| `textshadow` | 5 | IMPLEMENTED (`:327`) |
-| `bordercolor` | 3 | IMPLEMENTED (`:307`) |
-| `borderthickness` | 2 | stored as `border_thickness` since 2026-07-26 (§1.1), still not consumed for layout |
-| `fontcolorsel`, `shadowcolor`, `shadowoffset`, `textoffset` | 2 each | MISSING |
-| `align`, `autosizewidth`, `fillcolorhl`, `fontcolorlink` | 1 each | `align`/`fillcolorhl` IMPLEMENTED, other two MISSING |
+| `fontcolorhl` | 5 | **IMPLEMENTED** (`GuiProfile.fg_hl`: hovered button label in `GuiButtonBaseCtrl.label_color`, selected span in `GuiTextEditCtrl._draw_self`, list rows in `collection_controls.py`) |
+| `fonttype` | 5 | **IMPLEMENTED**: `_profile_from_fields` resolves it with `resolve_font_file` into `GuiProfile.font_path`, which `_font` passes to the font manager (falls back to the game font when unresolvable) |
+| `textshadow` | 5 | IMPLEMENTED (`_profile_from_fields`, `_TextShadow`) |
+| `bordercolor` | 3 | IMPLEMENTED (`_profile_from_fields`) |
+| `borderthickness` | 2 | stored as `GuiProfile.border_thickness` since 2026-07-26 (§1.1); stored only, nothing reads it (not a layout inset, not the drawn line width) |
+| `fontcolorsel`, `shadowcolor`, `shadowoffset` | 2 each | **IMPLEMENTED** (`GuiProfile.fg_sel`, read for the selected list row in `collection_controls.py`; shadow colour/offset on `_TextShadow`) |
+| `textoffset` | 2 | MISSING |
+| `align`, `autosizewidth`, `fillcolorhl`, `fontcolorlink` | 1 each | `align`/`fillcolorhl` IMPLEMENTED, `autosizewidth` and `fontcolorlink` still MISSING |
 | the remaining 30 | 0 | not worth implementing |
 
 ---
@@ -682,22 +686,19 @@ deferred to the next `reflow`.
 
 ### Diff vs `gs2_gui/`
 
-`class GuiMLTextCtrl(GuiControl)` at `game/gs2_gui/text_controls.py:17`.
+`class GuiMLTextCtrl(GuiControl)` in `game/gs2_gui/text_controls.py`.
 
 | Member | Corpus files | Status |
 | --- | ---: | --- |
-| `text` | (52 across all control classes) | IMPLEMENTED as a plain attribute (`:894`), escaping (§1.14) not modelled |
-| `urlbase` | 5 | IMPLEMENTED **by accident**, falls into the generic `_members` dict, so `Serverlist_EventNews.urlbase = x` then `openURL(Serverlist_EventNews.urlbase @ url)` round-trips correctly. Not claimed by `_TORQUE_PROPS`, so a *construction-block* `urlbase = ...` would fall through to a temp under the VM's existence gate |
-| `reflow` | 0 in these corpora (see §7) | IMPLEMENTED as cache invalidation (`:1706`, `:1714-1720`), does not resize, does not fire `onReflow` |
-| `getlines` | 1 | IMPLEMENTED (`GuiControl._METHOD_NAMES`, `:870`) |
-| `setlines`, `settext`, `gettext`, `addtext`, `scrolltobottom` | 0 | IMPLEMENTED (`:869-872`) |
-| `wordwrap` | **7** | **MISSING and existence-gated**, not in `_TORQUE_PROPS` (`:848-863`), so `wordwrap = true;` in a construction block never reaches the control. Note one site writes the **string** `"1"` to this `'b'` property (`graal-loginserver/weapons/weapon-StartConnectMessage.txt:110`). Others write `true`/`false` |
-| `htmlcompatibility` | 5 | MISSING, existence-gated |
-| `maxchars` | 4 | MISSING, existence-gated |
-| `parsetags` | 3 | MISSING, existence-gated, and it changes what `findtext`/`replacetext` skip (§1.16) |
-| `allowedtags`, `disallowedtags`, `cursorposition`, `deniedsound`, `htmllinks`, `plaintext` | 2 each | MISSING, existence-gated |
-| `alpha` | 0 on a GUI control | MISSING, all 12 corpus `.alpha` writes are on `tilelayers[n]`/`findimg(n)`/`player` (§1.13) |
-| the other 19 methods | 0 | MISSING |
+| `text` | (52 across all control classes) | IMPLEMENTED as the base `GuiControl.text` attribute, escaping (§1.14) not modelled |
+| `urlbase` | 5 | IMPLEMENTED (stored): claimed in `GuiMLTextCtrl._TORQUE_PROPS`, so a *construction-block* `urlbase = ...` lands on the control, and `Serverlist_EventNews.urlbase = x` then `openURL(Serverlist_EventNews.urlbase @ url)` round-trips |
+| `reflow` | 0 in these corpora (see §7) | **IMPLEMENTED**: `GuiMLTextCtrl._m_reflow` drops the layout cache, resizes to the last painted content extent (height always, width `+1` when word-wrap is off) and fires `onReflow(width, height)` (§1.5) |
+| `getlines` | 1 | IMPLEMENTED (`GuiControl._METHOD_NAMES`, `base.py`) |
+| `setlines`, `settext`, `gettext`, `addtext`, `scrolltobottom` | 0 | IMPLEMENTED (`GuiControl._METHOD_NAMES`, `base.py`) |
+| `wordwrap` | **7** | **IMPLEMENTED (stored)**: claimed in `GuiMLTextCtrl._TORQUE_PROPS`, so `wordwrap = true;` in a construction block reaches the control; `GuiMLTextCtrl.word_wrap` (default on) and `_m_reflow` read it. Note one site writes the **string** `"1"` to this `'b'` property (`graal-loginserver/weapons/weapon-StartConnectMessage.txt:110`). Others write `true`/`false` |
+| `htmlcompatibility`, `maxchars`, `parsetags`, `allowedtags`, `disallowedtags`, `cursorposition`, `deniedsound`, `htmllinks`, `plaintext` | 5 / 4 / 3 / 2 each | claimed in `GuiMLTextCtrl._TORQUE_PROPS` (stored, so construction-block writes land). Only `wordwrap` has a visible effect; `parsetags` does not change `findtext`/`replacetext` (§1.16), and `plaintext`/`text` escaping (§1.14) is not modelled |
+| `alpha` | 0 on a GUI control | claimed in `GuiMLTextCtrl._TORQUE_PROPS` (stored); all 12 corpus `.alpha` writes are on `tilelayers[n]`/`findimg(n)`/`player` (§1.13) |
+| the other 19 methods | 0 | **IMPLEMENTED**: all 24 methods answer. `GuiMLTextCtrl._METHOD_NAMES` lists `reflow`, `deselecttext`, `findtext`, `findtextat`, `getcursorline`, `getline`, `getlinecount`, `getselectedposition`, `getselectedlength`, `getcolumnandlineofposition`, `replacetext`, `scrolltotag`, `scrolltotop`, `scrolltoline`, `scrolltoposition`, `selecttext`, `setcursorcolumnandline`, `trimhorizontally` (`trimhorizontally` is a no-op); `addtext`/`setlines`/`getlines`/`gettext`/`settext`/`scrolltobottom` come from `GuiControl`. |
 
 Corrected from the first pass, which counted dotted forms only and reported 0
 for the whole property list. The eleven properties above are all written **bare
@@ -740,24 +741,24 @@ for `scrollTo`/`scrollDelta`/`getChildrenFitHeight`, **not** for
 
 ### Diff vs `gs2_gui/`
 
-`class GuiScrollCtrl(GuiControl)` at `game/gs2_gui/text_controls.py:181`.
+`class GuiScrollCtrl(GuiControl)` in `game/gs2_gui/text_controls.py`.
 
 | Member | Corpus files | Status |
 | --- | ---: | --- |
-| `vscrollbar` / `hscrollbar` | 22 combined | PARTIAL. `vscrollbar` is claimed in `_TORQUE_PROPS` (`:854`) and honoured at draw time (`:1845-1848`, `alwaysoff` suppresses the bar). `hscrollbar` is claimed but never read: we have no horizontal bar. Our comparison is `.lower()`ed (`:1845`), so we are *more* permissive than the oracle (§1.8). This is harmless, since all corpus values already match exactly |
-| `childmargin` | **8** (assignment sites) | **Claimed since 2026-07-26** (`_TORQUE_PROPS`, `game/gs2_gui/text_controls.py:200-202`), so a construction-block `childMargin = "0 0";` / `childmargin = {10,10};` now lands on the control instead of falling through to a temp (the existence-gate mechanism is documented at `game/gs2_gui/base.py:121-127`). Still not consumed for layout (no `computeSizes`/fit-height equivalent reads it). Corpus forms seen: `"0 0"` (string) ×4, `{0,0}` ×2, `{10,10}` ×5, `{5,5}` ×5, `{10,0}` ×1. Note both the string and array spellings (§8.6) |
-| `scrollpos` | 1 real (see note) | **IMPLEMENTED, fixed 2026-07-26.** A raw count says 5 files, but 4 of those are the script-local `this.scrollpos` (`…/weapon-Serverlist_v4.txt:179` ×3, `graal-bomber-gs2/world/bomblobby.nw:338`, `:801`). The only true control usage is `graal-loginserver-dev/weapons/weapon-Staff_GraalShop.txt:1472` (`temp.spos = GraalShop_Sprites_Scroll.scrollpos;`) and `:1542` (the restore). Now claimed (`_TORQUE_PROPS`, `game/gs2_gui/text_controls.py:202`), the getter answers `[scroll_x, scroll_y]` and the setter routes through `scroll_to()` (`:214-224`), which does update `scroll_x`/`scroll_y`. Previously the name was unclaimed and the write never touched `scroll_y`, making the save/restore a silent no-op |
-| `scrolldelta` | 1 | IMPLEMENTED (`game/gs2_gui/text_controls.py:277-282`), clamps to `max_scroll_y()` and fires `onscrolled` via `scroll_to()` (fixed 2026-07-26, previously did not fire it) |
-| `scrolltobottom` | 3 | **IMPLEMENTED, fixed 2026-07-26.** `_m_scrolltobottom` now exists on `GuiScrollCtrl` (`:290-293`) and resets the horizontal scroll too, matching §1.7 |
-| `constantthumbheight` | 2 | claimed since 2026-07-26 (`_TORQUE_PROPS`, `:202`) but still inert (cosmetic, no consumer) |
-| `willfirstrespond` | 2 | claimed (`:855`) but inert |
+| `vscrollbar` / `hscrollbar` | 22 combined | PARTIAL. Both are claimed in `GuiControl._TORQUE_PROPS` (`base.py`). The setter is byte-exact like the oracle (§1.8): `GuiScrollCtrl.set` accepts only `SCROLLBAR_MODES = ("alwaysOn", "alwaysOff", "dynamic")` and silently leaves the old mode for any other spelling. `vscrollbar` is honoured at draw time (`GuiScrollCtrl._draw_self` suppresses the bar for `alwaysOff`; the stored value is already exact-case). `hscrollbar` is stored but never read: we have no horizontal bar |
+| `childmargin` | **8** (assignment sites) | **Claimed since 2026-07-26** (`GuiScrollCtrl._TORQUE_PROPS`, `game/gs2_gui/text_controls.py`), so a construction-block `childMargin = "0 0";` / `childmargin = {10,10};` now lands on the control instead of falling through to a temp (the existence-gate mechanism is documented in the `GuiControl._TORQUE_PROPS` comment in `game/gs2_gui/base.py`). Still not consumed for layout (no `computeSizes`/fit-height equivalent reads it). Corpus forms seen: `"0 0"` (string) ×4, `{0,0}` ×2, `{10,10}` ×5, `{5,5}` ×5, `{10,0}` ×1. Note both the string and array spellings (§8.6) |
+| `scrollpos` | 1 real (see note) | **IMPLEMENTED, fixed 2026-07-26.** A raw count says 5 files, but 4 of those are the script-local `this.scrollpos` (`…/weapon-Serverlist_v4.txt:179` ×3, `graal-bomber-gs2/world/bomblobby.nw:338`, `:801`). The only true control usage is `graal-loginserver-dev/weapons/weapon-Staff_GraalShop.txt:1472` (`temp.spos = GraalShop_Sprites_Scroll.scrollpos;`) and `:1542` (the restore). Now claimed (`GuiScrollCtrl._TORQUE_PROPS`), `GuiScrollCtrl.get` answers `[scroll_x, scroll_y]` and `GuiScrollCtrl.set` routes through `GuiScrollCtrl.scroll_to()`, which does update `scroll_x`/`scroll_y`. Previously the name was unclaimed and the write never touched `scroll_y`, making the save/restore a silent no-op |
+| `scrolldelta` | 1 | IMPLEMENTED (`GuiScrollCtrl._m_scrolldelta`), clamps to `max_scroll_y()` and fires `onscrolled` via `scroll_to()` (fixed 2026-07-26, previously did not fire it) |
+| `scrolltobottom` | 3 | **IMPLEMENTED, fixed 2026-07-26.** `_m_scrolltobottom` now exists on `GuiScrollCtrl` and resets the horizontal scroll too, matching §1.7 |
+| `constantthumbheight` | 2 | claimed since 2026-07-26 (`GuiScrollCtrl._TORQUE_PROPS`) but still inert (cosmetic, no consumer) |
+| `willfirstrespond` | 2 | claimed (`GuiControl._TORQUE_PROPS`, `base.py`) but inert |
 | `tile` | see `GuiBitmapCtrl` below | the corpus `tile =` sites are bitmap controls, not scroll controls |
-| `scrollto`, `scrolltotop` | 0 | IMPLEMENTED (`:272-275`, `:284-288`), fixed 2026-07-26 |
-| `wheelscrolllines` | 0 | claimed since 2026-07-26 (`_TORQUE_PROPS`, `:202`) with the setter's `<= 0` no-op (`:230`), but the wheel handler still uses a fixed step, not this value (`manager.py:_on_wheel`) |
-| `scrollrectvisible` | 0 | MISSING |
+| `scrollto`, `scrolltotop` | 0 | IMPLEMENTED (`GuiScrollCtrl._m_scrollto`, `_m_scrolltotop`), fixed 2026-07-26 |
+| `wheelscrolllines` | 0 | claimed since 2026-07-26 (`GuiScrollCtrl._TORQUE_PROPS`) with the setter's `<= 0` no-op (`GuiScrollCtrl.set`), but the wheel handler still uses a fixed step, not this value (`manager.py:_on_wheel`) |
+| `scrollrectvisible` | 0 | **IMPLEMENTED** (`GuiScrollCtrl._m_scrollrectvisible`, scrolls the minimum distance through `scroll_to`) |
 
-Also absent on our side: `onScrolled` is never fired. I found no corpus
-handler for it (see §7), so this is low priority.
+`onScrolled` **is** fired: `GuiScrollCtrl.scroll_to` raises `onscrolled(newX, newY, dx, dy)` before storing the position (§1.6), and `scrollpos`, `scrollto`, `scrolldelta`, `scrolltotop`, `scrolltobottom` and `scrollrectvisible` all go through it. The one path that does not is the mouse wheel: `GS2GuiManager._on_wheel` (`manager.py`) writes `scroll_y` directly, so a wheel scroll fires no event. I found no corpus
+handler for `onScrolled` (see §7), so this is low priority.
 
 ---
 
@@ -791,16 +792,16 @@ script-visible `width`/`height` are `GuiControl`'s bounds
 
 ### Diff vs `gs2_gui/`
 
-`class GuiBitmapCtrl(GuiControl)` at `game/gs2_gui/image_controls.py:73`.
+`class GuiBitmapCtrl(GuiControl)` in `game/gs2_gui/image_controls.py`.
 
 | Member | Corpus files | Status |
 | --- | ---: | --- |
-| `bitmap` | 21 (all classes, shared with the profile property of the same name) | IMPLEMENTED (`:83-84`, `:94-110`). We also accept `image` as a synonym, **that synonym is ours, not the reference's**. No `image` property exists in any of the six tables audited here |
-| `tile` | **12** | **IMPLEMENTED, fixed 2026-07-26.** `tile` is claimed in `_TORQUE_PROPS` (`:83-84`) and `_draw_self` (`:118-136`) now tiles the image across the rect when set, instead of always stretching. Real sites are Login construction blocks, e.g. `graal-loginserver/weapons/weapon-Rescripted_Serverlist.txt:988` (`tile = true;`), `:1003` (`tile = 0;`), `:1100`, `:1244`, `:1977`, `:2008`, `:2039`. `graal-loginserver/weapons/weapon-ServerListScreen.txt:1610`, `:1647`, `:1724` (`tile = false;`). Note both boolean and 0/1 spellings |
-| `wrap` | 0 | IMPLEMENTED, alias of `tile` (§1.3, `:98-99`, `:107-108`), fixed alongside it |
-| `bitmaprectangle` / `fullbitmap` | 0 | claimed in `_TORQUE_PROPS` (`:83-84`) but still MISSING behaviourally (no sub-rect blitting) |
-| `setbitmap` | 0 | IMPLEMENTED (`_METHOD_NAMES`, `:85`; `_m_setbitmap`, `:112-116`), fixed 2026-07-26 |
-| `setvalue` | 0 | MISSING (not in `_METHOD_NAMES`) |
+| `bitmap` | 21 (all classes, shared with the profile property of the same name) | IMPLEMENTED (`GuiBitmapCtrl._TORQUE_PROPS`, `get`/`set`). We also accept `image` as a synonym, **that synonym is ours, not the reference's**. No `image` property exists in any of the six tables audited here |
+| `tile` | **12** | **IMPLEMENTED, fixed 2026-07-26.** `tile` is claimed in `GuiBitmapCtrl._TORQUE_PROPS` and `GuiBitmapCtrl._draw_self` now tiles the image across the rect when set, instead of always stretching. Real sites are Login construction blocks, e.g. `graal-loginserver/weapons/weapon-Rescripted_Serverlist.txt:988` (`tile = true;`), `:1003` (`tile = 0;`), `:1100`, `:1244`, `:1977`, `:2008`, `:2039`. `graal-loginserver/weapons/weapon-ServerListScreen.txt:1610`, `:1647`, `:1724` (`tile = false;`). Note both boolean and 0/1 spellings |
+| `wrap` | 0 | IMPLEMENTED, alias of `tile` (§1.3, `GuiBitmapCtrl.get`/`set`), fixed alongside it |
+| `bitmaprectangle` / `fullbitmap` | 0 | claimed in `GuiBitmapCtrl._TORQUE_PROPS` but still MISSING behaviourally (no sub-rect blitting) |
+| `setbitmap` | 0 | IMPLEMENTED (`GuiBitmapCtrl._METHOD_NAMES`; `_m_setbitmap`), fixed 2026-07-26 |
+| `setvalue` | 0 | IMPLEMENTED (stored): in `GuiBitmapCtrl._METHOD_NAMES`; `_m_setvalue` stores `value_x`/`value_y`, which `_draw_self` does not read |
 
 ---
 
@@ -845,13 +846,13 @@ controls created elsewhere, e.g.
 ### Diff vs `gs2_gui/`
 
 `class GuiBitmapButtonCtrl(GuiButtonCtrl)` at
-`game/gs2_gui/image_controls.py:156`. Three bitmap slots
-(`_BITMAP_SLOTS`, `:169-171`), face picked by mouse state
-(`:186-190`), drawn stretched with the text overlaid (`:219-239`).
+`game/gs2_gui/image_controls.py`. Three bitmap slots
+(`_BITMAP_SLOTS`), face picked by mouse state
+(`GuiBitmapButtonCtrl.face`), drawn stretched with the text overlaid (`GuiBitmapButtonCtrl._draw_self`).
 
 | Member | Corpus files | Status |
 | --- | ---: | --- |
-| `normalbitmap` | 8 | **IMPLEMENTED, fixed 2026-07-26**, claimed in this class's `_TORQUE_PROPS` (`:170-171`). Login's 2001-style buttons now get a face: `normalbitmap` maps onto slot 0, the same slot `bitmap`/`image` read/write (`:178-184`, `:192-208`) |
+| `normalbitmap` | 8 | **IMPLEMENTED, fixed 2026-07-26**, claimed in this class's `_TORQUE_PROPS`. Login's 2001-style buttons now get a face: `normalbitmap` maps onto slot 0, the same slot `bitmap`/`image` read/write (`GuiBitmapButtonCtrl.get`/`set`, `_m_setbitmap`) |
 | `mouseoverbitmap` | 8 | IMPLEMENTED (hover face, slot 1), fixed 2026-07-26 |
 | `pressedbitmap` | 8 | IMPLEMENTED (pressed face, slot 2), fixed 2026-07-26 |
 | `checked` | 10 | IMPLEMENTED, inherited from the shared `GuiButtonBaseCtrl` layer, fixed 2026-07-26 |
@@ -863,7 +864,7 @@ Previously this was a materially bigger gap than the first pass reported: the
 three bitmap slots are live Login content, not dead table entries. All three
 names are now claimed, `normalbitmap` maps onto the existing `self.bitmap`
 slot, and the other two are wired to the hover/press states the class already
-tracks (`GuiControl.hovered`/`pressed`, `game/gs2_gui/base.py:201-202`).
+tracks (`GuiControl.hovered`/`pressed`, `game/gs2_gui/base.py`).
 
 ---
 
@@ -878,8 +879,8 @@ every text list.
 
 Corpus: the class name appears in **0** files and `allowmultipleselections` in
 **0** files. The `game/gs2_gui/` package has no `GuiArrayCtrl` at all
-(`factory.py:_CONTROL_CLASSES`, `:31-46`) and `GuiTextListCtrl` derives straight from
-`GuiControl` (`collection_controls.py:267`). **Verdict: do not implement.** Recorded here so the
+(`factory.py:_CONTROL_CLASSES`) and `GuiTextListCtrl` derives straight from
+`GuiControl` (`collection_controls.py`). **Verdict: do not implement.** Recorded here so the
 next wave does not re-derive it.
 
 ---
@@ -944,13 +945,13 @@ never reaches the object and cannot be recovered later. **Fixed 2026-07-26 for
 all four groups** (`_TORQUE_PROPS` now claims all of them):
 
 - `GuiScrollCtrl`: `childmargin`, `scrollpos`, `constantthumbheight`,
-  `wheelscrolllines` (`game/gs2_gui/text_controls.py:202`)
-- `GuiMLTextCtrl`: all 13 (`game/gs2_gui/text_controls.py:33-37`)
+  `wheelscrolllines` (`GuiScrollCtrl._TORQUE_PROPS`, `game/gs2_gui/text_controls.py`)
+- `GuiMLTextCtrl`: all 13 (`GuiMLTextCtrl._TORQUE_PROPS`, `game/gs2_gui/text_controls.py`)
 - `GuiBitmapButtonCtrl`: `normalbitmap`, `mouseoverbitmap`, `pressedbitmap`,
-  `checked`, `groupnum`, `buttontype` (`game/gs2_gui/image_controls.py:170-171`,
+  `checked`, `groupnum`, `buttontype` (`GuiBitmapButtonCtrl._TORQUE_PROPS`, `game/gs2_gui/image_controls.py`,
   inherited `GuiButtonBaseCtrl`)
 - `GuiBitmapCtrl`: `bitmaprectangle`, `fullbitmap`, `wrap`
-  (`game/gs2_gui/image_controls.py:83-84`)
+  (`GuiBitmapCtrl._TORQUE_PROPS`, `game/gs2_gui/image_controls.py`)
 
 What remained after the names landed, by value (items already fixed alongside
 the claim — bitmap slots, `border`, `justify`, `tile`, `wordwrap`, `scrollpos`,
@@ -959,9 +960,8 @@ the claim — bitmap slots, `border`, `justify`, `tile`, `wordwrap`, `scrollpos`
 1. **`childmargin`**: claimed since 2026-07-26, but still not consumed for
    layout (no fit-height equivalent reads it), and the `"0 0"` string vs
    `{10,10}` array spellings still are not specially parsed. (§4)
-2. `fontcolorhl` (5), `fonttype` (5), `modal` (7), `tab` (5), `overridestylefont`
-   (5), `fillcolorna` (5), `focusonshow` (5) on profiles, cheap, each a
-   `_STYLE_FIELDS` entry plus a renderer read.
+2. `overridestylefont` (5), `fillcolorna` (5), `focusonshow` (5) on profiles, cheap, each a
+   `_STYLE_FIELDS` entry plus a renderer read. (`fontcolorhl`, `fonttype`, `modal` and `tab` are done, see the profile table.)
 3. Everything else in §2-§7 with a corpus count of 0, leave
    registered-but-inert. `GuiArrayCtrl` in particular: do not implement (§7).
 

@@ -24,8 +24,8 @@ new-world file logs once and falls back to classic.
 
 Evidence:
 
-- `pyReborn/pyreborn/tiletypes.py:1-31,66-101`
-- `pyReborn/tests/unit/test_tilestype_selection.py:84-97,135-141`
+- `pyReborn/pyreborn/tiletypes.py:1-30,69-98`
+- `pyReborn/tests/unit/test_tilestype_selection.py:84-98,135-144`
 
 ## Per-level selection
 
@@ -51,5 +51,5 @@ Evidence:
 
 - `Preagonal/FourPlay/quattroplay/src/TTiles.cpp:568-630`
 - `Preagonal/FourPlay/quattroplay/src/TServerLevel.cpp:688-708,735-743`
-- `pyReborn/pyreborn/tiletypes.py:103-145,153-200,203-248`
-- `pyReborn/tests/unit/test_tilestype_selection.py:38-79,90-132,144-170`
+- `pyReborn/pyreborn/tiletypes.py:112-156,158-200,206-247`
+- `pyReborn/tests/unit/test_tilestype_selection.py:40-82,90-133,146-178`

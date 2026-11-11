@@ -32,18 +32,21 @@ guidelines for Reborn servers and clients.
 ## Building Documentation
 
 ```bash
-# Install dependencies
-/usr/bin/python3.13 -m pip install -r requirements.txt
+# Run from this repository's root
+# Install dependencies into a virtual environment
+python3 -m venv venv
+venv/bin/python -m pip install -r requirements.txt
 
 # Build docs
-/usr/bin/python3.13 -m sphinx -b html docs _build/html
+venv/bin/python -m sphinx -b html docs _build/html
 
 # View docs
 open _build/html/index.html
 ```
 
-Use `/usr/bin/python3.13` for repository tests and documentation tooling. The
-system `python3` is 3.14 and does not have Hypothesis installed.
+Sphinx and `myst-parser` are not system packages on most distributions, so
+build in a virtual environment. The code repositories keep their own project
+virtual environment for tests (Hypothesis, pygame-ce, pytest).
 
 ## Online Documentation
 
@@ -52,7 +55,7 @@ The build system automatically builds and hosts the documentation at
 
 ## Citation guard
 
-These docs cite source by `path/to/file.py:123` in about 640 places. A refactor
+These docs cite source by `path/to/file.py:123` in several hundred places. A refactor
 in another repo invalidates those citations silently, because nothing connects
 the two. That is how 65 citations went dead at once when `gs1_client.py`,
 `gs2_client.py`, `game/gs2_gui.py` and `packets.py` each became a package.

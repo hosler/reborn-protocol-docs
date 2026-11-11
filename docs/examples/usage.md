@@ -305,33 +305,44 @@ diagnostic.
 
 ```python
 def request_file(client, filename):
-    """Request a file from server"""
-    data = filename.encode('latin-1')
-    client.send_packet(23, data)  # PLI_WANTFILE
-    
-def handle_file_packet(packet_data):
-    """Handle incoming PLO_FILE packet"""
-    if len(packet_data) < 6:
+    """Request a file from the server (PLI_WANTFILE)"""
+    return client.request_file(filename)  # returns bool
+
+def handle_file_packet(packet_data, no_modtime=False):
+    """Decode a PLO_FILE packet (see pyreborn.packet_codec.files.parse_file)
+
+    Layout: modTime (GINT5, absent for clients older than 2.1) +
+    filename length (GCHAR) + filename + file data.
+    There is no type byte and no size field.
+    """
+    pos = 0
+    mod_time = 0
+    if not no_modtime:
+        if len(packet_data) < 7:
+            return None
+        for i in range(5):
+            mod_time = (mod_time << 7) | ((packet_data[pos + i] - 32) & 0x7F)
+        pos = 5
+    elif len(packet_data) < 2:
         return None
-        
-    # Read file type and size
-    file_type = packet_data[0] - 32
-    size_bytes = packet_data[1:6]
-    
-    # Decode GINT5 size
-    file_size = 0
-    for i in range(5):
-        file_size = (file_size << 7) | ((size_bytes[i] - 32) & 0x7F)
-    
-    # Extract file data
-    file_data = packet_data[6:6+file_size]
-    
+
+    name_len = packet_data[pos] - 32
+    pos += 1
+    filename = packet_data[pos:pos + name_len].decode('latin-1')
+    file_data = packet_data[pos + name_len:]
+
     return {
-        'type': file_type,
-        'size': file_size,
+        'mod_time': mod_time,
+        'filename': filename,
         'data': file_data
     }
 ```
+
+The server sends a file larger than 32000 bytes to a 2.14 or newer client as
+`PLO_LARGEFILESTART`, `PLO_LARGEFILESIZE`, repeated `PLO_FILE` chunks (each
+resending the header), then `PLO_LARGEFILEEND`. Older clients get one
+`PLO_FILE`, and the server refuses files over 64000 bytes for them.
+See `handle_file`, `handle_large_file_start` and `handle_large_file_end` in `pyreborn/handlers/files.py`.
 
 These examples show the core concepts that you must use to make a compatible
 Reborn protocol client or server in any programming language.

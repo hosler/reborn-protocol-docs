@@ -6,7 +6,7 @@ reference client's interpreter registers. The page compares this surface with wh
 `reborn-protocol/reborn_protocol/gs2/vm.py` and
 `pyReborn/pyreborn/gs2_client/` answer today.
 
-## Status (2026-07-26)
+## Status (2026-07-26, re-checked 2026-11-11)
 
 This started as a **specification for implementers** with nothing implemented.
 That is no longer true. The tiers below still use the future tense. Read them
@@ -56,13 +56,21 @@ as the *survey*. Read this section as the list of implemented items.
   `GuiTabCtrl`, `GuiTreeViewCtrl`, `GuiAccountPasswordCtrl` and
   `GuiMLTextEditCtrl` are all real, all used by Login content, and all absent
   here.
-- The **T2 runners-up** list below remains untouched: `getkeycode`/`keyname`,
-  `findlevel`, `findnpcbyid`, `findani`, `format2`, `getascii`, `strcmp`,
-  `getnearestplayer`, `trace`, `aindexof`, `randomstring`,
-  `hasfunction`/`getfunctions`, `level.findareanpcs`/`getmappartfile`, the
-  attachment read-back, NPC geometry/layer/`peltwith*`, and the
-  `isinvincible`/`paused`/`reading`/`isjumping`/`map`/`isobserver` set.
-- **T3 beyond the root methods and the text list**, and all of **T4**.
+- The **T2 runners-up** list below has landed, apart from the names named at
+  the end of this bullet: `getkeycode`/`keyname`/`keyname2`, `findlevel`,
+  `findnpcbyid`, `findani`, `format2`, `getascii`, `strcmp`,
+  `getnearestplayer`, `trace`, `aindexof`, `randomstring`, `hasfunction`,
+  `level.findareanpcs`/`getmappartfile`, the attachment read-back
+  (`attachedtoobject`), NPC geometry and `peltwith*`, and the
+  `isinvincible`/`isinvincible2`/`paused`/`reading`/`isjumping`/`map`/
+  `isobserver` set are all registered in `gs2_client/` (`host_bare.py`,
+  `host_objmethods.py`, `objects.py`, `objects_player.py`). Still unregistered
+  in the host: `getfunctions` (the VM only carries it in its name set),
+  `preloadimage`, `resetimageanimation`, `preloadanimation`, and an NPC
+  `layer`.
+- **T3 beyond the root methods and the text list** (the `level.putbomb2`,
+  emoticon/sign UI, and `level.test*` probes have since landed; see the T3 and
+  T4 lists), and the remainder of **T4**.
 
 ### Method caveat: this page was built top-down only
 
@@ -151,12 +159,18 @@ current level → the universe globals.
 | `player` properties (whole chain) | 107 | 34 |
 | other-player properties | 85 | 32 |
 | NPC `this` properties | 102 | 16 |
-| `level` properties (whole chain) | 14 | **0** |
+| `level` properties (whole chain) | 14 | 14 |
 | `player` methods (whole chain) | 59 | 23 |
 | NPC `this` methods | 109 | 79 |
 | `level` methods | 62 | 29 |
 | GUI control properties (**sampled**, see below) | 189 | not audited |
-| GUI control methods (**sampled**) | 123 | 36 |
+| GUI control methods (**sampled**) | 123 | 129 |
+
+The `level` and GUI-method cells were recounted on 2026-11-11. The other "We
+answer" cells are the pre-landing snapshot and were not recounted. The GUI
+method cell (129) is the union of every control class's method names. It
+includes names outside the sampled reference set, so it is not a coverage
+figure against the 123.
 
 The extraction found **1474** table entries across 43 `*Properties.cpp` files.
 It also examined `TInitStatics.cpp`, `TClient.cpp`, and the `src/gui/` tree. Extraction is
@@ -209,8 +223,8 @@ This is not hypothetical. Two live outages came from it: `serverstartconnect`
 (unanswered → `serverstartconnect == "skills"` true → the serverlist request
 the code skipped) and `player.platform` (unanswered → 48 `== "linuxstream"` tests
 per session all true). We now answer both as `""`. Comments describe the fixes
-in `gs2_client/host_objects.py:81-98` (`serverstartconnect`) and
-`gs2_client/objects_player.py:345-361` (`player.platform`).
+in `gs2_client/host_objects.py` (`serverstartconnect`) and
+`gs2_client/objects_player.py` (`player.platform`).
 
 Note that "answer a string" does **not** mean "answer `""`". Several globals
 are pre-seeded with non-empty defaults, e.g. `spritesimage` = `"sprites.png"`
@@ -377,7 +391,8 @@ Runners-up, same tier:
   `ignoreevents` — `src/TGraalVarProperties.cpp:215-593`.
 - Emoticon and sign UI on the local player: `showemoticon`,
   `showemoticonbykey`, `hideemoticon`, `scrollsign`, `hidesign`, `getnohit` —
-  `src/TPlayerProperties.cpp:381-426`.
+  `src/TPlayerProperties.cpp:381-426`. All six are now implemented
+  (`gs2_client/host_objmethods.py`, `_obj_player_display`).
 - Particle system: `TParticleEmitterProperties` (28 properties, 8 methods) and
   `TParticleModifierProperties` — `src/TParticleEmitterProperties.cpp:5-323`.
 - Crypto helpers beyond the three we answer: `checksum`, `des_decrypt`,
@@ -391,7 +406,8 @@ Runners-up, same tier:
   `setsoundpitch`, `setsoundpitchbynote`, `musicpos`, `musiclen`,
   `soundoffscreendistance` — `src/sound/TSounds.cpp:222-271`.
 - `level.putbomb2` (`src/TServerLevelProperties.cpp:146`) — the four-argument
-  form. We answer `putbomb` only.
+  form. Landed: `gs2_client/host_objmethods.py` registers `putbomb` and
+  `putbomb2`.
 - `parsejson(obj, text)` — `src/TGraalVarProperties.cpp:613`.
 - `chessrating` helpers `updateratings`, `updateratingdeviation` —
   `src/TInitStatics.cpp:6090-6091`.
@@ -399,9 +415,9 @@ Runners-up, same tier:
 ### GUI controls (sampled — not a completeness claim)
 
 The `src/gui/` tree registers **189 distinct property names** and **123
-distinct method names** across 24 control classes plus `GuiControlProfile`. We
-name 36 of the 123 methods
-(`pyReborn/pyreborn/game/gs2_gui/`, the `_METHOD_NAMES` sets).
+distinct method names** across 24 control classes plus `GuiControlProfile`. Our
+`control_method_names()` in `pyReborn/pyreborn/game/gs2_gui/factory.py` now
+returns 129 names (the original sample named 36 of the 123).
 `GuiControlProperties::propDefs` alone is 55 entries
 (`src/gui/GuiControlProperties.cpp:895` is the constructor. The table precedes
 it), of which 13 have string types: `bounds`, `clientextent`, `color`, `cursor`,
@@ -445,7 +461,8 @@ The reference registers these names, which an implementer will otherwise waste t
   `src/TOptions.cpp:457-473`) and `TFontOptions` / `TTranslations` prefs.
 - Screenshots: `makescreenshot2`, `makescreenshotgame`, `makescreenshotfull`
   (`src/TInitStatics.cpp:4234-4236`) — implementable, but only as a policy
-  decision about writing files.
+  decision about writing files. Now implemented: `gs2_client/host_bare.py`
+  (`_bi_make_screenshot`) writes under the prefs `screenshots` directory.
 
 ---
 
@@ -466,8 +483,8 @@ it explains why the fix looks the way it does.
    both cases. It now checks `_PLAYER_READONLY` (`{"nick", "maxhp",
    "levelname"}`, `gs2_client/registry.py:143`) first and no-ops the write on
    the local player before it reaches `_PLAYER_MEMBER_ATTR`
-   (`gs2_client/objects_player.py:509-513`). Remote players are plain
-   `GS2Object`s (`gs2_client/runtime.py:262-279`,
+   (`gs2_client/objects_player.py`, the `_PLAYER_READONLY` gate). Remote players are plain
+   `GS2Object`s (`gs2_client/runtime.py`,
    `ClientGS2.script_player_object`), so a write to one still lands,
    preserving the reference's local/remote asymmetry.
 
@@ -482,7 +499,7 @@ it explains why the fix looks the way it does.
    player's value. `_FlagScopeObject.get` now falls back to a `player` object
    handed in by `flag_scope_object()` once the flag store says it does not
    have the name (`gs2_client/objects_player.py:63-133`,
-   `gs2_client/runtime.py:1164-1186`). Only reads take the fallback — a write
+   `gs2_client/runtime.py`, `ClientGS2.flag_scope_object`). Only reads take the fallback — a write
    through `client`/`clientr`/`serverr` still lands as a flag write, and
    `server` (which the reference does not alias to the player) gets no
    fallback at all.
@@ -497,8 +514,8 @@ it explains why the fix looks the way it does.
    valid official spellings (`src/TGraalVarProperties.cpp:494`, `:548`) that
    used to return 0.0 for us. All four now live in `_GS2_OBJ_METHODS`, which
    the host dispatches for any object regardless of type
-   (`gs2_client/host_objmethods.py:43-59` for `sortascending`/
-   `sortdescending`/`savelines`, `:91-96` for `settimer`); the array-only
+   (`gs2_client/host_objmethods.py`: the `sortascending`/
+   `sortdescending` handler, `savelines`, and the `settimer` handler); the array-only
    check moved inside each handler instead of gating dispatch, so a
    non-array object is now *answered* (with 0.0) rather than falling through
    unhandled. `sortbyvalue` is likewise a `TGraalVar` method (`:575`) that our
@@ -519,7 +536,7 @@ it explains why the fix looks the way it does.
    accident, because the code routes the bare-name forms (`putbomb`, `tiletype`, …)
    through the GS1 host — but the property surface used to be entirely
    absent. `ClientGS2.__init__` now does `self.level_object =
-   _LevelObject(self)` (`gs2_client/runtime.py:40`), a real object that
+   _LevelObject(self)` (`gs2_client/runtime.py`, `ClientGS2.__init__`), a real object that
    answers `name`, `width`, `height`, `tilelayercount`,
    `joinedclasses`/`scripterrors` (empty arrays) and the remaining
    numeric/boolean entries from the same two tables with `0.0`
@@ -530,19 +547,19 @@ it explains why the fix looks the way it does.
    exists on any player class. The official spelling is `levelname` (string).
    The reference registers `level` only on `TLevelObject`
    (`src/TLevelObjectProperties.cpp:6`, object-typed), which players are not.
-   Our `player.level` (`gs2_client/objects_player.py:397-410`) is a
+   Our `player.level` (`gs2_client/objects_player.py`, the `level` key) is a
    deliberate extension that fixed a real bug and stays. `player.levelname`
    now answers too, returning the same value as `player.level`
-   (`gs2_client/objects_player.py:431-439`), so content written against the
+   (`gs2_client/objects_player.py`, the `levelname` key), so content written against the
    reference's spelling no longer reads 0.0.
 
 ### Deliberate divergences (verified, not bugs)
 
 - `graalversion` returns `6.15401` unconditionally in the reference
   (`src/TInitStatics.cpp:2331-2334`). We return the version negotiated at
-  login, on purpose (`pyReborn/pyreborn/gs1_client/host_builtins.py:351-360`).
+  login, on purpose (`pyReborn/pyreborn/gs1_client/host_builtins.py`, the `graalversion` builtin).
 - `allstats` returns `0x7ff` = 2047 (`src/TInitStatics.cpp:2340`). Our
-  hard-coded `2047.0` (`gs2_client/host_objects.py:128-134`) is now
+  hard-coded `2047.0` (`gs2_client/host_objects.py`, `_obj_allstats`; also `gs1_client/host_builtins.py`) is now
   oracle-confirmed. The
   neighbouring constants are `allfeatures` = `0xffff` (`:2336`) and
   `allrenderobjecttypes` = `0x3f` (`:2338`), both unanswered.
@@ -564,8 +581,8 @@ it explains why the fix looks the way it does.
    already has. The rest can follow.
 3. **Route the probes that already exist.** Done for `testnpc` and
    `testplayer`, which now sit in `_GS1_LEVEL_PROBES`. The sign, item, bomb and
-   explosion probes still need writing, and each is a one-line change per name
-   once it exists.
+   explosion probes are now registered too (`gs2_client/host_any.py`,
+   `_any_test_level_object`).
 4. The rest of T2, then T3. T4 should be left registered-but-inert, with the
    existing `stubbed` mechanism, so `builtins_missing` stops reporting them.
 

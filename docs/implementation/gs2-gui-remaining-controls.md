@@ -66,6 +66,9 @@ Evidence, in order of strength:
    that the prior wave guessed the right class set. The one loose end is our
    `GuiFrameSetCtrl`, whose nearest TU is `GuiFrameCtrl.cpp`. The name may be
    wrong.
+   `factory.py` `_CONTROL_CLASSES` also registers `GuiSliderCtrl`,
+   `GuiTextEditSliderCtrl`, `GuiPMCtrl`/`GuiPMEditCtrl`/`GuiPMHistoryCtrl`,
+   `GuiStretchCtrl`, `GuiContextMenuCtrl` and `GuiPopUpMenuCtrl`, which this list omits.
 
    Note also `_ZN31WxcBwVWGWsGwXdFBwxbcvPropertiesC2Ev` and friends immediately
    after the `GuiTabCtrl.cpp` marker (`symbol_dump.log:4327-4332`): the class has
@@ -410,8 +413,8 @@ Members assigned, by class (refs / distinct files):
 - **`GuiGraalCtrl` / `GuiBrowserCtrl`**, zero references of any kind.
   `isrendering` and `allowzoom` appear nowhere.
 
-**Dead classes, do not implement:** `GuiGraalCtrl`, `GuiBrowserCtrl`, and (as a
-script-instantiable type) `GuiTextListEntry`. Also dead and not in my list but
+**Dead in the corpora:** `GuiGraalCtrl`, `GuiBrowserCtrl`, and (as a
+script-instantiable type) `GuiTextListEntry`. (Our `GuiWorldCtrl` and `GuiBrowserCtrl` exist anyway as store-only shells; see the diff table. Do not build more on them.) Also dead and not in my list but
 worth recording, since they have no `TObjectCreator` and no corpus reference:
 `GuiContextTextListCtrl`, `GuiPopUpContextMenuCtrl`.
 
@@ -419,33 +422,35 @@ worth recording, since they have no `TObjectCreator` and no corpus reference:
 
 ## Diff vs `pyReborn/pyreborn/game/gs2_gui/` (read, not edited)
 
+pyReborn cites in this section are file + symbol; the pre-split line numbers are gone.
+
 | Member | Class in ours | Verdict |
 | --- | --- | --- |
-| `progress` clamp 0..1 | `GuiProgressCtrl` `:1997-2001` | **IMPLEMENTED**, matches `GuiProgressCtrl.cpp:32-35` |
-| `GuiProgressCtrl` default extent 150×20 | `:1989` | **WRONG**, oracle inherits `GuiControl`'s default, only checkbox/radio get 140×30. Cosmetic, corpus always sets `extent`. |
-| `checked` | `GuiCheckBoxCtrl` `:2028-2037` | **IMPLEMENTED** |
-| `value` as an alias of `checked` | `:2020` | **INVENTED**, no `value` in `GuiButtonBaseCtrlProperties::propDefs` (`:68-105`) and zero corpus use. Harmless but unsourced. |
-| `buttontype` | `GuiButtonBaseCtrl` (`game/gs2_gui/basic_controls.py:279-345`) | **IMPLEMENTED, fixed 2026-07-26** (registered `:68-77`, corpus 2 files) |
-| `groupnum` | `GuiButtonBaseCtrl` (`:307-308`, `:315`, `:321-322`, `:337-338`) | **IMPLEMENTED, fixed 2026-07-26.** `_TORQUE_PROPS` gating is existence-based (comment at `game/gs2_gui/base.py:121-127`). `groupNum = 1;` in 12 construction blocks across 6 files now lands on the control instead of falling through to a temp |
-| `gettext` / `settext` on buttons | in `GuiControl._METHOD_NAMES` `:869` | **IMPLEMENTED** (over-broadly, they are only registered on `GuiButtonBaseCtrl` and `GuiTextListEntry`) |
-| radio group exclusivity on click only | `GuiButtonBaseCtrl.on_action` (`game/gs2_gui/basic_controls.py:350-369`) | **IMPLEMENTED and correct**, matches "exclusivity lives in `onAction`, not `setChecked`" (`GuiButtonBaseCtrl.cpp:42-46` vs `:59-94`). **Fixed 2026-07-26**: now keyed on `button_type == RadioButton` **and** equal `groupnum` (`:360-368`). Previously keyed on `isinstance(GuiRadioCtrl)` and ignored `groupnum`, diverging for a mixed-`groupnum` sibling set. (Login's `StartGuestCheck`/`StartMemberCheck` are both `groupNum = 1`, so this masked the divergence in practice.) |
-| docstring "there is no separate group-name property on the wire" | `:2063-2064` | **WRONG as documented**, `groupnum` is a registered `'i'` property (`GuiButtonBaseCtrlProperties.cpp:87-95`) |
-| `GuiShowImgCtrl` modelled as a `GuiBitmapCtrl` subclass | `:2127-2135` | **WRONG**, oracle parent is `GuiControl` (`GuiShowImgCtrlProperties.cpp:77`), it is a `TShowImg` host, not a bitmap. Its docstring's claim that the two class names are interchangeable spellings does not hold. `GuiBitmapCtrlProperties.cpp` exists as a separate class with its own `TObjectCreator` (`TInitStatics.cpp:5419`). |
-| `ani`, `dir`, `layer`, `offsetx`, `offsety` | none | **MISSING** (`GuiShowImgCtrlProperties.cpp:70-74`) |
+| `progress` clamp 0..1 | `GuiProgressCtrl.set` (`text_controls.py`) | **IMPLEMENTED**, matches `GuiProgressCtrl.cpp:32-35` |
+| `GuiProgressCtrl` default extent 150×20 | `GuiProgressCtrl.__init__` | **WRONG**, oracle inherits `GuiControl`'s default, only checkbox/radio get 140×30. Cosmetic, corpus always sets `extent`. |
+| `checked` | `GuiButtonBaseCtrl` (`basic_controls.py`), shared by `GuiCheckBoxCtrl` | **IMPLEMENTED** |
+| `value` as an alias of `checked` | removed | **GONE**: no button/checkbox class answers `value` any more (only `GuiSliderCtrl` has its own `value`), so this now matches the reference and the zero corpus use. |
+| `buttontype` | `GuiButtonBaseCtrl` (`game/gs2_gui/basic_controls.py`) | **IMPLEMENTED, fixed 2026-07-26** (registered `:68-77`, corpus 2 files) |
+| `groupnum` | `GuiButtonBaseCtrl` (`basic_controls.py`, `get`/`set`) | **IMPLEMENTED, fixed 2026-07-26.** `_TORQUE_PROPS` gating is existence-based (comment on `GuiControl._TORQUE_PROPS` in `game/gs2_gui/base.py`). `groupNum = 1;` in 12 construction blocks across 6 files now lands on the control instead of falling through to a temp |
+| `gettext` / `settext` on buttons | in `GuiControl._METHOD_NAMES` (`base.py`) | **IMPLEMENTED** (over-broadly, they are only registered on `GuiButtonBaseCtrl` and `GuiTextListEntry`) |
+| radio group exclusivity on click only | `GuiButtonBaseCtrl.on_action` (`game/gs2_gui/basic_controls.py`) | **IMPLEMENTED and correct**, matches "exclusivity lives in `onAction`, not `setChecked`" (`GuiButtonBaseCtrl.cpp:42-46` vs `:59-94`). **Fixed 2026-07-26**: now keyed on `button_type == RadioButton` **and** equal `groupnum` (`GuiButtonBaseCtrl.on_action`). Previously keyed on `isinstance(GuiRadioCtrl)` and ignored `groupnum`, diverging for a mixed-`groupnum` sibling set. (Login's `StartGuestCheck`/`StartMemberCheck` are both `groupNum = 1`, so this masked the divergence in practice.) |
+| docstring "there is no separate group-name property on the wire" | removed | **FIXED**: that docstring is gone, and `groupnum` is a registered `'i'` property (`GuiButtonBaseCtrlProperties.cpp:87-95`) claimed on `GuiButtonBaseCtrl`. |
+| `GuiShowImgCtrl` modelled as a `GuiBitmapCtrl` subclass | `GuiShowImgCtrl` (`image_controls.py`) | **WRONG**, oracle parent is `GuiControl` (`GuiShowImgCtrlProperties.cpp:77`), it is a `TShowImg` host, not a bitmap. Its docstring's claim that the two class names are interchangeable spellings does not hold. `GuiBitmapCtrlProperties.cpp` exists as a separate class with its own `TObjectCreator` (`TInitStatics.cpp:5419`). |
+| `ani`, `dir`, `layer`, `offsetx`, `offsety` | `GuiShowImgCtrl` (`image_controls.py`) | **IMPLEMENTED (stored)**: claimed in `GuiShowImgCtrl._TORQUE_PROPS`, answered by its `get`/`set` (`GuiShowImgCtrlProperties.cpp:70-74`); nothing renders from them. |
 | `zoom`/`stretchx`/`stretchy`/`partx`/`party`/`textshadow`/`shadowcolor`/`shadowoffset` on a showimg ctrl | none | **MISSING**, the `TShowImg` delegate. 7/6 to 8/2 corpus files each. |
 | `red/green/blue/alpha/mode/style/rotation` sourced from `GuiControl` on a showimg ctrl | inherited | **WRONG source**, removed from `GuiControl` on this class (`GuiShowImgCtrlProperties.cpp:84`) and answered by `TShowImg` instead. Values may coincide, provenance does not. |
-| `GuiStretchCtrl` | now its own class in `_CONTROL_CLASSES` (`game/gs2_gui/factory.py:41`) | **IMPLEMENTED, fixed 2026-07-26.** `GuiStretchCtrl` (`game/gs2_gui/popup_controls.py:302-339`) redeclares `clientwidth`/`clientheight`/`clientextent` against its own `client_size`, matching the child-replaces-parent shape. The `resizeChildren` side effect is still not modelled (noted in the class docstring, `:311-312`; the reference body was not read). Previously the class did not exist and construction fell back to generic `GuiControl`, whose `clientwidth`/`clientheight` derive from the outer bounds instead. 5 corpus files. |
-| `GuiDrawingPanel.drawimagestretched` arg mapping | `:2507-2512` | **WRONG**, ours reads `(x, y, w, h, image)` and **discards args 5–8**. Oracle is `iiiisiiii` = `(x,y,w,h,image,srcX,srcY,srcW,srcH)` (`GuiDrawingPanelProperties.cpp:105-111, 197`). Latent only because the two live calls pass a full-image source rect (`weapon-Rescripted_Serverlist.txt:278`, `:2312`, `..., 0, 0, 32, 32` on a 32×32 icon). |
-| `GuiDrawingPanel.drawimagerectangle` | `:2514-2522` | **IMPLEMENTED**, arg order matches `iisiiii` (`:198`) |
-| `GuiDrawingPanel.drawrect` | `:2495-2499`, `:2476` | **INVENTED**, no such entry in `funcDefs` (`:192-207`) and zero corpus calls |
-| `clearrectangle`, `drawcurve`, `drawobject`, `drawtext`, `saveimage`, `saveimage2`, `filterrectangle`, `maskimage`, `setdrawpalette` | none | **MISSING** (9 of 14 methods). Only `saveimage` has a corpus caller (`weapon-Staff_GraalShop.txt:946`). |
-| `partx/party/partw/parth/availablefilters/enablecache` | none | **MISSING** (all 6 properties, 4 are RO) |
-| `GuiContextMenuCtrl` parent = `GuiPopUpEditCtrl` | `:2447` | **WRONG**, oracle parent is `GuiControl` (`GuiContextMenuCtrlProperties.cpp:171`). `GuiPopUpEditCtrl` is not in this binary at all. |
-| `visible = False` at construction | `:2457` | **IMPLEMENTED**, the cited `GuiContextMenuCtrl.cpp:35-46` is a real range I re-read |
-| `rows`, `maxpopupheight`, `scrollprofile`, `textprofile`, `width`-override, `close`/`isopen`/`open(x,y)` | `textprofile` is in `GuiControl._TORQUE_PROPS` `:853`, `openatmouse` in `_METHOD_NAMES` `:872` | **MISSING** (5 properties + 3 methods). `isopen` has 2 corpus files. |
-| `profile` aliasing to the scroll control on a context menu | none | **MISSING** (`:159`) |
-| `GuiTextListEntry` | modelled as `GuiListRow` (`:793`) | **PARTIAL**. It needs an audit against the 18-entry table. In particular, `image`/`selectedimage` are ints, six members are read-only, and the `text`/`hint` split must follow the property table, not the header |
-| `GuiGraalCtrl`, `GuiBrowserCtrl` | absent | **Correctly absent**, zero corpus use |
+| `GuiStretchCtrl` | now its own class in `factory.py` `_CONTROL_CLASSES` | **IMPLEMENTED, fixed 2026-07-26.** `GuiStretchCtrl` (`game/gs2_gui/popup_controls.py`) redeclares `clientwidth`/`clientheight`/`clientextent` against its own `client_size`, matching the child-replaces-parent shape. The `resizeChildren` side effect is still not modelled (noted in the `GuiStretchCtrl` docstring; the reference body was not read). Previously the class did not exist and construction fell back to generic `GuiControl`, whose `clientwidth`/`clientheight` derive from the outer bounds instead. 5 corpus files. |
+| `GuiDrawingPanel.drawimagestretched` arg mapping | `GuiDrawingPanel._m_drawimagestretched` (`collection_controls.py`) | **IMPLEMENTED, fixed**: reads `(x, y, w, h, image, srcX, srcY, srcW, srcH)` (`iiiisiiii`, `GuiDrawingPanelProperties.cpp:105-111, 197`) and keeps the four source-rect args when all nine are given. (It used to drop args 5-8, invisible while callers pass the whole image, e.g. `weapon-Rescripted_Serverlist.txt:278`, `:2312`.) |
+| `GuiDrawingPanel.drawimagerectangle` | `GuiDrawingPanel._m_drawimagerectangle` | **IMPLEMENTED**, arg order matches `iisiiii` (`:198`) |
+| `GuiDrawingPanel.drawrect` | removed | **GONE**: no `drawrect` anywhere in `gs2_gui/`, matching `funcDefs` (`:192-207`) and zero corpus calls. |
+| `clearrectangle`, `drawcurve`, `drawobject`, `drawtext`, `saveimage`, `saveimage2`, `filterrectangle`, `maskimage`, `setdrawpalette` | `GuiDrawingPanel._METHOD_NAMES` (`collection_controls.py`) | **IMPLEMENTED**: all 14 funcDefs are answered (with `clearall` via `GuiControl`); `filterrectangle` is a typed no-op. See the 2026-07-26 round below. |
+| `partx/party/partw/parth/availablefilters/enablecache` | `GuiDrawingPanel._TORQUE_PROPS` | **IMPLEMENTED (claimed)**: all 6; `partx/party/partw/parth` answer 0.0 and `availablefilters` answers an empty array (read-only, bodies unrecovered), `enablecache` is RW. |
+| `GuiContextMenuCtrl` parent = `GuiPopUpEditCtrl` | `GuiContextMenuCtrl` (`popup_controls.py`) | **WRONG**, oracle parent is `GuiControl` (`GuiContextMenuCtrlProperties.cpp:171`). `GuiPopUpEditCtrl` is not in this binary at all. The class docstring records the approximation (the reference reaches the text list by delegation). |
+| `visible = False` at construction | `GuiContextMenuCtrl.__init__` | **IMPLEMENTED**, the cited `GuiContextMenuCtrl.cpp:35-46` is a real range I re-read |
+| `maxpopupheight`, `scrollprofile`, `textprofile`, `width`-override, `close`/`isopen`/`open(x,y)` | `GuiContextMenuCtrl._TORQUE_PROPS`/`_METHOD_NAMES` (`popup_controls.py`); `textprofile` in `GuiControl._TORQUE_PROPS` (`base.py`); `openatmouse` in `GuiControl._METHOD_NAMES` | **IMPLEMENTED**: `maxpopupheight` and `scrollprofile` are claimed (`scrollprofile` aliases `profile`), `textprofile` styles the rows (`_row_profile`), the `width` setter clamps to >= 1, and `_m_close`/`_m_isopen`/`_m_open` exist (`open` does not reparent the popup). **Still open**: the read-only `rows` forward, and the reference's asymmetric `width` read. `isopen` has 2 corpus files. |
+| `profile` aliasing to the scroll control on a context menu | `GuiContextMenuCtrl.get`/`set` | **IMPLEMENTED** (`:159`): `profile` and `scrollprofile` share one slot. |
+| `GuiTextListEntry` | modelled as `GuiListRow` (`base.py`) | **PARTIAL**. It needs an audit against the 18-entry table. `GuiListRow.set` makes `image`/`selectedimage`/`sortgroup`/`sortvalue`/`id` numeric; the six read-only members and the `text`/`hint` split (which must follow the property table, not the header) are not verified |
+| `GuiGraalCtrl`, `GuiBrowserCtrl` | `GuiWorldCtrl` (`CTRL_CLASS = "GuiGraalCtrl"`) and `GuiBrowserCtrl`, `basic_controls.py`, both registered in `factory.py` | **EXIST, store-only**: `GuiWorldCtrl` claims `isrendering` (the game scene owns rendering), `GuiBrowserCtrl` claims `allowzoom`/`text`/`url` with `text` and `url` mutually exclusive and draws nothing. Zero corpus use, so they are not worth extending. |
 
 ---
 
@@ -478,7 +483,7 @@ worth recording, since they have no `TObjectCreator` and no corpus reference:
 ## 2026-07-26 implementation round (context menu + drawing panel)
 
 - **`GuiContextMenuCtrl` aliasing implemented** (pyReborn
-  `gs2_gui/popup_controls.py`): `profile`/`scrollprofile` are one slot
+  `gs2_gui/popup_controls.py` `GuiContextMenuCtrl`): `profile`/`scrollprofile` are one slot
   (pointer-identical table entries, `GuiContextMenuCtrlProperties.cpp:157`
   vs `:159`) styling the frame. `textprofile` styles the rows (the popup
   row painter resolves it separately). The `width` setter clamps to >= 1
@@ -504,6 +509,6 @@ worth recording, since they have no `TObjectCreator` and no corpus reference:
   (`'o'` RO, body unrecovered, typed so the read is not Number 0.0).
   `filterrectangle` stays the doc's unverifiable-return entry, answered as
   a typed no-op.
-- The per-class diff table above is now stale where it says MISSING for
-  these two classes. The remaining WRONG/MISSING rows (`GuiShowImgCtrl` as
-  a TShowImg host, `GuiProgressCtrl` default extent) remain unchanged.
+- The per-class diff table above has been updated for these two classes.
+  The remaining WRONG/MISSING rows (`GuiShowImgCtrl` as a TShowImg host and
+  its delegate names, `GuiProgressCtrl` default extent) remain.

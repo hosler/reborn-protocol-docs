@@ -28,8 +28,8 @@ Functions that use the GS2 event naming convention also receive classic events.
 
 Evidence:
 
-- `reborn_protocol/gs1/parser.py:261-275,300-353`
-- `reborn_protocol/gs1/interp.py:246-280`
+- `reborn_protocol/gs1/parser.py` (`_read_parameter_name`, the `FuncDef` parse that reads the parameter list)
+- `reborn_protocol/gs1/interp.py` (`_gcall_user`, `_fire_event_function`)
 - `reborn-protocol/tests/test_gs1_era_newgs1.py:30-69`
 
 `@` concatenates values as text. Assignment associates from right to left
@@ -41,9 +41,9 @@ An unknown method has no effect and does not invalidate its enclosing script.
 
 Evidence:
 
-- `reborn_protocol/gs1/lexer.py:43-53`
-- `reborn_protocol/gs1/parser.py:300-315,520-601`
-- `reborn_protocol/gs1/interp.py:832-905`
+- `reborn_protocol/gs1/lexer.py` (`OP_CONCAT` token, `KW` table)
+- `reborn_protocol/gs1/parser.py` (the `@` loop over `OP_CONCAT`, `_parse_method_chain`)
+- `reborn_protocol/gs1/interp.py` (`BinOp` `@` evaluation; `_ex_MethodCall` with `tokenize`, `pos`, `starts`, `ends`)
 - `reborn-protocol/tests/test_gs1_era_newgs1.py:92-139`
 
 Classic commands retain their space form. They can also use the call form:
@@ -58,8 +58,8 @@ value less than or equal to `0.0001` cancels the timer.
 
 Evidence:
 
-- `reborn_protocol/gs1/lexer.py:773-817`
-- `reborn_protocol/gs1/interp.py:246-255,808-826`
+- `reborn_protocol/gs1/lexer.py` (`_mode_L` call-form lexing, `_string_mode`)
+- `reborn_protocol/gs1/interp.py` (`_ex_Call`, the `settimer` branch)
 - `reborn-protocol/tests/test_gs1_era_newgs1.py:71-90,141-150`
 - `Preagonal/FourPlay/quattroplay/src/TScriptSpace.cpp:121-129`
 

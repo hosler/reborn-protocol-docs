@@ -5,16 +5,17 @@ guidelines to make an implementation compatible with existing servers and
 clients.
 
 > **pyReborn's current conformance status** (see [PyReborn Implementation Gaps](pyreborn-gaps.md)
-> for detail): base QA suite 16/16, tier1 2/2, tier2 4/4, tier3 4/4, tier5 5/5, GMAP suite
+> for detail): base QA suite 16/16, tier1 2/2, tier2 9/9, tier3 4/4, tier5 5/5, GMAP suite
 > 6/6, and PLO packet-coverage harnesses at 100% of emitted types for base/RC/NC sessions.
 > The implementation includes GEN_2, GEN_3, GEN_4, and GEN_5 codecs. Live tests
 > verified them (the version
 > probe logs in as 1.411/2.17/2.21/2.22/6.037 against GServer). Server-control packets,
 > The implementation includes server-control packets, GS2 bytecode *transport
 > and execution*,
-> and the RC write-side builders. Remaining genuine
-> gaps include GEN_6/v6-native encryption (also unimplemented
-> server-side) and a client-art table for ground-item sprites. These gaps do not
+> and the RC write-side builders. The remaining genuine
+> gap is GEN_6/v6-native encryption (also unimplemented
+> server-side). Ground-item sprites draw sheet art (`pyreborn/ground_items.py`
+> `GIVE_SPRITES`). This gap does not
 > block the Level 3 checklist items below.
 
 ## Conformance Levels
@@ -104,7 +105,7 @@ the commands, set it to your working copy.
 
 The compiler baseline is the upstream `gs2-parser` harness, not pytest.
 `ctest` does not discover the cached `gs2test` executable. Run the harness
-with `/usr/bin/python3.13`, copying its test tree to a temporary project and
+with the project venv python (`.venv/bin/python`), copying its test tree to a temporary project and
 providing the Reborn compiler adapter at the path the harness searches:
 
 ```bash
@@ -114,7 +115,7 @@ cp -a tests "$test_root/tests"
 mkdir -p "$test_root/bin"
 ln -s $REPO_ROOT/reborn-protocol/tests/tools/gs2test \
   "$test_root/bin/gs2test"
-/usr/bin/python3.13 tests/tools/run_tests.py --project-root "$test_root"
+$REPO_ROOT/.venv/bin/python tests/tools/run_tests.py --project-root "$test_root"
 ```
 
 The accepted baseline is **178 total, 175 passed, 0 failed, 3 expected
@@ -132,7 +133,7 @@ read-only oracle.
 From `$REPO_ROOT/pyReborn`, run:
 
 ```bash
-/usr/bin/python3.13 -m game_tester --gs2
+../.venv/bin/python -m game_tester --gs2
 ```
 
 The accepted result is **6/6**, over **175 scripts**, with **crashes=0**,
@@ -145,8 +146,8 @@ the test at `pygserver`, the test gives the misleading result
 
 ### Required Python interpreter
 
-Run these suites with `/usr/bin/python3.13`. The system `python3` is 3.14 and
-lacks Hypothesis. Under it, the `reborn-protocol` property suite fails during
+Run these suites with the project venv python (`.venv/bin/python`). The system
+`python3` lacks Hypothesis. Under it, the `reborn-protocol` property suite fails during
 collection. If you treat the remaining collected tests as successful, you get
 a false conformance result. Always examine collection errors and the collected
 test count. Do not examine only the final pass count.
@@ -157,7 +158,7 @@ def test_gshort_encoding():
     # Test boundary values
     assert encode_gshort(0) == b'\x20\x20'      # 32,32
     assert encode_gshort(63) == b'\x20\x5f'     # 32,95  
-    assert encode_gshort(4095) == b'\x5f\x5f'   # 95,95
+    assert encode_gshort(4095) == b'\x3f\x9f'   # 63,159
     
 def test_encryption_limits():
     # Test compression-based limits (iteration counts, NOT byte counts)

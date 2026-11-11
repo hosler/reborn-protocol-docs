@@ -6,7 +6,7 @@ Spec fragment for `reborn-protocol-docs/docs/implementation/gs2-name-surface.md`
 
 Oracle root: `/home/hosler/Projects/opengraal2/Preagonal/FourPlay/quattroplay/`
 (paths below are relative to it unless prefixed). Diff target:
-`/home/hosler/Projects/opengraal2/pyReborn/pyreborn/game/gs2_gui/` (package).
+`/home/hosler/Projects/opengraal2/pyReborn/pyreborn/game/gs2_gui/` (package). pyReborn cites below are file + symbol (the pre-split line numbers are gone).
 
 I opened and read every `file:line` below. If I did not recover or read a body,
 the text says so and does not assert semantics.
@@ -173,7 +173,7 @@ the same virtual `setText` but leaves the selection intact.
 them** (`GuiTextEditCtrl.cpp:216-220`). It also clamps `a < 0 → 0`, `b > len →
 len`, and moves the cursor to `b` (`:209-224`). **Our `_m_setselection` zeroes
 both ends on an inverted range, matching this**
-(`game/gs2_gui/text_controls.py:410-421`). Previously it swapped instead;
+(`game/gs2_gui/text_controls.py` `GuiTextEditCtrl._m_setselection`). Previously it swapped instead;
 fixed 2026-07-26. See §6.
 
 **C9. `undo()` is a toggle (undo/redo), not a stack pop.** It swaps the live
@@ -195,7 +195,7 @@ during member resolution (`src/TGraalVar.cpp:935-937`). So `seticonsize` is the
 *constructor* for `button.icon`, and it clamps `w`/`h` to `[0,64]`. `w<=0`,
 `h==0` or `h<0` **destroys** the panel instead (`:308-320, 358-383`). Our
 implementation already answers `button.icon` lazily
-(`game/gs2_gui/base.py:299-304`). This confirms that guess against the oracle.
+(`game/gs2_gui/base.py` `GuiControl.get`, the `icon` branch, a `_TreeNodeIcon` recorder). This confirms that guess against the oracle.
 
 **C12. Only user activation enforces a radio button's exclusivity. A script
 write never enforces it.** `setChecked` just stores + repaints
@@ -334,7 +334,7 @@ Table `src/gui/GuiTextCtrlProperties.cpp:35-75`.
 | Member | T | params | R/W | Semantics | Scripts |
 | --- | --- | --- | --- | --- | ---: |
 | `text` | s | — | RW | See C5 (truncation) and below. | 21 |
-| `maxchars` | i | — | RW | Character cap, **default 255** (`GuiTextCtrl.cpp:27`). Raw field read/write, no validation. | 2 |
+| `maxchars` | i | — | RW | Character cap, **default 255** (`GuiTextCtrl.cpp:27`). Raw field read/write, no validation. | 0 (the 2 weapon files that write `maxchars`/`maxChars = -1` do so inside `GuiMLTextCtrl` blocks) |
 | `gettext` | s | `""` | — | `getText()`. | 0 |
 | `settext` | v | `"s"` | — | `setText()`. Virtual ⇒ dispatches to `GuiTextEditCtrl::setText` on an edit control. | 0 |
 
@@ -466,60 +466,60 @@ them is harmless, not claiming them loses a write nothing reads.
 
 Our `GuiControl._TORQUE_PROPS` is an *existence gate*: a construction-block
 field only lands on the control if `has()` claims the name
-(`game/gs2_gui/base.py:128-149`). So "MISSING" below means the write is silently lost.
+(`game/gs2_gui/base.py` `GuiControl._TORQUE_PROPS`). So "MISSING" below means the write is silently lost.
 
 ### `GuiWindowCtrl` (`gs2_gui/basic_controls.py`)
 
 | Member | Status | Note |
 | --- | --- | --- |
 | `text` | IMPLEMENTED | but default is `""`. Reference seeds `"New Window"`. |
-| `canclose` `canminimize` `canmaximize` `canmove` `closequery` `destroyonhide` | IMPLEMENTED | explicit get/set at `:1454-1467`. Button layout at `:1469-1480` matches the oracle's 18 px right-to-left walk exactly. |
-| `tile` | IMPLEMENTED (stored) | claimed in `_TORQUE_PROPS` (`:862`), inert — matches the reference's recovered body. |
-| `maximized` `minimized` | **MISSING** | our fields exist (`:1450-1451`) but are not in `get`/`set`/`_TORQUE_PROPS`, so `win.maximized = true` is lost and the read is 0.0. 2 corpus files write `maximized`. Implement as the C3 toggle. |
-| `resizewidth` `resizeheight` `cancollapse` `edgesnap` `closecommand` `buttonoffset` | MISSING | 0 corpus uses. Store-only is enough. |
-| `close` `minimize` `maximize` `restore` | **MISSING as script methods** | the Python methods exist (`close_window`/`minimize_window`/…) but are not in `_METHOD_NAMES`, so a script call returns 0.0. 0 corpus uses — low priority, cheap to wire. |
-| `TITLE_H = 22` (`:1436`) | **WRONG vs oracle (24)** | Do **not** change it blind: the docstring at `:1430-1433` says Login's own `y = -22` panel math produced 22. Live tests verified that math. This row only flags the conflict. It needs a render check, not an edit. |
-| default extent `240×160` (`:1440`) | WRONG | reference is `100×200`, and `minExtent = (50, 24)` with the resize clamp (`GuiWindowCtrl.cpp:331-337`) is not modelled. |
-| `maximize_window` (`:1507-1521`) | correct shape | matches `maximizeWindow` incl. the parent-size fallback. |
+| `canclose` `canminimize` `canmaximize` `canmove` `closequery` `destroyonhide` | IMPLEMENTED | explicit get/set in `GuiWindowCtrl.get`/`set`. Button layout in `GuiWindowCtrl.button_rects` matches the oracle's 18 px right-to-left walk exactly. |
+| `tile` | IMPLEMENTED (stored) | claimed in `GuiControl._TORQUE_PROPS` (`base.py`), inert — matches the reference's recovered body. |
+| `maximized` `minimized` | **IMPLEMENTED, with the C3 toggle** | claimed in `GuiWindowCtrl._TORQUE_PROPS`, read in `GuiWindowCtrl.get`. `GuiWindowCtrl.set` makes a truthy write call `maximize_window()`/`minimize_window()` (which restore when already in that state) and a falsy write restore only when the window is in that state. 2 corpus files write `maximized`. |
+| `resizewidth` `resizeheight` `cancollapse` `edgesnap` `closecommand` `buttonoffset` | IMPLEMENTED (stored, no behaviour) | claimed in `GuiWindowCtrl._TORQUE_PROPS` (as are `dockable`, `istoolwindow`, `stayontop`, `isexternal`, `minsize`). 0 corpus uses. Store-only is enough. |
+| `close` `minimize` `maximize` `restore` | **IMPLEMENTED as script methods** | in `GuiWindowCtrl._METHOD_NAMES`; `_m_close`/`_m_minimize`/`_m_maximize`/`_m_restore` call `close_window`/`minimize_window`/`maximize_window`/`restore_window`. `_m_close` ignores `canclose`, as the reference does (`canclose` gates only the title-bar button). 0 corpus uses. |
+| `GuiWindowCtrl.TITLE_H = 22` | **WRONG vs oracle (24)** | Do **not** change it blind: the class docstring says Login's own `y = -22` panel math produced 22. Live tests verified that math. This row only flags the conflict. It needs a render check, not an edit. |
+| default extent `240×160` (`GuiWindowCtrl.__init__`) | WRONG | reference is `100×200`, and `minExtent = (50, 24)` with the resize clamp (`GuiWindowCtrl.cpp:331-337`) is not modelled. |
+| `GuiWindowCtrl.maximize_window` | correct shape | matches `maximizeWindow` incl. the parent-size fallback. |
 
 ### `GuiButtonCtrl` / the button family (`gs2_gui/basic_controls.py`)
 
 | Member | Status | Note |
 | --- | --- | --- |
 | `text` | IMPLEMENTED | base class. |
-| `stylesection` | IMPLEMENTED (stored + used) | `:1608`, `:4200`. The `"startbutton"` → `"Start"` fallback at `:1605-1614` matches `GuiButtonCtrl.cpp:159-166`. |
-| `checked` `groupnum` `buttontype` | **IMPLEMENTED on a shared `GuiButtonBaseCtrl`** | fixed 2026-07-26. All three now live on `GuiButtonBaseCtrl` (`game/gs2_gui/basic_controls.py:279-372`), reached by `GuiButtonCtrl` **and** `GuiBitmapButtonCtrl` as the oracle has it. Previously `checked` sat only on `GuiCheckBoxCtrl` and `groupnum`/`buttontype` were absent everywhere (8 and 2 corpus files respectively). |
-| radio exclusivity (`game/gs2_gui/basic_controls.py:350-369`) | **IMPLEMENTED, fixed 2026-07-26** | now keyed on `button_type == RadioButton` **and** equal `groupnum` (`:360-368`), matching `GuiButtonBaseCtrl.cpp:82-87`. Previously keyed on `isinstance(…, GuiRadioCtrl)` and ignored `groupnum`. |
-| `value` alias (`:2020`) | **EXTENSION** | Nothing under `src/gui/` registers `"value"`. Harmless, but it is ours, not the reference's. |
-| `gettext` `settext` | IMPLEMENTED | in `GuiControl._METHOD_NAMES` (`:869`). |
-| `seticonsize` | IMPLEMENTED | `:866`. `icon` object at `:971-976` — oracle-confirmed (C11). Our clamp is not `[0,64]` and we never destroy the panel on `w<=0`. |
-| default extent `100×24` (`:1600`) | WRONG | reference `140×30`. |
+| `stylesection` | IMPLEMENTED (stored + used) | `GuiButtonCtrl._label_text` and the skin selection. The `"startbutton"` → `"Start"` fallback in `GuiButtonCtrl._label_text` matches `GuiButtonCtrl.cpp:159-166`. |
+| `checked` `groupnum` `buttontype` | **IMPLEMENTED on a shared `GuiButtonBaseCtrl`** | fixed 2026-07-26. All three now live on `GuiButtonBaseCtrl` (`game/gs2_gui/basic_controls.py` `GuiButtonBaseCtrl`), reached by `GuiButtonCtrl` **and** `GuiBitmapButtonCtrl` as the oracle has it. Previously `checked` sat only on `GuiCheckBoxCtrl` and `groupnum`/`buttontype` were absent everywhere (8 and 2 corpus files respectively). |
+| radio exclusivity (`game/gs2_gui/basic_controls.py` `GuiButtonBaseCtrl.on_action`) | **IMPLEMENTED, fixed 2026-07-26** | now keyed on `button_type == RadioButton` **and** equal `groupnum`, matching `GuiButtonBaseCtrl.cpp:82-87`. Previously keyed on `isinstance(…, GuiRadioCtrl)` and ignored `groupnum`. |
+| `value` alias | **REMOVED** | the old extension is gone: no button or checkbox class in `gs2_gui/` answers `value` (only `GuiSliderCtrl` claims it, as its own property). Nothing under `src/gui/` registers it on buttons either. |
+| `gettext` `settext` | IMPLEMENTED | in `GuiControl._METHOD_NAMES` (`base.py`). |
+| `seticonsize` | IMPLEMENTED | `GuiControl._m_seticonsize` (`base.py`) only stores `icon_w`/`icon_h`. The lazy `icon` object (`GuiControl.get`) — oracle-confirmed (C11). Our clamp is not `[0,64]` and we never destroy the panel on `w<=0`. |
+| default extent `100×24` (`GuiButtonCtrl.__init__`) | WRONG | reference `140×30`. |
 
 ### `GuiTextCtrl` (`gs2_gui/basic_controls.py`)
 
 | Member | Status |
 | --- | --- |
 | `text` | IMPLEMENTED |
-| `maxchars` | **IMPLEMENTED**, default 255 (`game/gs2_gui/basic_controls.py:471-472`), fixed 2026-07-26 |
-| truncation to 255 on `.text` writes | **IMPLEMENTED** (`:493-495`), fixed 2026-07-26 |
-| unchanged-text early-out | IMPLEMENTED (`:496-497`), fixed 2026-07-26 |
-| `onTextChanged` event | **IMPLEMENTED** (see §8) — fires after the clip, on the control (`:498-499`), fixed 2026-07-26 |
-| autosize-on-set-text | MISSING for `GuiTextCtrl` (modelled only for `GuiMLTextCtrl`, `:1694-1699`) |
-| default extent `100×16` (`:1675`) | no oracle default to compare — `GuiTextCtrl::initObject` sets none. |
+| `maxchars` | **IMPLEMENTED**, default 255 (`game/gs2_gui/basic_controls.py` `GuiTextCtrl.maxchars`; `maxchars <= 0` disables the cap), fixed 2026-07-26 |
+| truncation to 255 on `.text` writes | **IMPLEMENTED** (`GuiTextCtrl.text` setter), fixed 2026-07-26 |
+| unchanged-text early-out | IMPLEMENTED (`GuiTextCtrl.text` setter), fixed 2026-07-26 |
+| `onTextChanged` event | **IMPLEMENTED** (see §8) — fires after the clip, on the control (`GuiTextCtrl.text` setter), fixed 2026-07-26 |
+| autosize-on-set-text | MISSING for `GuiTextCtrl` (modelled only for `GuiMLTextCtrl`) |
+| default extent `100×16` (`GuiTextCtrl.__init__`) | no oracle default to compare — `GuiTextCtrl::initObject` sets none. |
 
 ### `GuiTextEditCtrl` (`gs2_gui/text_controls.py`)
 
 | Member | Status | Note |
 | --- | --- | --- |
-| `text` | IMPLEMENTED | but does not clear the selection on assignment (C7) and does not truncate (C5). |
-| `setselection` | **IMPLEMENTED, fixed 2026-07-26** | `game/gs2_gui/text_controls.py:410-421` clamps then **zeroes both ends** when `end < start`, matching the reference (C8). Previously it swapped instead, so `setSelection(5, 2)` gave a 2..5 selection; `take_selection()` (`:428-436`) would then have deleted text the reference would not. |
+| `text` | **IMPLEMENTED** | `GuiTextEditCtrl.set("text")` stores the undo slot, writes through the truncating `GuiTextCtrl.text` setter (C5, `maxchars`, fires `onTextChanged`) and then zeroes both selection anchors (C7). Only the property path does this; `_m_settext` and a direct Python `.text =` leave the selection alone. |
+| `setselection` | **IMPLEMENTED, fixed 2026-07-26** | `GuiTextEditCtrl._m_setselection` (`game/gs2_gui/text_controls.py`) clamps then **zeroes both ends** when `end < start`, matching the reference (C8). Previously it swapped instead, so `setSelection(5, 2)` gave a 2..5 selection; `GuiTextEditCtrl.take_selection` would then have deleted text the reference would not. |
 | `getselection` | **EXTENSION** | not in any reference table. Not in the corpus either. |
-| `historysize` `tabcomplete` | claimed-but-inert (`_TORQUE_PROPS`, `:855`) | acceptable. 13 and 5 corpus files write them and nothing reads them back. |
-| `password` | **IMPLEMENTED as a property, fixed 2026-07-26** | claimed in `_TORQUE_PROPS` (`game/gs2_gui/text_controls.py:359`) and backed by `is_password()`/the `inputtype` derivation (`:380-395`, C6). 16 corpus files write it, 8 of them inside a `new GuiTextEditCtrl{}` block. Previously only covered by the separate `GuiAccountPasswordCtrl` subclass (`:1949-1953`), which handled the *other* 9 files but not these. |
-| `GuiAccountPasswordCtrl` (`:1949`) | **IMPLEMENTED, and oracle-backed after all** | I was about to record it as our invention. It is a **real Era class** (`symbol_dump.log`, `GuiAccountPasswordCtrl.cpp`) that FourPlay lacks entirely, and Login `new`s it in 9 files. Keep it. Its FourPlay-absence is a coverage gap, not an extension. Same for our `GuiMLTextEditCtrl` (`:1965`). |
-| `inputtype` `showcursor` `deniedsound` `undo` | MISSING | 0 corpus uses each. |
-| `max_len = 256` (`:1897`) | WRONG-ish | the reference's cap is the script-visible `maxchars`, default **255**, and it clips programmatic writes too. Ours is a fixed 256 that only limits typing (`:4308`). |
-| `clientrelative` `isexternal` `helptag` in `_TORQUE_PROPS` (`:849-853`) | **DIVERGENCE** | we claim three names the reference does not register. Those writes land on our control and fall through to temps/`this` in the reference. Nothing reads them back in any corpus, so it is currently unobservable. However, it is a deliberate-extension note, not parity. |
+| `historysize` `tabcomplete` | claimed-but-inert (`GuiControl._TORQUE_PROPS`, `base.py`) | acceptable. 13 and 5 corpus files write them and nothing reads them back. |
+| `password` | **IMPLEMENTED as a property, fixed 2026-07-26** | claimed in `GuiTextEditCtrl._TORQUE_PROPS` (`game/gs2_gui/text_controls.py`) and backed by `GuiTextEditCtrl.is_password()`/the shared `inputtype` storage (`get`/`set`, C6). 16 corpus files write it, 8 of them inside a `new GuiTextEditCtrl{}` block. Previously only covered by the separate `GuiAccountPasswordCtrl` subclass (`text_controls.py`, `is_password()` always true), which handled the *other* 9 files but not these. |
+| `GuiAccountPasswordCtrl` (`text_controls.py`) | **IMPLEMENTED, and oracle-backed after all** | I was about to record it as our invention. It is a **real Era class** (`symbol_dump.log`, `GuiAccountPasswordCtrl.cpp`) that FourPlay lacks entirely, and Login `new`s it in 9 files. Keep it. Its FourPlay-absence is a coverage gap, not an extension. Same for our `GuiMLTextEditCtrl` (`text_controls.py`). |
+| `inputtype` `showcursor` `deniedsound` `undo` | **IMPLEMENTED** | claimed in `GuiTextEditCtrl._TORQUE_PROPS`; `inputtype` is answered by `GuiTextEditCtrl.get` (default `"default"`; `password` is the same storage); `showcursor` and `deniedsound` are claimed and inert; `_m_undo` is the C9 swap toggle (selection zeroed). 0 corpus uses each. |
+| `max_len` | **IMPLEMENTED per the reference** | `GuiTextEditCtrl.max_len` returns `maxchars` (`<= 0` disables), and the cap clips every write through the `GuiTextCtrl.text` setter, programmatic ones included. |
+| `clientrelative` `isexternal` `helptag` in `GuiControl._TORQUE_PROPS` (`base.py`; `GuiWindowCtrl` also claims `isexternal`) | **DIVERGENCE** | we claim three names the reference does not register. Those writes land on our control and fall through to temps/`this` in the reference. Nothing reads them back in any corpus, so it is currently unobservable. However, it is a deliberate-extension note, not parity. |
 
 ### Ranked fix list (by distinct corpus files × observability)
 
@@ -528,7 +528,7 @@ Items 1-4 of the original list here (`GuiTextEditCtrl.password`; `checked` /
 inverted-range rule; `maxchars` + truncation + `onTextChanged` on
 `GuiTextCtrl`) were fixed 2026-07-26. See the tables above.
 
-1. `maximized`/`minimized` as toggling properties, and the four window methods.
+1. ~~`maximized`/`minimized` as toggling properties, and the four window methods~~ — implemented (see the window table).
 2. Window `text` default `"New Window"`. Button extent `140×30`. Window extent
    `100×200` + `minExtent` clamp. Leave `TITLE_H` alone pending a render check.
 
@@ -553,7 +553,7 @@ inverted-range rule; `maxchars` + truncation + `onTextChanged` on
 ## 8. 2026-07-26 implementation round (text family + engine events)
 
 - **The code implements `onTextChanged` (§4.1 step 3)** on `GuiTextCtrl`'s text
-  setter (pyReborn `gs2_gui/basic_controls.py`): unchanged-text early-out,
+  setter (pyReborn `gs2_gui/basic_controls.py` `GuiTextCtrl.text`): unchanged-text early-out,
   clip first, then the event with the clipped text — one path for script
   `.text =`, `settext()` and typed input, matching the virtual dispatch
   (C5). Corpus weight was under-counted by the §5 construction-block
@@ -594,7 +594,7 @@ inverted-range rule; `maxchars` + truncation + `onTextChanged` on
   chr (`weapon-LoginScreen.txt:341`). Both are Era/mobile names absent from
   FourPlay — semantics from usage, flagged as such in the handlers.
   `des_decrypt` and `initializeiphonedisplay` joined the POLICY-INERT stub
-  set (`gs2_client/host.py:37-80` `stubbed`): the mobile credential cache round-trips
+  set (`gs2_client/host.py` `GS2ClientHost.stubbed`): the mobile credential cache round-trips
   account+password through `des_encrypt`/`des_decrypt`
   (`weapon-Mobile_Login.txt:325-336`), and this client keeps that whole
   surface inert. `Quattro::DebugTools::*` calls (bomber

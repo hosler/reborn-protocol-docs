@@ -21,12 +21,12 @@ of these wire primitives.
 ### Packet dispatch
 
 `Client._handle_packet` is a registry lookup, not the former 1,279-line
-90-branch dispatcher. The `pyreborn.handlers` package registers **93 handlers**
+90-branch dispatcher. The `pyreborn.handlers` package registers **98 handlers**
 across seven domain modules:
 
 - `chat`, `combat`, `entities`, `files`, `level`, `scripts`, and `session`
-- `registry.handles` records packet IDs and `registry.dispatch` invokes the
-  bound handler
+- `registry.handles` records packet IDs in `registry.PACKET_HANDLERS`, and
+  `Client._handle_packet` looks the id up there
 
 This closes the old maintainability gap in which protocol coverage depended on
 editing one large conditional.
@@ -34,11 +34,12 @@ editing one large conditional.
 ### Client state
 
 The former flat `Client.__init__` state is divided among components in
-`pyreborn.client_state`: session, identity, world, entity, inventory, script,
-file, and warp state. `client.py` installs a property-alias table for **150 of
-the 156** historical attributes, preserving source compatibility for callers
+`pyreborn.client_state`: `SessionState`, `LevelState`, `GmapState`,
+`WarpState`, `EntityState`, `CombatState`, `FileTransfers`, `ScriptTransport`,
+`Instrumentation`, and `Callbacks`. `client.py` installs a property-alias table for **178**
+historical names (`_STATE_ALIASES`), preserving source compatibility for callers
 such as `client.level_name` while component code uses explicit ownership.
-`client.py` is now 675 lines rather than the former 4,111. A later refactor
+`client.py` is now 826 lines rather than the former 4,111. A later refactor
 split the facade into mixins, which carry most of the former body.
 
 ### Properties and coordinates
@@ -69,20 +70,20 @@ module no longer has private encryption, codec, and G-type implementations.
 
 Client-side GS1 builtin dispatch uses the `_GS1_PLAYER_BUILTINS`,
 `_GS1_NPC_BUILTINS`, and `_GS1_BUILTINS` registries rather than a long
-conditional. The client host surface contains **414 names**.
+conditional.
 
 The client host and the pygserver server host each have independent
-implementations of approximately **57 builtin names**. This duplication is
+implementations of many of the same builtin names. This duplication is
 deliberate. The two implementations sometimes have different live behavior.
 A person must make a compatibility decision before the project merges each
 implementation.
 
 ## Server-side architecture relevant to the client
 
-The pygserver `Player` class has decreased from 1,702 lines to about 571. It
+The pygserver `Player` class has decreased from 1,702 lines to about 700. It
 now acts as a
 façade over login, session, movement, entity, combat, and other services.
-`pygserver.audience.AudienceService` centralizes visibility and recipient
+`pygserver.audience.Audience` centralizes visibility and recipient
 selection. This closes the prior risk that different handlers independently
 implemented “nearby players” with subtly different rules.
 
@@ -102,12 +103,9 @@ implemented “nearby players” with subtly different rules.
 The remaining issues are not core framing failures:
 
 - GEN_6 is not implemented by either PyReborn or the reference server.
-- The GS1 command `hidepoly` and the ground-item sprite table remain incomplete.
+- The GS1 command `hidepoly` remains unimplemented.
 - Corrupt level-board data falls back to an empty board without surfacing a
   diagnostic to the caller.
-- List-server server-entry strings decode as cp1252, but top-level
-  status/site/donation/error bodies in `build_response` still decode as
-  latin-1. Bytes such as `0x92` are therefore wrong on that path.
-- Roughly 57 shared builtin names await behavior-by-behavior reconciliation.
+- Shared builtin names that both hosts implement await behavior-by-behavior reconciliation.
 
 See [PyReborn Implementation Gaps](pyreborn-gaps.md) for the actionable list.

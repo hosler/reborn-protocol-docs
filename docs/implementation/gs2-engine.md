@@ -11,11 +11,11 @@ for its own engine and separately compiles the client portion sent as
 bytecode. The client VM therefore never receives or executes server-side
 code.
 
-`GServer-v2/server/src/scripting/Script.cpp`, `Script::setSource()` and
+`GServer-v2/server/src/scripting/Script.cpp`, `Script::split()` and
 `Script::compileScript()`, implement the split. Weapon and class delivery use
 `getClientByteCode()` in `server/src/object/Weapon.cpp` and
 `server/src/scripting/ScriptClass.cpp`. The receiving entry point is
-`pyReborn/pyreborn/gs2_client/runtime.py:825-893`, `ClientGS2.load_bytecode()`.
+`pyReborn/pyreborn/gs2_client/runtime.py`, `ClientGS2.load_bytecode()`.
 
 ## Container format
 
@@ -149,11 +149,11 @@ The GS1 policy home is `reborn_protocol/gs1/values.py`:
 `COMPARE_EPSILON`, `doubles_are_same()`, `gs1_int()`, and `gs1_index()`.
 The server oracle calls `DoublesAreSame()` only from equality and inequality.
 Its relational visitor uses the native operators directly
-(`GServer-v2/server/include/utilities/CommonTypes.h:315-320` and
-`GServer-v2/server/src/scripting/gs1/GS1Visitor.cpp:1284-1292,1311-1322`).
+(`GServer-v2/server/include/utilities/CommonTypes.h:376-380` and
+`GServer-v2/server/src/scripting/gs1/GS1Visitor.cpp:1295-1307,1322-1342`, at `origin/beta4`).
 The much smaller `2.220446049250313e-16` constant is the separate
 `DoubleIsZero()` threshold used by unary zero testing. It is not the GS1
-comparison epsilon (`GServer-v2/server/include/utilities/CommonTypes.h:310-318`).
+comparison epsilon (`GServer-v2/server/include/utilities/CommonTypes.h:371-374`).
 
 The GS2 policy home is `reborn_protocol/gs2/values.py`: `casefold()`,
 `casecmp()`, `array_index()`, `array_size()`, `to_int32()`, `wrap_int32()`,
@@ -276,7 +276,7 @@ Evidence:
 
 - `reborn_protocol/gs2/vm.py`, `_execute()`, `_gcall_script()`,
   `iter_call()`, and `_op_sleep()`
-- `pyReborn/pyreborn/gs2_client/runtime.py:1036-1057,1059-1094`,
+- `pyReborn/pyreborn/gs2_client/runtime.py`,
   `ClientGS2._drive()` and `ClientGS2.process_coroutines()`
 - `tests/test_gs2_sleep_resume.py`, which verifies retained state, nested
   suspension, synchronous fallback, and budget reset

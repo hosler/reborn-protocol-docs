@@ -7,7 +7,7 @@ player, NPC, board, rendering, and wire effects that a client script can see.
 ## Executable verification
 
 The primary suite is `pyReborn/game_tester/gs1_client_conformance.py`. Each of
-its 73 case rows has a decompiled-client citation. One temporary `pygserver`
+its 74 case rows has a decompiled-client citation. One temporary `pygserver`
 instance supplies a real login, boards, signs, NPC properties, weapon grants,
 and a packet sink. The test uses the real headless `GameClient` over a real
 `Client`. This configuration includes the normal NPC loader, touch handler,
@@ -22,8 +22,11 @@ use the classic text path. The server does not compile GS1-shaped source and
 silently run it in the GS2 VM.
 
 Level NPCs need a narrower seam. `pygserver` sends their image and position but
-does not send `NPCPROP_SCRIPT`. It attaches that source to its server-side GS1
-host. The suite therefore inserts source at `client.npcs[id]["script"]`, then
+does not send the server half of a script; it attaches that source to its
+server-side GS1 host. It does send the client half of a split script as
+`NPCPROP_SCRIPT`, and sends an empty `NPCPROP_SCRIPT` on the modern
+(bytecode) generation. The unsplit GS1 level NPCs that the fixtures use have no
+client half, so nothing reaches the client. The suite therefore inserts source at `client.npcs[id]["script"]`, then
 calls the normal `_load_new_npcs()` path. Delivery is simulated, but parsing,
 events, host calls, rendering, and assertions all use the real client stack.
 
@@ -31,7 +34,8 @@ Evidence:
 
 - `pyReborn/game_tester/gs1_client_conformance.py:1-48,93-105`
 - `pyReborn/game_tester/gs1_client_conformance.py:1135-1180,1184-1235,1255-1272`
-- `pygserver/pygserver/gs2.py:349-382`
+- `pygserver/pygserver/gs2.py` (`parse_weapon_file`, `_bytecode_for`, and the empty-cache gate in the weapon load path)
+- `pygserver/pygserver/npc.py` (`build_props_packet` `NPCPROP.SCRIPT` branch; `NPC.client_script`, set by `NPCManager.attach_gs1`)
 
 The older `pyReborn/game_tester/gs1_conformance.py` covers the other boundary.
 It runs identical level-NPC scripts on `pygserver` and the `GServer-v2`
@@ -95,12 +99,12 @@ text, and `message` remains an NPC bubble.
 Evidence:
 
 - `Preagonal/FourPlay/quattroplay/src/TScriptSpace.cpp:121-129`
-- `pyReborn/pyreborn/gs1_client/host_builtins.py:448-471`
-- `pyReborn/pyreborn/gs1_client/runtime.py:949-982`
+- `pyReborn/pyreborn/gs1_client/host_builtins.py` (the `timeout` branch of the property setter, `_TIMEOUT_CANCEL`)`
+- `pyReborn/pyreborn/gs1_client/runtime.py` (`process_timeouts`)`
 - `pyReborn/pyreborn/gs1_client/host_commands_pre.py:168-176,181-211`
 - `Preagonal/FourPlay/quattroplay/src/TInitStatics.cpp:3805-3831`
 - `pyReborn/pyreborn/gs1_client/host_commands_main.py:75-102`
-- `pyReborn/pyreborn/gs1_client/runtime.py:915-947`
+- `pyReborn/pyreborn/gs1_client/runtime.py` (`sign_text_by_index`)`
 - `pyReborn/game_tester/gs1_client_conformance.py:245-278,758-797`
 
 ## Boards and GMAP coordinates
@@ -120,7 +124,7 @@ Evidence:
 
 - `Preagonal/FourPlay/quattroplay/src/TServerLevel.cpp:563-612`
 - `pyReborn/pyreborn/gs1_client/board.py:37-179`
-- `pyReborn/pyreborn/gs1_client/runtime.py:205-225`
+- `pyReborn/pyreborn/gs1_client/runtime.py` (`board_ready`)`
 - `pyReborn/game_tester/gs1_client_conformance.py:798-815`
 
 ## Scripted combat and palettes
@@ -137,8 +141,8 @@ processed, avoiding a second speculative projectile.
 Evidence:
 
 - `Preagonal/FourPlay/quattroplay/src/TServerLevel.cpp:1087,1494`
-- `pyReborn/pyreborn/gs1_client/host_commands_main.py:290-315,345-397`
-- `pyReborn/pyreborn/gs1_client/host_commands_main.py:651-664`
+- `pyReborn/pyreborn/gs1_client/host_commands_main.py` (`_cmd_putbomb`, `_cmd_putexplosion`)`
+- `pyReborn/pyreborn/gs1_client/host_commands_main.py` (`_cmd_setshootparams`, `_cmd_shoot`)`
 - `pyReborn/game_tester/gs1_client_conformance.py:835-847`
 
 `setbackpal filename` is an indexed-palette swap. It is not a replacement
@@ -149,5 +153,5 @@ client restores the stock palette.
 Evidence:
 
 - `pyReborn/pyreborn/gs1_client/host_commands_pre.py:275-292`
-- `pyReborn/pyreborn/sprites.py:624-648`
+- `pyReborn/pyreborn/sprites.py` (`TilesetManager.set_backpal`)`
 - `pyReborn/tests/unit/test_gs1_combat_family.py:445-492`
