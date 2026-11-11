@@ -102,6 +102,56 @@ Lookup is a linear string scan: `getVersionID()` (`IUtil.cpp:234-244`) matches t
 identifier against `clientVersions[]`. `getVersionString()` (`IUtil.cpp:246-277`) resolves
 the display string and dispatches between the client/RC/NC arrays by `PLTYPE_*` bitmask.
 
+### Tokens from real clients: 2.05 and the tokens the table does not list
+
+Static reads and lab logins of original client builds, reported in squirelworks'
+client-analysis notes, show the tokens below. The builds and platforms in the second column
+are those observations. They are not verified against the reference. The reference side is
+the pinned gs2lib `clientVersions[]` (`src/IUtil.cpp`) and the GServer-v2 beta4 login path
+(`server/src/player/PlayerClient.cpp`).
+
+| Token | Client build (observed) | Login type | Reference table | Effect on a stock server |
+|---|---|---|---|---|
+| `GNW03081` | 2.05 rev 2 (Windows) | 0 | Listed: `CLVER_2_052` (`IUtil.cpp:92`, display `"2.05r2"` at `:205`) | The first 8-byte read misses (the key sits before the token), so the server falls to GEN_3, rewinds and re-reads the token, which then resolves to `CLVER_2_052` (`PlayerClient.cpp:319-344`). That is below `CLVER_2_1`, so the pre-2.1 forms apply. No default generation range includes it, so the default `allowedversions.txt` rejects it |
+| `G3D15010` | 5.24r3, 5.24r4, 6.00 beta2 (Windows) | 5 | Not listed | Resolves to `CLVER_UNKNOWN`. Rejected by the default allowed-versions check (below) |
+| `G3D03048` | 6.00 beta1 (Windows) | 5 | Not listed | Same |
+| `G3D0108A` | 6.01r1 (Linux) | 5 | Not listed | Same |
+| `G3D19026` | 4.04r2 (Linux); Windows 4.04r2 sends the listed `G3D17026` (`CLVER_4_042`) | 5 | Not listed | Same |
+| `G3D27076` | 4.20r6 (Mac) | 5 | Not listed | Same |
+| `G3D22126` | 4.20 (Linux, both builds); Windows 4.20r8 sends the listed `G3D20126` (`CLVER_4_208`) | 5 | Not listed | Same |
+
+The only local corroboration for any of the six unlisted tokens is weak: a third-party
+login-server config, `Preagonal/graal-loginserver/config/allowedversions.txt:36`, whitelists
+`G3D22126` on its own line directly after the 4.x range that ends at `G3D20126` (4.2.0.8).
+It shows the token exists in the wild, not which build or platform sends it.
+
+**Rejection, not just "unknown".** An unlisted token gives `m_versionId = CLVER_UNKNOWN`
+(0) (`getVersionID`, `IUtil.cpp:271-281`; dispatched by `Player::getVersionIDByVersion`,
+`Player.cpp:1742-1751`). The server then checks the id against `allowedversions.txt`:
+a range entry passes only if `first <= id <= last`, a single entry only on an exact match
+(`PlayerClient.cpp:384-409`). The stock file's three generation ranges are `GNW13110`
+(1.41r1), `GNW03014:GNW28015` (2.22-2.31) and `G3D14097:G3D0511C` (5.12-6.037)
+(`bin/servers/default/config/allowedversions.txt:3-5`), and none of them matches id 0. So a
+stock server logs `Client version not allowed` and sends `PLO_DISCMESSAGE` "Your client
+version is not allowed on this server." (`PlayerClient.cpp:410-415`). The login type still
+sets the generation first (type 5 gives GEN_5, `PlayerClient.cpp:308-311`), and the server
+logs these logins as `[New Client (2.22+)]` (`:365-367`). The `CLVER_*` gates only see
+"unknown" on a server whose allowed list admits them.
+
+So a server must list each platform's token, not one token per version number. The
+following are observations from the same notes, not verified against the reference
+client. The token is a constant in each build. The client does not compute it. Every
+build from 3.04 to 6.03 sends login type 5, a key byte, then its token. 2.17 still sends
+login type 0 and uses GEN_3, like 2.05. The server side agrees: type 5 reads the key byte,
+then the token (`PlayerClient.cpp:333-344`), and the server's own log labels put type 4 at
+"2.19 - 2.21, 3 - 3.01" and type 5 at "2.22+" (`:362-367`). The 3.x tokens reuse the 2.x
+date stamps: 3.04 sends `G3D03014`, which the reference lists as `CLVER_3_041`
+(`IUtil.cpp:111`) and whose stamp matches 2.22's `GNW03014` (`:105`). 3.153 sends
+`G3D28015` (2.31's stamp, `GNW28015` at `:107`), which the reference does not list.
+
+Source: squirelworks' client-analysis notes (`protocol/login-tokens-3x-7x.md`,
+`protocol/v5v6-lab-play.md` and `protocol/client-versions.md`).
+
 ### RC versions
 
 Separate dedicated enum `RCVER_*` (`IUtil.h:227-233`) with its own parallel arrays
@@ -261,6 +311,28 @@ Field order as read in `handleLogin` (`PlayerClient.cpp:303-378`):
 7. **Identity string**. `readString("")` reads to the end of the packet. The value is comma-delimited:
    `{platform},{mobile 'dc:id2'},{md5:harddisk-id},{md5:network-id},{uname release/version},{android-id}`.
    Only the platform token is actually consumed by the server.
+
+### The login frame itself is not GEN_5
+
+A GEN_4 or GEN_5 client sends the login packet in a frame that is plain zlib:
+`[uint16 big-endian length][zlib data]`, with **no compression-type byte and no XOR**. The
+key travels inside this frame, so the frame cannot be encrypted with it. The client
+switches to the generation's normal framing for every frame after the login. The same
+holds for RC2 (type 6). The NC socket (type 3) never leaves this plain zlib mode.
+
+Server side, confirmed against the reference: a new connection's `CEncryption` starts at
+GEN_3 (pinned gs2lib `src/CEncryption.cpp:26-30`), and the GEN_3 branch of
+`processPacketBundle` only inflates the bundle (`IPacketHandler.h:266-269`). The first
+packet goes to `parseLoginPacket`, which reads it to the newline with no decrypt step
+(`IPacketHandler.h:227-235`, `:375-395`). The generation is chosen only while that login is
+handled (`PlayerLogin.cpp:60-99`, `PlayerClient.cpp:297-316`). RC2 (type 6) switches to
+GEN_5 (`PlayerRC.cpp:146-156`). NC (type 3) always gets GEN_2, which is zlib only and reads
+no key (`PlayerNC.cpp:111-127`, `IPacketHandler.h:260-263`).
+
+The client side comes from static reads of the 2.22 and 2.31 clients and the Delphi
+RemoteControl, and lab captures of real 2.22 sessions, reported in squirelworks'
+client-analysis notes (`protocol/codec-and-framing.md`, `tools/remotecontrol.md`). This is
+not verified against the reference client.
 
 ## Per-Generation Wire Framing
 
