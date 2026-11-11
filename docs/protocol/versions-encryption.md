@@ -395,3 +395,95 @@ GeneratePacketHandlers()` — both arrays default-fill to `msgPLI_NULL` (or `nul
 bubbling to `Player::msgPLI_NULL`) and never register 252/253. Sending either packet to the
 current server logs `"Unknown Player Packet"` and counts against the connection's
 `InvalidPackets` disconnect threshold. Treat GEN_6 as unimplemented for interop purposes.
+
+## GEN_6 on the Wire: the 6.11 Client Handshake
+
+The master and beta4 branches do not implement GEN_6. But the Windows 6.113 and Mac 6.111
+clients do speak a newer framing. The packet ids it uses match `PLI_SET_ENC_KEY` (252) and
+`PLI_BUNDLE` (253). This section records what is known. The source is Graal_analysis:
+[`protocol/v6-login-token-explained.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v6-login-token-explained.md),
+[`protocol/v611-outgoing-cipher.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v611-outgoing-cipher.md)
+and
+[`protocol/v6113-list-capture.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v6113-list-capture.md)
+(static reads, one capture and offline lab replays).
+
+### The connector script decides the protocol
+
+A 6.11 client has no built-in login token. Before it connects to a game server, it asks
+an HTTP connector for `conf.gs`. The reply is a 256-byte RSA-2048 signature over the bare
+SHA-256 digest of the payload (no `DigestInfo` wrapper), then an encrypted GS2 script. The
+client checks the signature and then runs the script as `StartScript_Connector`. The script
+opens the game connection and builds the login. In the reply that was studied, the script
+does this:
+
+1. `setProtocol("EILLLT")` sets the packet header template.
+2. `sendRaw("GNP1905C")` sends the 8-byte token with no header.
+3. It sends one framed packet that carries a 16-byte RC4 session key, encrypted with
+   `rsa_encrypt` to an RSA-2048 public key in the script.
+4. `setEncryptionOut` turns on RC4 for every later byte the client sends.
+
+A different connector reply could choose a different token, template or cipher.
+
+### The `EILLLT` header
+
+Each letter is one header byte:
+
+| Letter | Field |
+|---|---|
+| `E` | Compression: 0 raw, 1 zlib |
+| `I` | Packet counter, one byte, +1 for each packet. Inner and outer packets share it |
+| `LLL` | Big-endian length of **header plus body** (6 + body length) |
+| `T` | Packet id as a raw byte, **no +32** |
+
+There is no trailing newline.
+
+### The first packets are 252 and 253
+
+A 6.11 stream starts with these bytes:
+
+| Offset | Bytes | Meaning |
+|---|---|---|
+| 0-7 | `GNP1905C` | Token |
+| 8-13 | `01 02 00 01 17 fd` | `E`=1 (zlib), `I`=2, `LLL`=279, `T`=**0xFD (253)** |
+| 14-286 | zlib data | Inflates to an inner packet: `E`=0, `I`=1, `LLL`=262, `T`=**0xFC (252)**, 256-byte body |
+| 287 on | RC4 ciphertext | Plain RC4, standard key schedule, no IV, headers included |
+
+The 0xFC body is one RSA-2048 block. The best explanation is that it carries the wrapped
+session key. That is `PLI_SET_ENC_KEY` ("Set AES / RC4 encryption key and init vector").
+Every outer packet the client sends after this is 0xFD, wrapping one or more inner packets.
+That is `PLI_BUNDLE` ("Bundled packets contain multiple packets"). So a server for stock
+6.11 clients needs the private key that matches the script's public key. Without it, the
+server cannot read the client stream. The server-to-client direction after the server's
+first packet (`01 02 00 01 21 fd` in the capture) has not been decoded yet.
+
+### Upstream `feature/newprotocol`
+
+The GServer-v2 branch `feature/newprotocol` (`c3cc0d8`, January 2026) has a partial
+implementation. It detects `GNP1905C` as the first 8 bytes
+(`server/src/Player/Player.cpp:582`). It writes packets as `00`, a running counter, a
+3-byte length that includes the 6 header bytes, and the raw id
+(`Player.cpp:973-997`). It skips the `PLO_RAWDATA` announcements. It does not parse
+anything the client sends, and it has no RC4 or RSA step. The same branch answers a
+`G3D2204D` (Worlds) login only with
+`PLO_SERVERWARP "Offline,Offline,127.0.0.1,14915"` (`Player.cpp:2713-2715`).
+
+### v7 (Graal Worlds) engine builds
+
+A static read of the v7 native engine plugin (builds 548 to 614 and later) shows the same
+two framing modes in one socket object. Source: Graal_analysis
+[`protocol/v7-graal3d-framing-and-packet-tables.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v7-graal3d-framing-and-packet-tables.md)
+(static read only, no live session).
+
+- **Mode 0, classic GEN_5**, is the default before a connector script runs. Its receive
+  path reads a 2-byte big-endian length. If that length is `0xFFFF`, a further 4-byte
+  length follows, so the header is 6 bytes. GEN_5 as documented here has no such escape.
+- **Mode 1, script template**, starts when the script calls `setprotocol`. The letters
+  `I`, `L`, `T` and `E` set the offset and width (1-4 bytes) of counter, length, id and
+  compression fields. The low nibble of `E` selects raw (0) or one of two inflate forms
+  (1, 2). A configured "nested" id makes the parser read the body as more framed packets.
+  That is how the `PLI_BUNDLE` (253) wrapper above is unpacked.
+- **Counter check.** In mode 1 a counter must equal the previous counter + 1, masked to the
+  counter width. The check is skipped while the stored previous value is negative. A
+  mismatch is an error.
+- **Ciphers.** A type byte (`GCHAR`, 1 = RC4, 2 = AES) selects the stream cipher for
+  each direction. AES is CBC and pads outbound data with `0xFF` to 16 bytes. RC4 has no IV.
