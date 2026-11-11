@@ -13,18 +13,16 @@ only calls out the packet handlers that use them.
 
 ### PLI_LEVELWARP (0)
 ```cpp
-// From PlayerClientPackets.cpp
+// From PlayerClientPackets.cpp:52-61
 HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
 {
-    time_t modTime = 0;
+    std::optional<time_t> modTime;
+
     if (pPacket[0] - 32 == PLI_LEVELWARPMOD)
-        modTime = (time_t)pPacket.readGUInt5();
-    
-    Position<int16_t> pos = { 
-        static_cast<int16_t>(pPacket.readGChar() * 8), 
-        static_cast<int16_t>(pPacket.readGChar() * 8) 
-    };
-    CString newLevel = pPacket.readString("");  // Read to end!
+        modTime = static_cast<time_t>(pPacket.readGUInt5());
+
+    const LocalPixelPosition pos = {static_cast<int16_t>(pPacket.readGChar() * 8), static_cast<int16_t>(pPacket.readGChar() * 8)};
+    const CString newLevelC = pPacket.readString("");  // Read to end!
     // ...
 }
 ```
@@ -35,14 +33,24 @@ HandlePacketResult PlayerClient::msgPLI_LEVELWARP(CString& pPacket)
   [Data Types](data-types.md#coordinates-a-field-guide)
 - Level name reads to end of packet
 - **Important**: read-to-end, **not** null-terminated
+- `PLI_LEVELWARPMOD (30)` is the same packet with a `[GUINT5 modtime]` prefix before the
+  coordinates (`:56-57`). The handler has **no permission check**. A name ending in `.gmap`
+  forces a warp to that gmap (`:65-69`). A level that is a segment of a gmap gets its static
+  data sent first and is then warped to (`:74-83`). If every attempt fails, the server
+  re-warps the player to the level it is already in, and as a last resort to the
+  `unstickmelevel` / `unstickmex` / `unstickmey` location (`:92-104`).
 
 ### PLO_LEVELNAME (6)
 ```cpp
-// Server sends level name
-sendPacket(CString() >> (char)PLO_LEVELNAME << level->levelName);
-// For GMAP, sends map name instead
-sendPacket(CString() >> (char)PLO_LEVELNAME << map->getMapName());
+// Server sends the (sub-)level name first (PlayerClient.cpp:1446)
+sendPacket(CString() >> (char)PLO_LEVELNAME << staticLevelData->levelName);
+// ... and after the level data, the name the player is "in" (PlayerClient.cpp:1504)
+sendPacket(CString() >> (char)PLO_LEVELNAME << getLevelName());
 ```
+On a GMAP the first packet carries the segment name and the last one carries the GMAP name
+(`getLevelName()` returns the `Level`'s `levelName`, which is the gmap name, `PlayerClient.cpp:1155-1162`).
+The original-protocol path sends the segment name only the first time
+(`PlayerClientOriginal.cpp:149-153`).
 **Format**: `[STRING: level_name]`
 - Entire packet payload is the level name
 - No length prefix
@@ -103,8 +111,11 @@ The server sends large files in chunks:
 ### Board Modifications
 Board data is always 8192 bytes (64x64 tiles, 2 bytes each):
 ```cpp
-// Server sends board packet
-sendPacket(CString() >> (char)PLO_BOARDPACKET << boardData);
+// Server sends board packet (Level.cpp:114-117, 397-400)
+CString retVal;
+retVal.writeGChar(PLO_BOARDPACKET);
+tiles.writeLayerToPacket(0, retVal);
+player->sendRawPacket(retVal);
 
 // Board modifications include position and size
 packet >> (char)PLO_BOARDMODIFY >> (char)x >> (char)y 
@@ -141,7 +152,8 @@ The parser reads the filename to the end of the packet.
 1. **Packet Boundaries**: Each packet is self-contained. "Read to end" means that the
    parser reads to the end of the current packet, not the stream.
 
-2. **GMAP Mode**: When on a GMAP, PLO_LEVELNAME sends the GMAP name, not the segment name. Segment info comes from GMAP file parsing.
+2. **GMAP Mode**: When on a GMAP, the segment name is sent first and the GMAP name last (see
+   [PLO_LEVELNAME](#plo_levelname-6) above). Segment info comes from GMAP file parsing.
 
 3. **Version Differences**: Some behaviors change based on client version (e.g., GANI format, encryption type).
 
@@ -152,15 +164,15 @@ See [String Types](strings.md) for the packet-by-packet string forms, and
 
 ## Board Change Replay Is Not GMAP-Exclusive
 
-`SubLevel::sendBoardChangesToPlayer` (`Level.cpp:481-526`) replays a level's accumulated
+`SubLevel::sendBoardChangesToPlayer` (`server/src/level/Level.cpp:483-530`) replays a level's accumulated
 board-change history to any player (re)entering it, via `PLO_BOARDMODIFY2` (map coords
 `0,0` for non-gmap levels, since `LevelBoardChange` objects always carry an explicit
-`MapPosition{partX, partY}` even for single-part levels, see `Level.cpp:1599`) or
+`MapPosition{partX, partY}` even for single-part levels, see `Level.cpp:1743`) or
 `PLO_BOARDMODIFY`, depending on client version (see
 [Version-Gated Behavior](version-gated-behavior.md#board-changes-two-different-code-paths-only-one-is-live)
 for the exact style/version table). This runs for **both gmap and non-gmap levels**.
-`PlayerClient::sendDynamicLevelData` (`PlayerClient.cpp:
-1492-1497`) calls it unconditionally:
+`PlayerClient::sendDynamicLevelData` (`server/src/player/PlayerClient.cpp:
+1523-1528`) calls it unconditionally:
 
 ```cpp
 subLevel->sendBoardChangesToPlayer(self, cachedModTime);
@@ -182,7 +194,7 @@ code. See [Version-Gated Behavior](version-gated-behavior.md#live-broadcast-path
 ## PLI_BOARDMODIFY Is Not Echoed To The Sender
 
 `PlayerClient::msgPLI_BOARDMODIFY` (`server/src/player/packets/PlayerClientPackets.cpp:
-125-134`) applies the edit to the level, then broadcasts it to **other** players only:
+109-135`) applies the edit to the level, then broadcasts it to **other** players only:
 
 ```cpp
 if (level->alterBoard(tiles, { toWholeTilePosition(globalPosition), { dim[0], dim[1] } }, this))
@@ -211,7 +223,7 @@ optimistically when it sends the edit.** It will never receive its own `PLI_BOAR
 Current server code sends only an empty `PLO_LEVELBOARD`. This acknowledgment tells the
 client that it can stop waiting for board data. The packet does not contain an inline tile
 payload. From
-`PlayerClient.cpp:1462-1465` (mirrored at `PlayerClientOriginal.cpp:140,171`):
+`PlayerClient.cpp:1493-1496` (mirrored at `PlayerClientOriginal.cpp:136,167`):
 
 ```cpp
 // The client will get stuck on "Loading" until it gets board data.
@@ -220,14 +232,14 @@ if (!sentBoard)
     sendPacket(CString() >> (char)PLO_LEVELBOARD);
 ```
 
-The payload-carrying path is unreachable dead code in `Level.cpp:497-511`: a `style == 2`
+The payload-carrying path is unreachable dead code in `Level.cpp:503-515`: a `style == 2`
 branch that batches all pending board changes into a single `PLO_LEVELBOARD` packet, but
 `style` (see [Version-Gated Behavior](version-gated-behavior.md#level-entry-replay-path-sublevel-sendboardchangestoplayer-version-check-is-live))
 is only ever assigned `1` or `3`, never `2`:
 
 ```cpp
 // The batched board changes seem to be sent when the player enters a level that it has cached.
-// TODO: The current level sending implementation doesn't easily allow use to use this right now,
+// TODO(refactor): The current level sending implementation doesn't easily allow us to use this right now,
 // so send individual changes (it won't hurt things).
 if (style == 2)
 {
@@ -244,21 +256,30 @@ if (style == 2)
 }
 ```
 
-The server sends the full 64×64 board dump in a different way. It sends raw data through
-`PLO_RAWDATA (100)` + `PLO_BOARDPACKET (101)` (see
+The server sends the full 64×64 board dump in a different way. It sends `PLO_BOARDPACKET (101)`
+as a raw packet (`sendRawPacket`, `Level.cpp:114-117`, `:397-400`; see
 [Packet Structures](packet-structures.md#plo_boardpacket-101---full-board-8192-bytes)), not
-through `PLO_LEVELBOARD` at all.
+through `PLO_LEVELBOARD` at all. The `PLO_RAWDATA (100)` wrapper in front of it exists only
+when the output encryption generation is 5 or lower (gs2lib `CFileQueue.cpp:94-96`). Generation
+6 sends no wrapper. Board layers above 0 follow as separate packets (`Level.cpp:120-125`,
+`:403-415`).
+
+The empty `PLO_LEVELBOARD` is not sent only for the `!sentBoard` case. The modern path also
+sends one up front when the player has not finished loading (`!m_loaded`,
+`PlayerClient.cpp:1448-1452`), as a client workaround. The original-protocol path sends one
+when the player has already seen the level or the client's cache is current
+(`PlayerClientOriginal.cpp:132-137`, `:164-168`).
 
 ## GS1 Player Commands Silently No-Op in `timeout` Handlers
 
 The GS1 commands `freezeplayer2`, `unfreezeplayer`, and `say2` (and other player-targeted
 commands built the same way, e.g. `sendpm`) resolve their target player by walking the
 script *source stack* for the nearest `PLAYER`-typed source
-(`GS1Visitor::findNearestScriptObjectSourceFromStack`, `scripting/gs1/GS1Visitor.cpp:
-419-427`):
+(`GS1Visitor::findNearestScriptObjectSourceFromStack`, `server/src/scripting/gs1/GS1Visitor.cpp:
+277-285`):
 
 ```cpp
-// fn_freezeplayer2 (GS1Commands.cpp:1185-1193); say2 at :1900, unfreezeplayer at :3231
+// fn_freezeplayer2 (GS1Commands.cpp:1313-1321); say2 at :2138, unfreezeplayer at :3666
 if (auto source = visitor->findNearestScriptObjectSourceFromStack(ScriptObjectType::PLAYER); source.has_value())
 {
     ...
@@ -271,13 +292,17 @@ these work there. A **`timeout` event carries no PLAYER source** (its source is 
 itself), so `source.has_value()` is false and the command **silently does nothing**: no
 packet, no script error, no log line. A script that does `playertouchsme → freeze →
 settimeout` and expects the timeout handler to `unfreezeplayer` will leave the player
-frozen forever. Confirmed by live testing (pyReborn `game_tester` tier-3 freeze/say2
-cycle). Workaround: run the unfreeze/say from a player-sourced event, or route through
+frozen forever. This was observed with our own pyReborn `game_tester` tier-3 freeze/say2
+cycle, which is a local observation and not a reference citation. A plain timeout is queued
+with an NPC source (`server/src/npcserver/NPCServer.cpp:182`). A script resumed from a
+`sleep` restores the source stack it saved (`GS1Visitor.cpp:713-721`), so a sleep
+continuation can keep its PLAYER source. The server also runs a timeout event last in an NPC's
+event batch (`server/src/scripting/Script.cpp:286`, `:325-336`). Workaround: run the unfreeze/say from a player-sourced event, or route through
 a flag the client watches.
 
 ## Raw-Framed Client Uploads Keep a Trailing Newline
 
-`IPacketHandler::parsePacketsFromBundle` (`IPacketHandler.h:303-318`) contains a strip for
+`IPacketHandler::parsePacketsFromBundle` (`server/include/network/IPacketHandler.h:309-328`) contains a strip for
 the framing `\n` that clients append to raw-framed (`PLI_RAWDATA`-announced) packets:
 
 ```cpp
@@ -303,25 +328,26 @@ way are simply corrupt by one byte until the flag wiring is fixed upstream.
 ## Behavior Changes When an NPC Server Is Active (`hasNPCServer()`)
 
 Several client packet handlers branch on `Server::hasNPCServer()` (true when
-`serverside = true` with the built-in NPC server). Two that surprise client implementers:
+the built-in NPC server is loaded, which `serverside` controls and which is off in the shipped
+`serveroptions.txt`; see [Server-Side Behavior](serverside-behavior.md)). Two that surprise client implementers:
 
 - **The server refuses client NPC mutation when it owns NPCs.**
   `msgPLI_NPCPROPS` and `msgPLI_NPCDEL` immediately return without applying the
   request when `hasNPCServer()` is true
-  (`GServer-v2/server/src/player/packets/PlayerClientPackets.cpp:189-193` and
-  `:782-786`). A client must treat server-owned NPC state as authoritative.
+  (`server/src/player/packets/PlayerClientPackets.cpp:189-193` and
+  `:783-787`). `msgPLI_PUTNPC` refuses the same way (`:754-758`). A client must treat server-owned NPC state as authoritative.
 
 - **The handler does not relay `PLI_BOMBADD` between clients.** Without an NPC server the
   handler relays `PLO_BOMBADD` to the rest of the level part. With one, the handler hands
   the bomb to the server-side bomb engine (`level->addBombFromClient(...)`), and **it does
   not broadcast any `PLO_BOMBADD` to other clients**: other players see the explosion
   effects only via the NPC-server's own output (`msgPLI_BOMBADD`,
-  `PlayerClientPackets.cpp:214-241`, and on failure the server even bounces a
+  `PlayerClientPackets.cpp:215-242`, and on failure the server even bounces a
   `PLO_BOMBDEL` back to the *sender*). Do not write a client test
   that expects bomb relay on a `serverside = true` server.
 - **Clients cannot set `server.*` flags.** `msgPLI_FLAGSET`/`msgPLI_FLAGDEL` route
   `server.`-prefixed names to the server flag list **only** `if (!m_server->hasNPCServer())`
-  (`PlayerClientPackets.cpp:650-659,693-701`). With an NPC server, a client's
+  (`PlayerClientPackets.cpp:659-669` and `:702-711`). With an NPC server, a client's
   `server.foo=bar` falls through, and the server stores it as an ordinary *player* flag
   instead, silently, with no error.
 - **`serverr.*` and `clientr.*` are read-only only when an NPC server is running.**
@@ -338,56 +364,41 @@ Several client packet handlers branch on `Server::hasNPCServer()` (true when
 `Player::setProp` compares `CURCHAT` with the stored message before doing
 anything. An unchanged value exits immediately. `Player::setProp` stores a changed value
 and, when chat command processing does not consume it, queues `PLAYERCHATS`
-(`GServer-v2/server/src/player/PlayerProps.cpp:354-368`). Consequently, changing
+(`server/src/player/PlayerProps.cpp:423-448`, `case PlayerProp::MESSAGE`). Consequently, changing
 non-empty chat to the empty string is still a change and fires the player-chat
 event. Re-sending the already-empty value does not.
 
-## Known Upstream Crash: Weapon Bytecode at Login
+## Weapon Bytecode Delivery Crashes: Fixed Upstream
 
-Two related defects in the GS2-weapon delivery path, both observed during live testing
-(July 2026) against the current upstream source:
-
-1. **`Script::getClientByteCode()` terminated the server on any weapon-bytecode request.**
-   Upstream `scripting/Script.cpp:193` does
-   `std::any_cast<ScriptByteCode*>(m_client_script->script)`. But `script` is a
-   `shared_ptr<any>` holding the bytecode **by value**, so the cast wraps the shared_ptr in
-   a fresh `any` and unconditionally throws `bad_any_cast` inside a `noexcept` function →
-   `std::terminate`. The local working tree carries an uncommitted fix (cast against
-   `script.get()` with the non-throwing pointer overload). **Upstream remains broken** as
-   of gs2emu pinned in this repo.
-2. **Registering a compiled GS2 weapon at login SEGVs.** When an account's saved
-   weapon list includes a bytecode-backed weapon, the login path
-   (`PlayerClient::sendLogin` weapon loop → `Weapon::registerWeaponWithPlayer`,
-   `PlayerClient.cpp:552`, `Weapon.cpp:267-297`) crashes the server. The **on-demand path
-   works**: register the weapon name only, and let the client fetch bytecode via
-   `PLI_UPDATESCRIPT (158)` → `Weapon::sendByteCodeToPlayer`. Until fixed, do not persist
-   compiled-GS2 weapons onto accounts on a stock server. Grant them at runtime instead.
-
-(The related GS1-weapon-on-MODERN-server crash (`registerWeaponWithPlayer` taking the
-bytecode branch for a weapon with no compiled bytecode and sending an unbuilt
-`m_headerWithCRC`) is also fixed only in the local working tree, `Weapon.cpp:275-283`.)
+The login-time crashes that GS2 weapon delivery once had (`Script::getClientByteCode()` throwing
+`bad_any_cast`, and `registerWeaponWithPlayer` sending an unbuilt header) are gone on
+`origin/beta4`: `Script::getClientByteCode()` uses the non-throwing pointer
+`std::any_cast` and returns an empty bytecode on a miss (`server/src/scripting/Script.cpp:246-256`),
+and `Weapon::registerWeaponWithPlayer` was rewritten (see
+[GS2 Bytecode Delivery Rule](version-gated-behavior.md#gs2-bytecode-delivery-rule)). This was
+checked by reading the source, not by running a server.
 
 ## Sources of Truth
 
-The vendored `GServer-v2/dependencies/gs2lib/` copy in this repo is **stale**. It is an
-orphaned git-submodule reference (`dependencies/gs2lib/.git` is a gitlink with no
-`.gitmodules` registering it) and is **not wired into the CMake build at all**
-(`grep`ping `server/CMakeLists.txt` for any `add_subdirectory`/path reference to it comes up
-empty). Never cite it.
+The `GServer-v2/dependencies/gs2lib/` directory in a checkout is **stale**. Git tracks nothing
+under `dependencies/` at `origin/beta4` (`git ls-tree origin/beta4 dependencies/` is empty), so
+it is an untracked leftover that carries its own `.git` and `.gitmodules`, and it is **not wired
+into the CMake build at all**. Never cite it.
 
 CMake `FetchContent` pulls the authoritative copy at configure time
-(`server/CMakeLists.txt:268-278`):
+(`server/CMakeLists.txt:267-273`):
 
 ```cmake
 FetchContent_Declare(gs2lib
 	GIT_REPOSITORY https://xtjoeytx@bitbucket.org/xtjoeytx/gs2lib.git
 	GIT_SHALLOW    ON
-	GIT_TAG        63b1ae96491c188905b50c6b61c8532c601a2122
+	GIT_TAG        35056f83c856091eacab50853876bfa9fa6f6967
 	#URL "${PROJECT_SOURCE_DIR}/../gs2lib"
 )
 ```
 
-pinned to commit `63b1ae96491c188905b50c6b61c8532c601a2122` (bitbucket
-`xtjoeytx/gs2lib`), checked out under `GServer-v2/build/dependencies/fc/gs2lib-src/`. All
+pinned to commit `35056f83c856091eacab50853876bfa9fa6f6967` (bitbucket
+`xtjoeytx/gs2lib`, pin updated by upstream commit 344a0252), checked out under
+`GServer-v2/build/dependencies/fc/gs2lib-src/`. All
 enum values, `IUtil.cpp` version tables, and `CEncryption` internals cited across this
 documentation set come from that path.
