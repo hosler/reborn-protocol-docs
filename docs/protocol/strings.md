@@ -1,14 +1,14 @@
 # String Types: A Tragedy in Three Acts
 
-The Reborn protocol has three methods to encode strings. The methods are not interchangeable. Some code uses the same name for different methods. This causes errors.
+The Reborn protocol has two methods to encode strings on the wire, plus a framing detail that looks like a third. The methods are not interchangeable. Some code uses the same name for different methods. This causes errors.
 
-## The Three Types at a Glance
+## The Types at a Glance
 
 | Type | Format | Max Length | Terminator | Also Known As |
 |------|--------|------------|------------|---------------|
 | Regular String | Raw bytes to packet end | Packet size | None (or null) | "string", "read to end" |
 | Length-Prefixed | [GCHAR length][data] | 223 chars | None | "GSTRING", "gstring" |
-| Newline-Terminated | Raw bytes until 0x0A | Line length | Newline (0x0A) | Also "gstring" (confusingly) |
+| "Newline-terminated" | Not a wire type | n/a | The packet's own newline | Some code calls a read-to-end string this |
 
 ## Type 1: Regular String (Read Until You Can't)
 
@@ -80,33 +80,30 @@ def write_gstring(string_data):
     return bytes([length + 32]) + encoded
 ```
 
-## Type 3: Newline-Terminated (The Impostor)
+## Type 3: The Packet Newline (Not a String Type)
 
-The reader reads bytes until it finds a newline character (0x0A). The reader consumes the newline but does not include it in the result.
+The reader of a packet bundle splits the stream on newline characters (0x0A). Every packet
+ends with one: the server's send queue appends `'\n'` to each packet
+(gs2lib `CFileQueue.cpp:101-103`), and the receiver cuts each packet with
+`readString("\n")` (`server/include/network/IPacketHandler.h:330`). That newline belongs
+to the packet framing. It is not a terminator that individual string fields carry.
 
-**Format**:
-```
-[string_data][0x0A]
-```
-
-**Characteristics**:
-- Reads until newline (0x0A)
-- Newline is consumed but not returned
-- No length prefix
-- Confusingly ALSO called "gstring" in some GServer code
+**What this means for strings**:
+- A string that the server writes as the last field of a packet is a read-to-end string
+  (Type 1). The newline that follows it is the packet terminator.
+- A reader that treats the string as "until newline" gets the same bytes only because the
+  packet has already been cut at the newline. It is not a third wire encoding.
+- Code that calls such a field "newline-terminated" (or "gstring") describes the framing,
+  not the field.
 
 **Used in**:
-- PLO_LEVELLINK data
-- Some internal packet handlers
-- Multi-line data parsing
+- PLO_LEVELLINK data (a read-to-end string, see below)
+- Other packets whose last field is a read-to-end string
 
-**Implementation**:
+**Implementation** (a reader working on one already-split packet):
 ```python
-def read_until_newline(packet, pos):
-    end = packet.find(b'\n', pos)
-    if end == -1:
-        end = len(packet)  # No newline found, read to end
-    return packet[pos:end].decode('latin-1'), end + 1
+def read_to_end(packet, pos):
+    return packet[pos:].decode('latin-1')
 ```
 
 ---
@@ -115,7 +112,7 @@ def read_until_newline(packet, pos):
 
 Multiple client implementations parse this field incorrectly.
 
-**The Trap**: PLO_LEVELLINK (packet ID 1) looks like it should use a length-prefixed GSTRING. It does not. It uses a raw newline-terminated string.
+**The Trap**: PLO_LEVELLINK (packet ID 1) looks like it should use a length-prefixed GSTRING. It does not. It is a read-to-end string with no length prefix. The server builds it as `>> (char)PLO_LEVELLINK << link.getLinkStr()` (`server/src/level/Level.cpp:165`, `server/src/level/LevelLink.cpp:71-74`) with no explicit newline. The only newline is the one that ends the packet.
 
 **What the Server Sends**:
 ```
@@ -146,15 +143,14 @@ def handle_levellink(packet):
 
 # RIGHT
 def handle_levellink(packet):
-    # Read until newline, no length prefix
-    end = packet.find(b'\n')
-    data = packet[:end].decode('latin-1')
+    # Read to the end of the packet (already cut at the newline), no length prefix
+    data = packet.rstrip(b'\n').decode('latin-1')
     # data = "level.nw 10 20 1 1 30 40"
 ```
 
 **Why This Happens**:
 
-`.nw` level files store level link data as plain text lines. The server reads these lines and sends them with minimal processing. The original design did not add a length prefix.
+The link is one space-separated text line, and the packet has no length field for it. Nothing in the reference explains the original design choice.
 
 ---
 
@@ -165,14 +161,13 @@ The term "gstring" is used inconsistently across codebases:
 | Context | "gstring" Means |
 |---------|-----------------|
 | GServer CString class | Length-prefixed (GCHAR + data) |
-| Some packet handlers | Newline-terminated |
+| Some packet handlers | A read-to-end field, described as newline-terminated |
 | PyReborn packet_parser | Length-prefixed |
-| PyReborn packet_handler | Newline-terminated |
+| PyReborn packet_handler | A read-to-end field, described as newline-terminated |
 | This documentation | We try to be specific |
 
 **Recommendation**: When documenting or discussing, use these explicit terms:
 - "Length-prefixed string" or "GSTRING"
-- "Newline-terminated string"
 - "Read-to-end string" or "regular string"
 
 Do not use only "gstring" without context.
@@ -184,11 +179,11 @@ Do not use only "gstring" without context.
 | Packet | String Type | Field |
 |--------|-------------|-------|
 | PLI_LEVELWARP | Read-to-end | Level name (after X, Y) |
-| PLI_TOALL | Read-to-end | Chat message |
+| PLI_TOALL | Length-prefixed | Chat message (`readString(readGUChar())`, `server/src/player/Player.cpp:1765`) |
 | PLO_LEVELNAME | Read-to-end | Level name (entire payload) |
-| PLO_LEVELLINK | Newline-terminated | Link data |
+| PLO_LEVELLINK | Read-to-end | Link data |
 | PLO_FILESENDFAILED | Read-to-end | Filename |
-| PLO_TOALL | Read-to-end | Chat message (after player ID) |
+| PLO_TOALL | Length-prefixed | Chat message (after the GSHORT player ID; `server/src/player/Player.cpp:1782`) |
 | Player props (nickname, etc.) | Length-prefixed | Various string properties |
 | NPC props | Length-prefixed | Various string properties |
 
@@ -196,8 +191,12 @@ Do not use only "gstring" without context.
 
 ## Character Encoding
 
-The session type selects the text encoding. There is no single protocol-wide
-decoder:
+Reborn selects the text encoding by session type. This is Reborn's policy, not a
+rule found in the reference. The reference server treats text as opaque bytes (it keeps a
+per-account `codePage`, default 1252, set by a client property: `server/include/Account.h:72`,
+`server/src/player/PlayerProps.cpp:1055-1063`), and no list-server text decoding was found
+in the list-server source or the reference client. The claim that the two sessions differ
+is backed only by Reborn's own tests, so treat it as **unverified** against the reference:
 
 | Session | Text encoding |
 | --- | --- |
@@ -253,7 +252,7 @@ unchanged. Do not use it to redefine GS2 semantics.
 
 ## Common Pitfalls Summary
 
-1. **PLO_LEVELLINK is NOT length-prefixed**. It is newline-terminated. Multiple implementations have made this mistake.
+1. **PLO_LEVELLINK is NOT length-prefixed**. It is a read-to-end string. Multiple implementations have made this mistake.
 
 2. **"gstring" means different things**. Always check the specific packet documentation.
 

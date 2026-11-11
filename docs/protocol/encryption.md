@@ -14,7 +14,12 @@ This section explains how the Reborn protocol encrypts, compresses, and bundles 
 
 A packet passes through the following stages:
 
-### Sending (Client → Server)
+### Sending
+
+The diagram shows the GEN_5 send path. The reference server's queue (gs2lib
+`CFileQueue.cpp:230-269`) compresses the bundle, encrypts the compressed bytes with the limit
+for the chosen type, and only then puts the unencrypted type byte in front. The length
+prefix is `encrypted length + 1`.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -34,27 +39,27 @@ A packet passes through the following stages:
 │     └───────────────────────────────────────────────────────────────┘  │
 │                                   │                                     │
 │                                   ▼                                     │
-│  3. COMPRESS (if enabled)                                               │
+│  3. COMPRESS (if enabled; the type is chosen here, not yet sent)        │
 │     ┌───────────────────────────────────────────────────────────────┐  │
 │     │ [compressed_data...]                                          │  │
 │     └───────────────────────────────────────────────────────────────┘  │
 │                                   │                                     │
 │                                   ▼                                     │
-│  4. PREPEND COMPRESSION TYPE                                            │
-│     ┌───────────────────────────────────────────────────────────────┐  │
-│     │ [type][compressed_data...]                                    │  │
-│     └───────────────────────────────────────────────────────────────┘  │
-│                                   │                                     │
-│                                   ▼                                     │
-│  5. ENCRYPT (first N bytes only!)                                       │
+│  4. ENCRYPT (first N bytes of the compressed data only!)                │
 │     ┌───────────────────────────────────────────────────────────────┐  │
 │     │ [encrypted...][plaintext...]  ← N bytes encrypted, rest plain │  │
 │     └───────────────────────────────────────────────────────────────┘  │
 │                                   │                                     │
 │                                   ▼                                     │
-│  6. PREPEND LENGTH (2 bytes, big-endian)                                │
+│  5. PREPEND COMPRESSION TYPE (never encrypted)                          │
 │     ┌───────────────────────────────────────────────────────────────┐  │
-│     │ [len_hi][len_lo][encrypted...][plaintext...]                  │  │
+│     │ [type][encrypted...][plaintext...]                            │  │
+│     └───────────────────────────────────────────────────────────────┘  │
+│                                   │                                     │
+│                                   ▼                                     │
+│  6. PREPEND LENGTH (2 bytes, big-endian, counts the type byte)          │
+│     ┌───────────────────────────────────────────────────────────────┐  │
+│     │ [len_hi][len_lo][type][encrypted...][plaintext...]            │  │
 │     └───────────────────────────────────────────────────────────────┘  │
 │                                   │                                     │
 │                                   ▼                                     │
@@ -63,7 +68,7 @@ A packet passes through the following stages:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Receiving (Server → Client)
+### Receiving
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -106,9 +111,9 @@ The protocol supports multiple encryption "generations." Each later generation c
 
 | Generation | Encryption | Compression | Status |
 |------------|------------|-------------|--------|
-| GEN_1 (0) | None | None | Ancient history |
-| GEN_2 (1) | None | Zlib | **Live: NC clients + listserver** |
-| GEN_3 (2) | Single byte XOR | Zlib | Legacy |
+| GEN_1 (0) | None | None | Live: `PLTYPE_WEB` logins, and the first leg of the server's list-server registration |
+| GEN_2 (1) | None | Zlib | **Live: NC clients, legacy 1.x game clients, legacy RC, and the list-server bootstrap** |
+| GEN_3 (2) | Single-byte insertion | Zlib | Legacy |
 | GEN_4 (3) | Partial XOR | BZ2 | Less legacy |
 | **GEN_5 (4)** | **Partial XOR** | **Multi** | **Current standard** |
 
@@ -124,17 +129,26 @@ Recv: Decrypt → Decompress decrypted data → Parse
 
 **GEN_3 (Legacy)**:
 ```
-Send: Compress → Send
-Recv: Decompress → Decrypt individual packets → Parse
+Client → server:  Insert one byte into each packet → Bundle → Compress → Send
+Server receives:  Decompress → Split into packets → Remove the inserted byte from each → Parse
+Server → client:  Compress → Send   (no insertion at all)
 ```
 
-GEN_5 encrypts the *compressed bundle*. GEN_3 encrypts the *decompressed packets*. An incorrect order prevents communication.
+GEN_5 encrypts the *compressed bundle*. GEN_3 transforms the individual *packets*, before
+compression on the sending side and after decompression on the receiving side, and only in
+the client-to-server direction. An incorrect order prevents communication.
 
 ## ENCRYPT_GEN_2: The NC / Listserver Format
 
-GEN_2 is the **live** encryption for two current
-connection types: **NC (NPC Control)** clients and **listserver** communication. If you
-implement an NC client, you implement GEN_2.
+GEN_2 is the **live** encryption for several connection types: **NC (NPC Control)** clients,
+legacy `PLTYPE_CLIENT` (1.x) game clients (`server/src/player/PlayerClient.cpp:302-304`),
+legacy `PLTYPE_RC` (`server/src/player/PlayerRC.cpp:147-150`), and the **listserver**
+bootstrap. The list server starts every connection in GEN_2 and switches both directions to
+GEN_5 after the first initialization packet
+(`graal-serverlist/server/src/PlayerConnection.cpp:42-43,305-306,321-322`). GEN_1 is also
+still reachable: `PLTYPE_WEB` clients get it (`PlayerClient.cpp:312-315`), and the game
+server's own `REGISTERV3` to the list server goes out as GEN_1, then GEN_2
+(`server/src/ServerList.cpp:264-266`). If you implement an NC client, you implement GEN_2.
 
 GEN_2 is the simplest format:
 
@@ -145,19 +159,24 @@ GEN_2 is the simplest format:
 - **No per-packet/partial encryption.** GEN_2's encrypt/decrypt is a no-op. The "encryption"
   is purely the zlib wrapping.
 - **No compression-type byte.** Unlike GEN_5, there is no leading `0x02/0x04/0x06` — the
-  payload is *always* zlib. (A tolerant reader may fall back to treating the body as raw if
-  zlib inflation fails.)
-- **The login packet omits the encryption-key byte.** The server reads the key byte only
-  when `gen > ENCRYPT_GEN_3`. Since GEN_2 < GEN_3, NC/listserver logins do **not** send it.
+  payload is *always* zlib. The reference receiver inflates with `zuncompress2I`, which
+  retries a bad-checksum body as raw DEFLATE but does not treat the body as raw data
+  (see [Zlib tolerance](#zlib-tolerance-and-iterator-rollback)).
+- **The NC/RC login packet omits the encryption-key byte.** The NC and RC login handlers read
+  the key byte only when `gen > ENCRYPT_GEN_3` (`server/src/player/PlayerNC.cpp:120`,
+  `server/src/player/PlayerRC.cpp:159`). Since GEN_2 < GEN_3, GEN_2 NC and RC logins do
+  **not** send it. The game-client path uses a different rule: it reads the key whenever the
+  version token is still unknown (`PlayerClient.cpp:333-341`). See
+  [Login Packet Layout](versions-encryption.md#login-packet-layout).
 - The decompressed bundle is the usual `[id+32][body]\n` packet stream.
 
 This is why an NC client cannot share the GEN_5 codec path: it must swap to a GEN_2 codec
 (zlib-frame in/out, no key byte, no compression byte) before login. See
 [RC & NC Protocols](rc-nc-protocols.md) for the full NC login handshake.
 
-> RC is the other admin protocol but does **not** use GEN_2: modern **RC2** clients use
-> GEN_5 (with the key byte and compression byte, exactly like a game client). Only the
-> legacy `PLTYPE_RC` and `PLTYPE_NC` paths use GEN_2.
+> RC is the other admin protocol. Modern **RC2** clients use GEN_5 (with the key byte and
+> compression byte, exactly like a game client). The legacy `PLTYPE_RC`, `PLTYPE_NC` and
+> `PLTYPE_CLIENT` paths use GEN_2.
 
 ## ENCRYPT_GEN_5: The Details
 
@@ -199,13 +218,13 @@ The algorithm encrypts only the first N iterations. Each iteration processes 4 b
 | ZLIB | 0x04 | 0x04 (4) | 16 bytes |
 | BZ2 | 0x06 | 0x04 (4) | 16 bytes |
 
-These values come directly from GServer-v2's `CEncryption.cpp`:
+These values come directly from gs2lib's `CEncryption.cpp:159`:
 ```cpp
 static int limits[] = { 0x02, 0x0C, 0x04, 0x04, 0x06, 0x04 };
 // { type, limit, type, limit, ... }
 ```
 
-The design assumes that compression makes the first bytes less predictable and more difficult to analyze. Therefore, it does not encrypt the complete packet. If a packet exceeds the limit, part of it remains unencrypted.
+If a packet exceeds the limit, part of it remains unencrypted.
 
 ### Compression Types
 
@@ -215,12 +234,12 @@ The design assumes that compression makes the first bytes less predictable and m
 #define COMPRESS_BZ2           0x06  // Bzip2
 ```
 
-The likely reason for values 0x02, 0x04, and 0x06 is to prevent 0x00 bytes in the stream. This choice is consistent with other low-value-byte restrictions.
-
 ### Outbound Compression Is a Session Contract
 
-GEN_5 does not have one universal size policy. Reborn uses these outbound
-policies:
+GEN_5 does not have one universal size policy. The table below is **Reborn's** outbound
+policy (the game-session column mirrors the reference server; the list-server column is
+Reborn's own choice), not a reference-wide contract. The reference server and the reference
+client use different thresholds, given after the table:
 
 | Uncompressed payload size | Game session | List-server session |
 |---|---|---|
@@ -250,9 +269,10 @@ The reference client has no "zlib if shorter" rule below 48 bytes: it always sen
 there. The send buffer flushes at `0x1000` bytes (`TGraalConnection.cpp:1309,1320,1338`).
 
 The 55 and 8192 limits above are the reference server's GEN_5 send policy
-(gs2lib `CFileQueue.cpp:236-245`: `> 0x2000` bzip2, `> 55` zlib), which Reborn mirrors
-for game sessions; only the list-server column is Reborn's own. Any receiver accepts all
-three types, so either policy works on the wire.
+(gs2lib `CFileQueue.cpp:235-245`: `> 0x2000` bzip2, `> 55` zlib), which Reborn mirrors
+for game sessions; only the list-server column is Reborn's own. The open list server's own
+sends go through the same `CFileQueue` thresholds, so it sends bzip2 above 8192 bytes. Any
+receiver accepts all three types, so either policy works on the wire.
 
 The following are reported in squirelworks' client-analysis notes
 (`protocol/client-versions.md` and `protocol/codec-and-framing.md`; static read and lab
@@ -262,14 +282,51 @@ actually shorter. Real 2.22 sessions under Wine sent 580 `0x02` and 17 `0x04` fr
 `0x06` frame from a client has been captured yet. The Delphi RemoteControl RC socket uses
 the same per-flush choice.
 
-The two-tier list-server rule describes the client's historical behavior
-against the closed production list server; it is **not** a demonstrated
-server-side prohibition. The open reference list server accepts `0x06`, calls
+The two-tier list-server rule describes how the Reborn client treats the closed production
+list server. That production behavior is **unverified** against the reference: the
+reference client's own thresholds are the 48 and 4096 above, and the rule is **not** a
+demonstrated server-side prohibition. The open reference list server accepts `0x06`, calls
 `limitFromType`, decrypts, and bzip2-decompresses it
 (`graal-serverlist/server/src/PlayerConnection.cpp:137-153`). A compatible
 client nevertheless should emit only uncompressed or zlib bundles for a
 production list-server session unless it has separately established bzip2
 support.
+
+### Zlib tolerance and iterator rollback
+
+A zlib bundle is inflated with gs2lib `CString::zuncompress2`. If the normal inflate reports
+a data error, it strips the 2-byte zlib header and the 4-byte checksum trailer and retries
+the body as raw DEFLATE. This works around a 2.x client bug that writes a bad Adler-32
+checksum in some cases (gs2lib `CString.cpp:936-959`). If both attempts fail the call returns
+an empty buffer (`CString.cpp:960-976`). The buffer for the inflated data defaults to 65,536
+bytes (gs2lib `CString.h:170-177`).
+
+On GEN_5 a zlib bundle that needed the DEFLATE retry makes the receiver roll the LCG
+iterator back one step (`server/include/network/IPacketHandler.h:293-301`, gs2lib
+`CEncryption.h:64-65`: "the client falls 1 iteration behind"). A receiver that skips the
+rollback desynchronises the keystream for every later bundle.
+
+### Outbound bundle rules (reference server)
+
+These are the gs2lib `CFileQueue.cpp` rules for what goes into one bundle:
+
+- The queue packs normal packets until the bundle holds 0xC000 bytes, and never lets a
+  bundle grow past `0xF000 - 6` bytes (`:84-146`).
+- A packet that carries raw data is announced by `PLO_RAWDATA` as
+  `>> PLO_RAWDATA >> (int)(len + 1) << '\n'`, then the body, then `'\n'`, only when the
+  generation is GEN_5 or lower (`:62,92-104`). On receive, `PLI_RAWDATA` sets a flag, and
+  the next `GUInt` bytes are taken as one packet without newline splitting
+  (`server/include/network/IPacketHandler.h:315-328,363-368`).
+- After compression the data must fit in `0xFFFC` bytes for GEN_5 (the type byte takes one
+  more) or `0xFFFD` bytes for GEN_2 to GEN_4. A larger bundle is dropped with an error and
+  not sent (`:186-191,209-214,251-256`).
+
+An edge case in the reference client: it scrambles `ceil(len / 4)` blocks (at most 12) for
+an uncompressed (`0x02`) payload but `floor(len / 4)` blocks (at most 4) for a compressed
+one (`Preagonal/FourPlay/quattroplay/src/TGraalConnection.cpp:76-92`). The server XORs
+every byte up to the limit, including a partial final block (gs2lib `CEncryption.cpp:71-85`).
+The two differ only for a compressed payload shorter than 16 bytes whose length is not a
+multiple of 4.
 
 ## The Magic Constants
 
@@ -277,22 +334,22 @@ support.
 
 Each encryption generation has an iterator start value. These arbitrary values have no cryptographic significance.
 
-From GServer-v2's `CEncryption.cpp`:
+From gs2lib's `CEncryption.cpp:24`:
 ```cpp
-const uint32_t CEncryption::ITERATOR_START[6] = {0, 0, 0x04A80B38, 0x4A80B38, 0x4A80B38, 0};
+static constexpr std::array ITERATOR_START = {0U, 0U, 0x04A80B38U, 0x4A80B38U, 0x4A80B38U, 0U};
 ```
 
 | Generation | Enum Index | Iterator Start | In Hex | Notes |
 |------------|------------|---------------|--------|-------|
 | GEN_1 | 0 | 0 | 0x0 | No encryption anyway |
 | GEN_2 | 1 | 0 | 0x0 | Still no encryption |
-| GEN_3 | 2 | 78,061,368 | 0x4A80B38 | Why this number? Lost to time. |
-| GEN_4 | 3 | 78,061,368 | 0x4A80B38 | Same as GEN_3 |
-| **GEN_5** | 4 | **78,061,368** | **0x4A80B38** | **Same as GEN_3/4** |
+| GEN_3 | 2 | 78,121,784 | 0x4A80B38 | Why this number? Lost to time. |
+| GEN_4 | 3 | 78,121,784 | 0x4A80B38 | Same as GEN_3 |
+| **GEN_5** | 4 | **78,121,784** | **0x4A80B38** | **Same as GEN_3/4** |
 
 GEN_3, GEN_4, and GEN_5 all use the same iterator start value (0x4A80B38). Their algorithms differ. GEN_3 inserts one byte, while GEN_4 and GEN_5 use the LCG-based XOR method.
 
-Someone selected these values in the early 2000s, but the reason is unknown. Incorrect values produce invalid packets. Use the specified values.
+The reason for these values is unknown. Incorrect values produce invalid packets. Use the specified values.
 
 ### The Key
 
@@ -320,7 +377,10 @@ class Encryption:
         self.multiplier = 0x8088405
 
     def set_limit_from_compression(self, compression_type):
-        self.limit = self.LIMITS.get(compression_type, -1)
+        # The reference limitFromType leaves the limit unchanged for an unknown type
+        # and reports an error (gs2lib CEncryption.cpp:156-171).
+        if compression_type in self.LIMITS:
+            self.limit = self.LIMITS[compression_type]
 
     def decrypt(self, data):
         result = bytearray(data)
@@ -358,7 +418,10 @@ class Encryption {
     }
 
     setLimitFromCompression(compressionType) {
-        this.limit = Encryption.LIMITS[compressionType] ?? -1;
+        // The reference leaves the limit unchanged for an unknown type.
+        if (compressionType in Encryption.LIMITS) {
+            this.limit = Encryption.LIMITS[compressionType];
+        }
     }
 
     decrypt(data) {
@@ -417,7 +480,7 @@ Let's be clear: this is not secure encryption. It's obfuscation.
 4. **No authentication**: Packets can be modified without detection
 5. **Known plaintext**: Packet IDs are predictable, enabling key recovery
 
-**Appropriate use**: Discouraging casual packet sniffing in a game protocol from 1999. Not for protecting sensitive data.
+**Appropriate use**: Discouraging casual packet sniffing in a legacy game protocol. Not for protecting sensitive data.
 
 ## Common Implementation Errors
 
@@ -429,7 +492,7 @@ Let's be clear: this is not secure encryption. It's obfuscation.
 
 4. **Forgetting the limit check**: You must stop after `limit` iterations.
 
-5. **Order of operations**: GEN_5 encrypts *after* compression. GEN_3 encrypts *after* decompression.
+5. **Order of operations**: GEN_5 encrypts *after* compression and prepends the type byte after encrypting. GEN_3 works on individual packets, outside the compressed bundle.
 
 6. **Wrong byte ordering**: The 32-bit iterator is accessed as little-endian bytes for XOR.
 
@@ -450,7 +513,8 @@ class Gen5Encryption:
         self.limit = -1
 
     def set_limit_from_compression(self, compression_type):
-        self.limit = self.LIMITS.get(compression_type, -1)
+        if compression_type in self.LIMITS:
+            self.limit = self.LIMITS[compression_type]
 
     def decrypt(self, data):
         result = bytearray(data)

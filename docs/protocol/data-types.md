@@ -4,7 +4,7 @@ This section specifies all data types that the Reborn protocol uses. It also exp
 
 ## The +32 Obsession: Why Everything Adds 32
 
-Almost every value in this protocol has 32 added to it before transmission. The following history explains this design.
+Almost every value in this protocol has 32 added to it before transmission. The reference does not record why. The following is the commonly given explanation, and it is **unverified**.
 
 The Reborn protocol was designed in the late 1990s, when:
 - Binary protocols made some network administrators nervous
@@ -23,8 +23,8 @@ These basic types have the expected behavior:
 |------|------|-------|-------------|
 | BYTE | 1 byte | 0-255 | Unsigned 8-bit integer |
 | CHAR | 1 byte | -128 to 127 | Signed 8-bit integer |
-| SHORT | 2 bytes | 0-65535 | Unsigned 16-bit, little-endian |
-| INT | 4 bytes | 0-4294967295 | Unsigned 32-bit, little-endian |
+| SHORT | 2 bytes | 0-65535 | Unsigned 16-bit, big-endian |
+| INT | 4 bytes | 0-4294967295 | Unsigned 32-bit, big-endian |
 | STRING | Variable | N/A | See [String Types](strings.md) |
 
 ## G-Types: The Reborn-Encoded Types
@@ -263,7 +263,7 @@ Decoding:
 | +0 | 0 | 0 |
 | -1 | 3 | 11 |
 
-The protocol does not use signed integers because each encoded byte must be ≥32. Signed representations would violate this requirement.
+The protocol does not use two's-complement integers here. It carries the sign in the low bit of an unsigned value instead.
 
 ```python
 def decode_x2y2(gshort_value):
@@ -300,7 +300,11 @@ The one-byte player/NPC `X` and `Y` properties are signed half-tile coordinates,
 ordinary unsigned GCHARs. After removing the +32 wire bias, values `216..255` are
 interpreted as signed 8-bit values (`-40..-1`) before division by two. This is the
 `PropertyTileCoordinate::deserialize` contract
-(`GServer-v2/server/src/utilities/PropertySerializers.cpp:420-429`).
+(`server/src/utilities/PropertySerializers.cpp:487-501`). The writer
+(`PropertyTileCoordinate::serialize`, `PropertySerializers.cpp:473-485`) writes the
+half-tile byte without the +32 check, so for negative values the wire byte can be below
+32, and it replaces an encoded 223 with 224 so that the byte never becomes the packet
+newline. A reader of these two properties must therefore accept bytes below 32.
 
 ## Player Property Data Types
 
@@ -316,7 +320,7 @@ Each byte: color index (+ 32 for encoding)
 
 > The count is **server-policy-dependent, not client-version-dependent**. The reference
 > server's `PropertyColors::getColorCount()` asks `Server::isNewWorldMode()` and returns
-> either 8 or 5 (`GServer-v2/server/src/utilities/PropertySerializers.cpp:628-632`).
+> either 8 or 5 (`server/include/utilities/PropertySerializers.h:793-796`).
 > Therefore, a receiver cannot derive the width from the handshake, and no particular
 > default is normative. A configurable server chooses one width for the world.
 >
@@ -343,8 +347,11 @@ Bit 6 (0x40): HASSPIN
 ```
 Format: GCHAR
 Range: 0-100
-Values: 0 = evil, 20 = neutral, 100 = good
+Values: 0 = evil, 100 = good (the server clamps to 0-100, `server/src/player/PlayerProps.cpp:852`)
 ```
+
+The reference does not define a "neutral" value. A commonly quoted 20 is not backed by
+the reference.
 
 ### Other Common Player Encodings
 
@@ -380,7 +387,7 @@ wire widths.
 | 16 | HURTDXDY | 2 GCHARs | Packed x/y knockback offsets |
 | 17 | ID | GINT3 | NPC identifier |
 | 18 | SPRITE | GCHAR | Sprite + direction packed into one byte |
-| 19 | COLORS | 5 or 8 GCHARs | Same generation split as player colors |
+| 19 | COLORS | 5 or 8 GCHARs | Sent with the width the server policy picks, as for player colors (`PropertyColors<true>`, `server/include/object/NPC.h:646`). A server **reads** this property as exactly 5 GCHARs regardless of policy (`server/include/utilities/PropertySerializers.h:751`) |
 | 20-22 | NICKNAME/HORSEIMAGE/HEADIMAGE | Variable | `HEADIMAGE` uses the preset-id threshold of 100 |
 | 23-32 | SAVE0-SAVE9 | GCHAR | Single-byte save slots |
 | 33 | ALIGNMENT | GCHAR | AP value |
@@ -406,7 +413,7 @@ The packet documentation uses these patterns repeatedly.
 | Pattern | Meaning | Notes |
 |---------|---------|-------|
 | Read-to-end string | Raw bytes until packet end | Used for `PLI_LEVELWARP`, `PLO_LEVELNAME`, `PLO_FILESENDFAILED`, and similar fields |
-| Newline-terminated string | Raw bytes until `0x0A` | Used by `PLO_LEVELLINK` and some server-side text payloads |
+| Newline-terminated string | Raw bytes until `0x0A` | Not a separate wire type: the newline is the packet terminator, so this is a read-to-end string. See [String Types](strings.md) |
 | GCHAR length + string | Length-prefixed string | Maximum 223 bytes |
 | GINT3 length | 3-byte count | Used for raw-data packet lengths and several counters |
 | GINT5 length | 5-byte count | Used for timestamps, file sizes, and large counters |
@@ -420,19 +427,22 @@ A Unix timestamp uses 5 bytes to avoid the 32-bit timestamp limit in 2038.
 
 ### Online Time (GINT)
 
-This type records seconds online. A 3-byte value gives approximately 24 days before overflow.
+This type records seconds online. The clamp of a 3-byte value is 3,682,399 seconds
+(about 42.6 days; gs2lib `CString.cpp:1750-1757`).
 
 ## Implementation Guidelines
 
 ### Byte Order
 
-- All multi-byte primitives (SHORT, INT) use **little-endian** before any G-encoding
+- All multi-byte primitives (SHORT, INT) use **big-endian** before any G-encoding
+  (gs2lib `CString.cpp:1657-1676,1700-1711`), like the 2-byte bundle length prefix
 - G-encoded types have their own byte order defined by the 7-bit packing
 
 ### Validation
 
 - Always validate ranges after decoding (especially GCHAR: 0-223)
-- Handle underflow gracefully (bytes < 32 are malformed)
+- Handle underflow gracefully (a G-encoded byte below 32 is malformed, with the exception
+  of the signed half-tile `X`/`Y` writes described above)
 - Reject malformed packets silently. Do not stop the program.
 
 ### Cross-Language Reference
