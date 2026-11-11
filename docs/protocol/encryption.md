@@ -142,7 +142,7 @@ the client-to-server direction. An incorrect order prevents communication.
 
 GEN_2 is the **live** encryption for several connection types: **NC (NPC Control)** clients,
 legacy `PLTYPE_CLIENT` (1.x) game clients (`server/src/player/PlayerClient.cpp:302-304`),
-legacy `PLTYPE_RC` (`server/src/player/PlayerRC.cpp:147-150`), and the **listserver**
+legacy `PLTYPE_RC` (`server/src/player/PlayerRC.cpp:148-151`), and the **listserver**
 bootstrap. The list server starts every connection in GEN_2 and switches both directions to
 GEN_5 after the first initialization packet
 (`graal-serverlist/server/src/PlayerConnection.cpp:42-43,305-306,321-322`). GEN_1 is also
@@ -295,8 +295,9 @@ support.
 ### Zlib tolerance and iterator rollback
 
 A zlib bundle is inflated with gs2lib `CString::zuncompress2`. If the normal inflate reports
-a data error, it strips the 2-byte zlib header and the 4-byte checksum trailer and retries
-the body as raw DEFLATE. This works around a 2.x client bug that writes a bad Adler-32
+a data error, it strips the 2-byte zlib header and retries the rest as raw DEFLATE. Only the
+header is removed from the input (`source + 2`, `length() - 2`); the "4-byte trailer" in the
+source comment is not stripped, and `buffSize - 6` is the size of the output buffer. This works around a 2.x client bug that writes a bad Adler-32
 checksum in some cases (gs2lib `CString.cpp:936-959`). If both attempts fail the call returns
 an empty buffer (`CString.cpp:960-976`). The buffer for the inflated data defaults to 65,536
 bytes (gs2lib `CString.h:170-177`).
@@ -310,8 +311,11 @@ rollback desynchronises the keystream for every later bundle.
 
 These are the gs2lib `CFileQueue.cpp` rules for what goes into one bundle:
 
-- The queue packs normal packets until the bundle holds 0xC000 bytes, and never lets a
-  bundle grow past `0xF000 - 6` bytes (`:84-146`).
+- The queue packs normal packets until the bundle holds 0xC000 bytes, and stops adding a
+  packet that would take it past `0xF000 - 6` bytes (`:84-146`). The exception is a first
+  normal packet that is already larger than that: it is added regardless (`:108-114`), and only
+  the post-compression check (over `0xFFFD` bytes, or `0xFFFC` for GEN_5) drops it
+  (`:186-191`, `:251-256`).
 - A packet that carries raw data is announced by `PLO_RAWDATA` as
   `>> PLO_RAWDATA >> (int)(len + 1) << '\n'`, then the body, then `'\n'`, only when the
   generation is GEN_5 or lower (`:62,92-104`). On receive, `PLI_RAWDATA` sets a flag, and

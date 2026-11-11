@@ -87,7 +87,10 @@ use the information at the link.
 - Level name uses `pPacket.readString("")` which reads to end of packet
 - If the warp fails, the handler warps the player back to its current level at its current
   position (`:92-97`). If that also fails, it warps to the configured unstick level and
-  tile (`:98-104`). It does not send `PLO_WARPFAILED`.
+  tile (`:98-104`). The handler itself writes no `PLO_WARPFAILED`, but the calls it makes do:
+  `warp(string)` sends it when the level cannot be loaded (`PlayerClient.cpp:1211`), and
+  `enterLevel` sends it, with `level->levelName`, when the level data cannot be sent
+  (`PlayerClient.cpp:1294`).
 
 **Variant**: PLI_LEVELWARPMOD (30) - includes modification time:
 ```
@@ -113,7 +116,7 @@ data is **not** a raw opaque string. Each tile is a proper GSHORT. The server do
 echo it to the sender**. See
 [GServer Behavior: PLI_BOARDMODIFY Is Not Echoed](gserver-behavior.md#pli_boardmodify-is-not-echoed-to-the-sender).
 
-One exception: when `enableClientsidePushPull` is on and the change is a 4x4 push-pull
+One exception: when the `clientsidepushpull` option is on (default true, `server/include/Server.h:133`) and the change is a 4x4 push-pull
 stone, `Level::alterBoard` rejects it and sends a `PLO_BOARDMODIFY` for the same area
 back to the sender (`Level.cpp:1660-1664`).
 
@@ -131,7 +134,7 @@ Property format:
 ### PLI_NPCPROPS (3) - NPC Property Update
 **Trigger**: Client updates NPC properties (when no NPC-Server)
 ```
-[GUINT: npc_id]      // NPC identifier
+[GINT3: npc_id]      // NPC identifier
 [STRING: prop_data]  // NPC property data
 ```
 
@@ -163,7 +166,14 @@ defines no default value.
 [STRING: message]     // Chat message text
 ```
 **Source**: `Player::msgPLI_TOALL` (`server/src/player/Player.cpp:1759-1785`). The server
-ignores the packet when the sender is jailed. It relays
+ignores the packet when the sender is jailed. **Reference quirk**: the server does not use
+`message_len` as a length. `Player.cpp:1765` calls `readString(readGUChar())`; the unsigned
+char becomes a `CString` holding its decimal text (gs2lib `CString.cpp:133-138`), and
+`readString(const CString&)` (gs2lib `CString.cpp:272-291`) treats that text as a delimiter.
+The server therefore reads the rest of the packet and cuts it at the first occurrence of the
+length's decimal digits (a 5-character message loses everything from its first `5`; a message
+that starts with those digits becomes empty). A client that sends the length byte plus the
+text still works for any message that does not contain those digits. It relays
 `PLO_TOALL >> short id >> char len << message` to every other player that does not have the
 `PLFLAG_NOTOALL` flag set.
 
@@ -190,7 +200,7 @@ ignores the packet when the sender is jailed. It relays
 [GUCHAR: tile_y]     // Y position (in half-tiles)
 [GUCHAR: flags]      // Direction (2 bits) + Reflect (1 bit) + From Player (1 bit)
 [GUCHAR: sprite]     // Arrow sprite/type
-[GUCHAR: power]      // Arrow power/damage
+[GCHAR: power]       // Arrow power/damage (read with `readGChar`, `PlayerClientPackets.cpp:293`)
 ```
 
 ### PLI_FIRESPY (10) - Fire Spy
@@ -302,7 +312,7 @@ documented only in a comment. The server does not parse them. It forwards the ra
 ### PLI_NPCDEL (22) - Delete NPC
 **Trigger**: Player deletes an NPC
 ```
-[GUINT: npc_id]      // NPC identifier to delete
+[GINT3: npc_id]      // NPC identifier to delete
 ```
 
 ### PLI_WANTFILE (23) - Request File
@@ -327,7 +337,7 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 [GCHAR: hurt_dx]     // Knockback X direction
 [GCHAR: hurt_dy]     // Knockback Y direction  
 [GUCHAR: power]      // Damage amount
-[GUINT: npc_id]      // NPC ID (if NPC caused damage)
+[GINT3: npc_id]      // NPC ID (if NPC caused damage)
 ```
 
 ### PLI_EXPLOSION (27) - Create Explosion
@@ -369,7 +379,7 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 // If type == 0:
 [GCHAR: item_id]      // Default weapon item ID
 // If type > 0:
-[GUINT: npc_id]       // Source NPC ID
+[GINT3: npc_id]       // Source NPC ID
 ```
 
 ### PLI_UPDATEFILE (34) - File Update Check
@@ -392,7 +402,7 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 [GCHAR: power]       // Hit power/damage (in half-increments)
 [GCHAR: tile_x]      // X position (in half-tiles)
 [GCHAR: tile_y]      // Y position (in half-tiles)
-[GUINT: npc_id]      // NPC ID (optional, if hit came from NPC)
+[GINT3: npc_id]      // NPC ID (optional, if hit came from NPC)
 ```
 
 ### PLI_LANGUAGE (37) - Set Language
@@ -404,7 +414,7 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 ### PLI_TRIGGERACTION (38) - Trigger Action
 **Trigger**: Player activates a trigger/sign action
 ```
-[GUINT: npc_id]      // Associated NPC ID
+[GINT3: npc_id]      // Associated NPC ID
 [GUCHAR: tile_x]     // X position (in half-tiles)
 [GUCHAR: tile_y]     // Y position (in half-tiles)
 [STRING: action_data] // Comma-separated action parameters
@@ -570,8 +580,10 @@ Layout from the gs2lib `IEnums.h:77` comment. The server handler does nothing
 ### PLI_RAWDATA (50) - Raw Data Marker
 **Trigger**: Indicates next packet contains raw binary data
 ```
-[GUINT: data_size]   // Size of following raw data in bytes
+[GINT3: data_size]   // Size of following raw data in bytes
 ```
+The server parses it with `readGUInt()`, which is the 3-byte GINT3 read
+(`server/include/network/IPacketHandler.h:366`; gs2lib `CString.cpp:1836`).
 
 ### PLI_PROFILEGET (80) - Request Player Profile
 **Trigger**: Client asks for a player's profile
@@ -1174,7 +1186,8 @@ changes inside this packet, but its use is commented out (the style stays 1 or 3
 > ⚠️ **THE TRAP** ⚠️
 >
 > This packet does NOT use a length-prefixed GSTRING. Multiple client implementations
-> have made this mistake. The server sends raw string data until a newline (0x0A).
+> have made this mistake. The string runs to the end of the packet; the only newline is the
+> packet terminator (`server/src/level/Level.cpp:165`).
 > If you read the first byte as a length, you will read 'l' from "level.nw".
 > You will compute length = 108 - 32 = 76 and consume half the next packet. Do not do this.
 >
@@ -1182,12 +1195,15 @@ changes inside this packet, but its use is commented out (the style stays 1 or 3
 
 **Trigger**: Level entry, one packet per link. The modern-generation server sends links
 only when it has no NPC-server, or the `clientsidelinks` option is set, or the level is a
-sub-level of a big map (`server/src/player/PlayerClient.cpp:1478-1482`). The
-original-generation path always sends them (`PlayerClientOriginal.cpp:156`).
+sub-level of a big map (`server/src/player/PlayerClient.cpp:1478-1482`). In both generations
+the links go out only inside the branch that sends the board: not when the client's cache is
+current or the level was already entered this session (`PlayerClient.cpp:1457-1482`;
+`PlayerClientOriginal.cpp:141-156`). The original-generation path sends them without the
+NPC-server condition, but only in that branch.
 ```
-[STRING: link_data] // Raw newline-terminated string (NOT a GSTRING!)
+[STRING: link_data] // Read-to-end string (NOT a GSTRING!)
 ```
-**String Type**: Newline-terminated (NOT length-prefixed).
+**String Type**: Read to end of packet (NOT length-prefixed).
 
 **Link Data Format**: "destlevel x y width height destx desty"
 - destlevel: Target level name
@@ -1197,7 +1213,9 @@ original-generation path always sends them (`PlayerClientOriginal.cpp:156`).
 
 The server builds the string as `"{dest} {x} {y} {w} {h} {destx} {desty}"`
 (`server/src/level/LevelLink.cpp:71-74`). `x`, `y`, `w` and `h` are numbers;
-`destx` and `desty` are kept as strings.
+`destx` and `desty` are kept as strings. A client parses the last six space-separated
+tokens as the numeric fields (`x y w h destx desty`); everything before them is the level
+name, which may contain spaces (`server/src/level/LevelLink.cpp:82-98`).
 
 **Important Server Behavior**:
 - The client handles the warp when it walks into the link area.
@@ -1317,7 +1335,9 @@ and unlayered forms for server, script and respawn changes (`LevelBoardChange.cp
 for the level-entry replay (`server/src/level/Level.cpp:525-528`). The relay of a player's
 own edit is different: `msgPLI_BOARDMODIFY` forwards the client's raw bytes
 (`<< (pPacket.text() + 1)`) to the other players
-(`server/src/player/packets/PlayerClientPackets.cpp:127-128`). A plain player edit never
+(`server/src/player/packets/PlayerClientPackets.cpp:127-128`). On a gmap that relay is not
+`PLO_BOARDMODIFY`: it is `PLO_BOARDMODIFY2` with the sender's `mapX` and `mapY` prefixed,
+sent to the nearby segments (`PlayerClientPackets.cpp:129-133`). A plain player edit never
 sets the layer prefix.
 
 **Source**: `server/src/level/LevelBoardChange.cpp:73-81` (build), `Level::alterBoard`
@@ -1339,6 +1359,9 @@ before 4.0211, get `PLO_BOARDMODIFY` instead). See
 [GCHAR: height]      // Modification height
 [GSHORT: tile]...    // width*height tiles, one GSHORT each (row-major)
 ```
+**Layer-prefixed variant**: when the change's layer is not 0, `{mapX}{mapY}{layer+64}{x}{y}{w}{h}{tiles}`
+is built, with the `layer + 64` byte after `mapY` (`server/src/level/LevelBoardChange.cpp:85-95`).
+
 **Source**: `LevelBoardChange::getPropsForMapClassic` (`server/src/level/LevelBoardChange.cpp:83-96`).
 `mapX`/`mapY` are always present, even for non-gmap levels (where they resolve to `0,0`),
 because `LevelBoardChange` objects always carry an explicit `MapPosition` (the function
@@ -1396,7 +1419,9 @@ same two bytes to roll back a refused bomb (`PlayerClientPackets.cpp:233`).
 [message]            // msg_len bytes
 ```
 The server writes `>> (short)m_id >> (char)message.length() << message`
-(`server/src/player/Player.cpp:1782`).
+(`server/src/player/Player.cpp:1782`). Unlike the inbound packet, this form is truly
+length-prefixed, but the length is that of the message after the inbound truncation quirk
+described under PLI_TOALL.
 
 ### PLO_PLAYERWARP (14) - Player Warp
 **Trigger**: Player warps to new location
@@ -1406,7 +1431,8 @@ The server writes `>> (short)m_id >> (char)message.length() << message`
 [STRING: level_name] // New level name
 ```
 `x` and `y` are `PropertyTileCoordinate` values: the server writes `pixel / 8` as one
-GCHAR and replaces 223 with 224, because 223 would overflow into the newline
+GCHAR and replaces 223 with 224. The source comment says 223 would overflow into the
+newline, but its wire byte is 255; 234 is the value that gives `0x0A` and it is not remapped
 (`server/src/utilities/PropertySerializers.cpp:473-485`, sent at
 `server/src/player/PlayerClient.cpp:1263`).
 
@@ -1416,7 +1442,8 @@ GCHAR and replaces 223 with 224, because 223 would overflow into the newline
 [STRING: level_name] // The level that could not be loaded
 ```
 The server writes `<< levelName` (`server/src/player/PlayerClient.cpp:1211`;
-`PlayerClientOriginal.cpp:87`).
+`PlayerClientOriginal.cpp:87`), and `<< level->levelName` from `enterLevel`
+(`server/src/player/PlayerClient.cpp:1294`).
 
 ### PLO_DISCMESSAGE (16) - Disconnect Message
 **Trigger**: The server disconnects the player
@@ -1513,7 +1540,7 @@ rollback of a refused drop (`server/src/player/packets/PlayerClientPackets.cpp:3
 [GCHAR: y / 8]        // (captured BEFORE removal from the old level)
 [STRING: new_level]   // The NEW level name being warped to, to end of packet
 ```
-> The previous version of this document incorrectly specified a bare `[GUINT: npc_id]`.
+> The previous version of this document incorrectly specified only a bare NPC id.
 > The packet carries the NPC's old position and the destination level name.
 
 **Source**: the level-change routine in `server/src/object/NPC.cpp:205-210`:
@@ -1579,7 +1606,7 @@ The server writes `>> (int)` (`server/src/Server.cpp:1637`).
 ```
 
 ### PLO_SHOWIMGPLAYER (32) - Show Image
-**Trigger**: Player displays image. The server relays the client's `PLI_SHOWIMG` body to the
+**Trigger**: Player displays image. The server relays the client's `PLI_SHOWIMGPLAYER` body to the
 nearby players (`server/src/player/packets/PlayerClientPackets.cpp:816`).
 ```
 [GSHORT: player_id]  // Player showing image
@@ -1730,15 +1757,17 @@ chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1
 **Trigger**: The server runs a trigger action for a level, or a player sends one
 ```
 [GSHORT: player_id]  // Sending player (0 when the server or an NPC sent it)
-[GINT3: npc_id]      // Source NPC (server and NPC-sourced form only)
-[GCHAR: x]           // X position, pixel / 8 (server and NPC-sourced form only)
-[GCHAR: y]           // Y position, pixel / 8 (server and NPC-sourced form only)
+[GINT3: npc_id]      // Source NPC
+[GCHAR: x]           // X position, pixel / 8
+[GCHAR: y]           // Y position, pixel / 8
 [STRINGLIST: action,params...]   // CSV: the action name, a comma, then the parameters
 ```
 The enum comment gives the same layout (gs2lib `IEnums.h:217`). The server and NPC form is
 built in `server/src/Server.cpp:1996` and `:2006`. When a **player** triggers an action,
 the server relays it to the other players in the level with `>> (short)m_id` followed by the
-client's `PLI_TRIGGERACTION` body unchanged (`PlayerClientPackets.cpp:1311`). It does that
+client's `PLI_TRIGGERACTION` body unchanged (`PlayerClientPackets.cpp:1311`). That body
+starts with the same GINT3 npc, GCHAR x and GCHAR y (`PlayerClientPackets.cpp:1056-1057`), so
+every form carries all five fields. It does that
 only when the `sendplayertriggers` option is on (the default).
 
 ### PLO_PLAYERWARP2 (49) - Player Warp v2
@@ -1994,7 +2023,7 @@ workaround. The weapon form is sent as a raw packet.
 ```
 **Source**: `Weapon::sendByteCodeToPlayer` (`server/src/object/Weapon.cpp:207-215`). The
 header CSV is Reborn quoted-CSV (`toCSV`): `weapon,<name>,1,<desKey>` where `<desKey>` is a
-64-bit script hash packed as two GINT5s (`Weapon.cpp:360-365`). This is `m_header`
+64-bit script hash packed as two GINT5s (`Weapon.cpp:346-349`). This is `m_header`
 **without** the CRC32. The server sends the CRC-bearing variant (`m_headerWithCRC`,
 `Weapon.cpp:367-370`) in `PLO_LOADSCRIPT (197)` instead. The unknown-class fallback
 (`msgPLI_UPDATECLASS`, `server/src/player/packets/PlayerClientPackets.cpp:1524-1535`) sends a
@@ -2087,8 +2116,11 @@ four comma-separated tokens (`server/src/player/PlayerClient.cpp:495-501`), and 
 GS1 `setmap` command (`server/src/scripting/gs1/GS1Commands.cpp:2630`). Same layout as
 `PLO_MINIMAP`. The enum comment says 6.037 does not handle it.
 ```
-[STRING: map_text]   // "imgfile,levelsfile,x,y", decimal text, to end of packet
+[STRING: map_text]   // "imgfile,levelsfile,x,y" per the GS1 command, decimal text, to end of packet
 ```
+The server does not reorder the tokens: the login path relays the option's four trimmed tokens
+in the order written, and the GS1 command sends `imgfile,levelsfile,x,y` in that order. See
+the token-order note under PLO_MINIMAP.
 
 ### PLO_MINIMAP (172) - Minimap Data
 **Trigger**: Sent at login to clients 2.1 and later when the `minimap` option is set to four
@@ -2098,7 +2130,11 @@ comma-separated tokens (`server/src/player/PlayerClient.cpp:504-512`), and by th
 [STRING: map_text]   // "imgfile,levelsfile,x,y": four trimmed tokens joined by commas
 ```
 The x and y tokens are decimal text, not GCHARs. The enum comment's example is
-`zodiacminimap.txt,zodiacworldminimap3.png,10,10` (gs2lib `IEnums.h:293`).
+`zodiacminimap.txt,zodiacworldminimap3.png,10,10` (gs2lib `IEnums.h:293`). That example puts the
+`.txt` file first, which conflicts with the `imgfile,levelsfile` order of the GS1
+`setminimap` command (`server/src/scripting/gs1/GS1Commands.cpp:2650`). The server relays the
+option text in the order written (`PlayerClient.cpp:504-512`), so the order a client sees is
+whatever the operator configured; the reference does not settle which one is right.
 
 ### PLO_GHOSTTEXT (173) - Ghost Text
 **Trigger**: Text display in ghost mode
@@ -2148,7 +2184,7 @@ classic-mode-disable or full-stop packet. A client must not freeze input on 176.
 
 ### PLO_NEWWORLDMODE (177) - Server Mode: New World
 **Trigger**: The server option `servermode = newworld`, sent at the same place
-as 176 (`Player.cpp:750-751`). The two are exclusive: an `if` / `else if`
+as 176 (`Player.cpp:751-752`). The two are exclusive: an `if` / `else if`
 chooses at most one, and `servermode = normal` (the default) sends neither.
 `servermode` is read once at startup (`Server.cpp:196-200`).
 ```
@@ -2185,14 +2221,15 @@ name ends that mode.
 
 ### PLO_RPGWINDOW (179) - RPG Window
 **Trigger**: Sent once at login to clients 2.1 and later
-(`server/src/player/PlayerClient.cpp:514-516`)
+(`server/src/player/PlayerClient.cpp:514-516`). `sendRPGMessage` sends it again later with the
+text as a quoted CSV, split at `#b` (`server/src/player/PlayerClient.cpp:1746-1751`)
 ```
 [CSV: text...]       // Two quoted strings: "Welcome to <server name>.","<vendor> <app> programmed by <credits>."
 ```
 
 ### PLO_STATUSLIST (180) - Status List
 **Trigger**: Sent at login to clients 2.1 and later with the server's status-list options
-(`server/src/player/PlayerClient.cpp:529-536`)
+(`server/src/player/PlayerClient.cpp:529-536`) and at RC login (`server/src/player/PlayerRC.cpp:264`)
 ```
 [STRING: statuses]   // The status names joined with "," and NOT quoted, to end of packet
 ```
@@ -2236,7 +2273,7 @@ above `CLVER_2_3`. See
 [Version-Gated Behavior](version-gated-behavior.md#npc-movement-plo_move-vs-plo_move2)
 for the `PLO_MOVE`/`PLO_MOVE2` version split.
 ```
-[GINT3: npc_id]      // NPC identifier (3 bytes, NOT GUINT)
+[GINT3: npc_id]      // NPC identifier (3 bytes)
 // then the whole move queue, one record per queued move:
 [GSHORT: pos_x]       // Current X, X2/Y2-style pixel-coord encoding (see below)
 [GSHORT: pos_y]       // Current Y, same encoding
@@ -2258,7 +2295,9 @@ players of version 2.3 or later (`NPC.cpp:578-587`), and to a single player on l
 ### PLO_SERVERLISTCONNECTED (190) - Server Connected to the List Server
 **Trigger**: Sent at login when the server is connected to the list server, before
 `PLO_RESETCLIENT` (`server/src/player/PlayerClient.cpp:487-489`). It is also sent to
-connected players when the list-server link comes up (`server/src/ServerList.cpp:358-370`).
+connected players when the list-server link comes up, except NC and NPC-server accounts
+(`server/src/ServerList.cpp:358-370`, the skip at `:365`). RC login sends it too
+(`server/src/player/PlayerRC.cpp:252`).
 ```
 // No additional data
 ```

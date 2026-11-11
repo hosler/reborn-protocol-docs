@@ -183,13 +183,14 @@ property to an integer tile before selecting its segment.
 
 ## The `.gmap` File Format
 
-Parsed by `Map::Map(is_gmap_t, ...)` (`server/src/level/Map.cpp:88-257`). The first line
-is the header `GRMAP001`. After it, one `KEY value` pair per line:
+Parsed by `Map::Map(is_gmap_t, ...)` (`server/src/level/Map.cpp:88-257`). The header
+`GRMAP001` is skipped wherever it appears (`Map.cpp:124`); it is not required on the first
+line. Every other line is one `KEY value` pair:
 
 | Key | Meaning |
 |-----|---------|
 | `WIDTH`, `HEIGHT` | grid size in segments |
-| `LEVELNAMES` ... `LEVELNAMESEND` | one CSV row of level file names per grid row. An empty cell is a hole. Names are stored lower-cased. Rows or cells beyond `HEIGHT`/`WIDTH` are ignored |
+| `LEVELNAMES` ... `LEVELNAMESEND` | one CSV row of level file names per grid row. An empty cell is a hole. Names are stored lower-cased. Rows or cells beyond `HEIGHT`/`WIDTH` are ignored, so `WIDTH` and `HEIGHT` must come before `LEVELNAMES` or the rows are dropped (`Map.cpp:147`, `:151`) |
 | `MAPIMG`, `MINIMAPIMG` | image names, stored on the map |
 | `NOAUTOMAPPING` | read and ignored by the server (client-side only) |
 | `LOADFULLMAP` | keep every segment loaded |

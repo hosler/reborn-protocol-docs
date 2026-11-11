@@ -1,4 +1,4 @@
-# String Types: A Tragedy in Three Acts
+# String Types: A Tragedy in Two Acts
 
 The Reborn protocol has two methods to encode strings on the wire, plus a framing detail that looks like a third. The methods are not interchangeable. Some code uses the same name for different methods. This causes errors.
 
@@ -80,7 +80,7 @@ def write_gstring(string_data):
     return bytes([length + 32]) + encoded
 ```
 
-## Type 3: The Packet Newline (Not a String Type)
+## The Packet Newline (Not a String Type)
 
 The reader of a packet bundle splits the stream on newline characters (0x0A). Every packet
 ends with one: the server's send queue appends `'\n'` to each packet
@@ -179,7 +179,7 @@ Do not use only "gstring" without context.
 | Packet | String Type | Field |
 |--------|-------------|-------|
 | PLI_LEVELWARP | Read-to-end | Level name (after X, Y) |
-| PLI_TOALL | Length-prefixed | Chat message (`readString(readGUChar())`, `server/src/player/Player.cpp:1765`) |
+| PLI_TOALL | Length byte on the wire, read-to-end by the server | Chat message. Reference quirk: `readString(readGUChar())` (`server/src/player/Player.cpp:1765`) converts the length to its decimal text (gs2lib `CString.cpp:133-138`) and uses that as a delimiter (gs2lib `CString.cpp:272-291`), so the length is never used as a length and the message is cut at the first occurrence of those digits |
 | PLO_LEVELNAME | Read-to-end | Level name (entire payload) |
 | PLO_LEVELLINK | Read-to-end | Link data |
 | PLO_FILESENDFAILED | Read-to-end | Filename |

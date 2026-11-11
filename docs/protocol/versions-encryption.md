@@ -408,7 +408,7 @@ to GEN_5 are sent as `[uint16 length][payload]`.
 | **GEN_6** | Declared (`ENCRYPT_GEN_6 = 5`) but **not implemented**. On receive it falls into the same `>= ENCRYPT_GEN_5` branch as GEN_5 (no dedicated case), but `CEncryption::decrypt` treats it as a no-op, so the XOR pass is silently skipped. On send the framing is **not** GEN_5-style: the outbound queue sends GEN_6 raw, with no compression, no length prefix and no per-packet newline (gs2lib `CFileQueue.cpp:162-178`, and `:62,95-103` for the newline and `PLO_RAWDATA` rules). |
 
 The two zlib rows use `zuncompress2I`, not `zuncompressI`. `zuncompress2` retries a body
-whose Adler-32 check fails as raw DEFLATE (it strips the 2-byte header and 4-byte trailer),
+whose Adler-32 check fails as raw DEFLATE (it strips the 2-byte header; the source comment also mentions a 4-byte trailer, which the code does not remove),
 a workaround for a bug in the 2.x client's zlib (gs2lib `CString.cpp:936-959`). If that
 retry also fails, the call returns an empty buffer (`CString.cpp:960-976`); there is no
 fallback to treating the body as raw data. The decompression buffer defaults to 65,536

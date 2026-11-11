@@ -39,7 +39,7 @@ For the canonical wire-width and encoding notes, see
 |----|------|---------------|
 | 0 | IMAGE | `[GCHAR len][string]` |
 | 1 | SCRIPT | **`[GSHORT len][raw]`** (2-byte length). A MODERN-generation server always sends len 0 because scripts come via the npc-server; other generations send `getClientSideScript()` (`PropertySerializers.cpp:553-557`) |
-| 2 | X | `[GCHAR]` TileCoord: `tile = (byte-32)/2`. The value is negative when the decoded value (wire byte minus 32) is ≥ 216, which is wire bytes 248-255 and 0-31 (`PropertySerializers.cpp:487-501`). The writer remaps half-tile 223 to 224 so the byte never becomes a newline (`:477-481`) |
+| 2 | X | `[GCHAR]` TileCoord: `tile = (byte-32)/2`. The value is negative when the decoded value (wire byte minus 32) is ≥ 216, which is wire bytes 248-255 and 0-31 (`PropertySerializers.cpp:487-501`). The writer remaps half-tile 223 to 224 (`:477-481`). The source comment says this avoids a newline, but the wire byte for 223 is 255; the half-tile that gives `0x0A` is 234, which is not remapped |
 | 3 | Y | `[GCHAR]` TileCoord (same as X) |
 | 4 | POWER | `[GCHAR]` hp in half-hearts (`NPCProp::HALFHEARTS` in the source enum) |
 | 5 | RUPEES | **`[GINT3]` (3 bytes)** (*not* a direction; `NPCProp::GRALATS` in the source enum) |

@@ -203,8 +203,12 @@ never calls `sendNCLoginToPlayer`. To get the address, the client sends
 `PLI_NPCSERVERQUERY` with message `"location"` and receives the reply
 (`PlayerRCPackets.cpp:1590-1602`). The server also pushes it unsolicited to every RC
 after `PLI_RC_SERVEROPTIONSSET` (`PlayerRCPackets.cpp:127`) and after a rights change that
-grants `PLPERM_NPCCONTROL` to a connected RC (`PlayerRCPackets.cpp:922`). Revoking it
-disconnects that account's NC session instead (`:913-918`). A client that waits for it at login waits forever.
+sets `PLPERM_NPCCONTROL` for a connected RC (`PlayerRCPackets.cpp:922`). Clearing it
+disconnects that account's NC session instead (`:913-918`). Reference quirk: the trigger is
+`changed_rights = account.adminRights ^ n_adminRights` (`PlayerRCPackets.cpp:882`), and
+`account` there is the account of the RC that sets the rights, not the target's. The branch
+runs when the setter's NPCCONTROL bit differs from the new mask, whether or not the target's
+own bit changed. A client that waits for it at login waits forever.
 
 ### PLPERM rights bits and per-packet gating
 
@@ -230,7 +234,12 @@ MODIFYSTAFFACCOUNT (account add, delete and set) `:405`, `:439`, `:702`, BAN
 `:425` (inside ACCOUNTADD), `:732`, `:1040`, VIEWATTRIBUTES `:517`, `:545`,
 RESETATTRIBUTES `:562`, SETATTRIBUTES (another player) or SETSELFATTRIBUTES (self) `:213`, `:632`,
 WARPTOPLAYER `:783`, SETRIGHTS (view another account's rights, and set) `:807`, `:842`,
-SETCOMMENTS `:972`. WARPTO and SUMMON gate the in-game chat commands instead
+SETCOMMENTS `:972`. Other gates: MODIFYSTAFFACCOUNT also guards the protected-file checks
+(`PlayerRCPackets.cpp:1267`, `:1317`) and the `/restartserver`, `/reloadserver` and
+`/updateserverhq` RC chat commands (`server/src/Server.cpp:2083-2099`); UPDATELEVEL guards the
+`update level` chat command (`PlayerClient.cpp:1013`) and `/updatelevel` and `/updatelevelall`
+(`Server.cpp:2055`, `:2069`); SETRIGHTS also gates changing another player's gralats when
+`normalAdminsCanChangeGralats` is off (`server/src/player/PlayerProps.cpp:1210`). WARPTO and SUMMON gate the in-game chat commands instead
 (`server/src/player/PlayerClient.cpp:961`, `:980`). NPCCONTROL gates the NPC-server address only.
 
 Rights-set rules (`PLI_RC_PLAYERRIGHTSSET`, `PlayerRCPackets.cpp:861-880`): an RC without

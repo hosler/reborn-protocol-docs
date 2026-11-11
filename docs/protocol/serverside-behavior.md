@@ -31,7 +31,10 @@ clientside. See the source reference below.
   or the level is a segment of a bigmap (links are always sent there)
 - Server does NOT send sign data to clients, **unless** `clientsidesigns = true`
 - The modern path (`PlayerClient.cpp:1478-1486`) applies this gate. The original-generation
-  path sends links and signs unconditionally (`PlayerClientOriginal.cpp:156`, `:159`)
+  path sends links and signs without the NPC-server conditions (`PlayerClientOriginal.cpp:156`,
+  `:159`), but still only in the branch that sends the board: not when the level was already
+  entered this session or the client's cache is current (`PlayerClientOriginal.cpp:132-137`,
+  `:141-168`)
 
 ### When `serverside = false`
 - Server sends PLO_LEVELLINK packets to clients when entering levels
@@ -54,7 +57,7 @@ If `serverside = false`, clients must do these tasks:
      (`PlayerClient.cpp:1457-1486`)
    - Format: "destlevel x y width height destx desty" (space-separated,
      `LevelLink.cpp:71-74`). The destination level name can contain spaces, so a parser takes
-     the last seven space-separated words as the numeric fields (`LevelLink.cpp:76-90`)
+     the last six space-separated words as the numeric fields (`LevelLink.cpp:82-98`)
    - Coordinates are in tiles (0-63), not pixels
 2. **Monitor player position** to detect link collisions
 3. **Send PLI_LEVELWARP** when player touches a link

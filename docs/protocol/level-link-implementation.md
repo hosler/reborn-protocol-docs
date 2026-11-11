@@ -33,10 +33,13 @@ When an NPC-server is present and none of the other conditions holds, the server
 links itself and warps the player (`PlayerClient.cpp:1843-1895`). It skips this on bigmaps
 (`:1855-1859`) and leaves out probable map links (see
 [Edge Link Filtering](#edge-link-filtering)) when the level is on a map. The pre-2.x client
-path sends links on every level entry (`PlayerClientOriginal.cpp:156`).
+path sends links without the NPC-server conditions, but only in the branch that sends the
+board (`PlayerClientOriginal.cpp:141-156`); it sends none when the level was already entered
+this session or the client's cache is current (`:132-137`).
 
 **Critical Implementation Note**: This data is NOT a GSTRING (length-prefixed string).
-The server sends raw string data until a newline character (0x0A). This difference has
+The string runs to the end of the packet; the only newline is the packet terminator
+(`server/src/level/Level.cpp:165`). This difference has
 caused many parsing errors.
 
 ### Link Data Format

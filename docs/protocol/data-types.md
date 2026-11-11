@@ -303,8 +303,11 @@ interpreted as signed 8-bit values (`-40..-1`) before division by two. This is t
 (`server/src/utilities/PropertySerializers.cpp:487-501`). The writer
 (`PropertyTileCoordinate::serialize`, `PropertySerializers.cpp:473-485`) writes the
 half-tile byte without the +32 check, so for negative values the wire byte can be below
-32, and it replaces an encoded 223 with 224 so that the byte never becomes the packet
-newline. A reader of these two properties must therefore accept bytes below 32.
+32, and it replaces a half-tile value of 223 with 224. The source comment says 223 would
+overflow to the newline, but the arithmetic does not support that: the wire byte is
+`(223 + 32) & 0xFF = 255`. The value that produces `0x0A` is 234 (-11 tiles), which is not
+remapped, so the writer can still emit a newline byte there (gs2lib `CString.cpp:1724-1731`
+only throws on 233). A reader of these two properties must therefore accept bytes below 32.
 
 ## Player Property Data Types
 
