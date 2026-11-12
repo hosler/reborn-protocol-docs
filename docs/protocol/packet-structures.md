@@ -1557,6 +1557,11 @@ it after removing the NPC from the old level and before it sets the new one.
 [GCHAR: signature]   // Always 73 (0x49): "more than eight players will be playing"
 ```
 
+**What the original clients do with the byte** (2.17 to 2.31): `1` makes the client quit; `0`
+makes it quit unless it is connected to the loopback address; every other value, the
+reference's 73 included, is ignored. So a server must never send 0 or 1 here
+([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+
 ### PLO_NPCSETSCRIPT (26) - NPC Set Script
 **Trigger**: Not sent by the reference server. The enum comment gives the layout and
 says the packet existed in clients 1.31 to 2.03, where it hot-swapped an NPC's script
