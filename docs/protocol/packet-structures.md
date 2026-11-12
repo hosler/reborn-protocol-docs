@@ -363,6 +363,10 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 [STRING: weapon_name] // Weapon name to remove
 ```
 
+**Original clients** (1.28 beta 2 and later): when a script destroys an NPC that is one of
+the player's weapons, the 2.05 client sends this id with the weapon name instead of
+`PLI_NPCDEL (22)` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), weapons section).
+
 ### PLI_PACKETCOUNT (31) - Packet Count Check
 **Trigger**: Client reports how many packets it has sent
 ```
@@ -381,6 +385,10 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 // If type > 0:
 [GINT3: npc_id]       // Source NPC ID
 ```
+
+**Original clients** (1.38 and later): the 2.05 client only ever sends type 0, a built-in
+weapon by item index. Type 1 (copy an NPC's script as a weapon by `GINT3` NPC id) is not sent
+by that build ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), weapons section).
 
 ### PLI_UPDATEFILE (34) - File Update Check
 **Trigger**: Client checks if local file is current
@@ -1635,6 +1643,12 @@ for older clients (`Weapon.cpp:194-199`). The client fetches the code with
 `PLI_UPDATESCRIPT (158)`; the answer is `PLO_WEAPONBYTECODE2 (140)` or `PLO_WEAPONBYTECODE (132)`.
 A default weapon (`PLO_DEFAULTWEAPON (43)`) skips all of this.
 
+**Original clients**: a weapon name the player already holds is ignored, so re-sending a
+weapon does not replace its script. A new weapon gets the `playerenters` event. In the
+classic script, line breaks are `§`. That is byte `A7` from a Latin-1 server and the two bytes
+`C2 A7` from a UTF-8 server ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); public-server run in
+[`client-internals/decomp-findings-2026-10-25-l/04-public-server-run.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-l/04-public-server-run.md)).
+
 ### PLO_NPCWEAPONDEL (34) - NPC Weapon Deleted
 **Trigger**: The server removes a weapon from the player
 ```
@@ -1723,6 +1737,9 @@ chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1
 [GCHAR: weapon_type] // LevelItemType id of the default weapon (0-24, see the PLO_ITEMADD table)
 ```
 (`server/src/object/Weapon.cpp:171`.)
+
+**Original clients**: the byte is the item index 0 to 24 (bow, bomb, sword and so on), and the
+client adds that built-in weapon ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_HASNPCSERVER (44) - Has NPC Server
 **Trigger**: Server indicates NPC-Server presence
@@ -2336,6 +2353,10 @@ PM servers, global PMs and buddy tracking (gs2lib `IEnums.h:311`).
 ```
 // No additional data - clears weapon list
 ```
+
+**Original clients**: the server sends it before the weapon list. What a client clears
+depends on the build: 4.20r8 clears its weapon and class script lists; 5.00r7 clears every
+loaded level and the level caches ([`protocol/v4x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v4x-clients.md), [`protocol/v5x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5x-clients.md)).
 
 ### PLO_LOADGANI (195) - Load GANI
 **Trigger**: Always sent in response to `PLI_UPDATEGANI (157)` (after the optional
