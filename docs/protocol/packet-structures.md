@@ -152,6 +152,16 @@ client has already counted down to 2.75 s when it sends the packet
 (`PlayerClientPackets.cpp:222-225`). So a value of 55 means 2.8 s remaining. The reference
 defines no default value.
 
+**What the original clients write in the third byte.** The 2.05 client does not write a
+player id there. It writes `power + 8`, where bit 3 (value 8) marks the bomb as the
+sender's own. A receiver takes the power as `v & 7` and bit 3 as "mine". The reference
+reads the same byte as `(player << 2) | power`, so the two disagree for any byte with bit
+3 set. A captured 2.05 bomb carried x 78, y 28, power byte 9 (power 1 plus the owner flag)
+and fuse 55 ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), board-change-on-the-wire section).
+
+When a bomb destroyed bushes in that capture, the other player on the level (not the
+bomb's owner) sent one `PLI_BOARDMODIFY` per destroyed 2×2 patch, eight in one frame.
+
 ### PLI_BOMBDEL (5) - Remove Bomb
 **Trigger**: Bomb explodes or is removed
 ```
@@ -348,6 +358,9 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 [GUCHAR: tile_y]     // Y position (in half-tiles)
 [GUCHAR: power]      // Explosion power
 ```
+
+**Original clients** (1.31 and later): `power` is written with the same owner bit as
+`PLI_BOMBADD`, power + 8 when the explosion is the sender's ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLI_PRIVATEMESSAGE (28) - Private Message
 **Trigger**: Player sends PM to other players
@@ -1401,6 +1414,9 @@ against it.
 The server-built form is `server/src/level/Level.cpp:2098`. The relay of a client's bomb
 prepends the sender id to the client body (`server/src/player/packets/PlayerClientPackets.cpp:237`).
 
+**Original clients**: power is `v & 7`; bit 3 (value 8) marks the bomb as belonging to the
+player whose id leads the packet ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLO_BOMBDEL (12) - Bomb Removed
 **Trigger**: Bomb explodes or is removed
 ```
@@ -1410,6 +1426,9 @@ prepends the sender id to the client body (`server/src/player/packets/PlayerClie
 There is **no** player id. The server builds `>> x >> y` (`server/src/level/Level.cpp:2138`),
 relays the client's `PLI_BOMBDEL` body unchanged (`PlayerClientPackets.cpp:248`), and uses the
 same two bytes to roll back a refused bomb (`PlayerClientPackets.cpp:233`).
+
+**Original clients**: the client removes the bomb at exactly that point; there is no
+tolerance ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_TOALL (13) - Chat Message
 **Trigger**: Player sends public chat
@@ -1658,6 +1677,9 @@ A default weapon (`PLO_DEFAULTWEAPON (43)`) skips all of this.
 ```
 (`server/src/level/Level.cpp:2224`; the relay of a client's explosion is
 `server/src/player/packets/PlayerClientPackets.cpp:855`.)
+
+**Original clients**: the 2.05 client takes `power & 7`, clamped to 1 to 3, and bit 3 (value
+8) as "owned by that player" ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_PRIVATEMESSAGE (37) - Private Message
 **Trigger**: Player receives PM
