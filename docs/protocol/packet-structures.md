@@ -330,6 +330,25 @@ documented only in a comment. The server does not parse them. It forwards the ra
 `PLO_SHOWIMGPLAYER (32) >> short player_id << body` to nearby players, excluding the
 sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 
+**What the body is.** In the original clients (2.05 to 2.31) this is the list of images the
+sender's weapon scripts show (`showimg` and the `changeimg*` commands), sent as changes
+against the list sent last ([`client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md); [`client-internals/id24-205.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/id24-205.md)):
+
+- A record starts with `0x2A + index` (index 0 to 199). Tag bytes `0x20 + tag` follow, each
+  with its data. A byte of `0x2A` or more starts the next record. An unknown tag skips one
+  data byte; a tag with no data ends the text.
+- Tags: 0 name (`GCHAR` length + bytes; empty removes the image), 1 x, 2 y, 3 layer − 1,
+  4 visible part (`0x20` whole image, or `0x21` + left and top as two 7-bit bytes each, then
+  width and height), 5 red, green, blue and alpha over 200, 6 zoom over 10, 7 draw order −
+  0x52, 8 mode ([`client-internals/decomp-findings-2026-10-25-g/image-text-format.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-g/image-text-format.tsv)). 2.05 sends tags 0 to 6 only.
+- A leading `0x29` (`GCHAR` 9) marks a **full** list: the receiver then removes every image
+  of that player the text did not name. With no images the full list is the marker alone,
+  which is the single byte every real client was seen to send.
+- A full list goes out when a countdown wraps: every 61st call in 2.05, every 102 ticks in
+  2.17.1 to 2.31. That fits the ~5.1 s period seen on the wire. An empty text is not sent.
+- 2.05 sends a UDP copy when it can and the TCP copy only when UDP does not reach every
+  player in the level; 2.31 always sends the TCP copy.
+
 ### PLI_HURTPLAYER (26) - Hurt Player
 **Trigger**: Player damages another player
 ```
@@ -1613,6 +1632,11 @@ nearby players (`server/src/player/packets/PlayerClientPackets.cpp:816`).
 [IMAGE_DATA...]      // The client's showimg body, unchanged
 ```
 The NPC form of this packet is `PLO_SHOWIMGNPC (166)`.
+
+**Original clients**: the receiver applies the record format described under
+`PLI_SHOWIMGPLAYER (24)` to that player's images. A new image starts with layer 1, colours 200
+each, zoom 10 and mode 0, and fields other than the name apply only to an image that already
+exists ([`client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md)).
 
 ### PLO_NPCWEAPONADD (33) - NPC Weapon Added
 **Trigger**: Player gains a weapon (login, or a script gives it)
