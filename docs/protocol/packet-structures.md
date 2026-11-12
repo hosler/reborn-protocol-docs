@@ -285,11 +285,18 @@ documented only in a comment. The server does not parse them. It forwards the ra
 [STRING: flag_data]  // Format: "flag_name=value" or "flag_name"
 ```
 
+**Original clients** (1.21 and later; read from the 2.05 sender, [`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)):
+- The body is the whole rest of the message, `name` or `name=value`. There is no length prefix.
+- A flag whose name starts with `local.` is never sent. Those stay on the client.
+
 ### PLI_FLAGDEL (19) - Delete Flag/Variable
 **Trigger**: Player/script deletes a flag
 ```
 [STRING: flag_name]  // Flag name to delete
 ```
+
+**Original clients** (1.21 and later): the body is the rest of the message, the flag name
+only. `local.` flags are never sent, as with `PLI_FLAGSET` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLI_OPENCHEST (20) - Open Chest
 **Trigger**: Player opens a treasure chest
@@ -1586,6 +1593,11 @@ reading it. The field names come from the commented-out reads at
 [STRING: flag_data]  // "flag_name=value" format
 ```
 
+**Original clients**: the body may be `name` alone or `name=value`. The 2.05 client adds the
+flag **only if it is not already set**, so a `PLO_FLAGSET` for an existing name does not
+change its value on that client. To change a value, delete the flag first with
+`PLO_FLAGDEL (31)` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), player-state section).
+
 ### PLO_NPCDEL (29) - NPC Deleted
 **Trigger**: The server removes an NPC from the level
 ```
@@ -1604,6 +1616,9 @@ The server writes `>> (int)` (`server/src/Server.cpp:1637`).
 ```
 [STRING: flag_name]  // Flag name to delete
 ```
+
+**Original clients**: the body is the rest of the message, the flag name only; the client
+removes the flag ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_SHOWIMGPLAYER (32) - Show Image
 **Trigger**: Player displays image. The server relays the client's `PLI_SHOWIMGPLAYER` body to the
