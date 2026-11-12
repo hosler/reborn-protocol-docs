@@ -321,6 +321,10 @@ documented only in a comment. The server does not parse them. It forwards the ra
 [STRING: filename]   // Requested file path
 ```
 
+**Original clients** (1.21 and later): the file name is the rest of the packet, no length
+prefix ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)). At login 2.22 sends `PLI_UPDATEFILE (34)` for the default images (sword, shield,
+body, bomb) and then 23 for the rest.
+
 ### PLI_SHOWIMGPLAYER (24) - Show Image
 **Trigger**: Player displays an image to others
 ```
@@ -388,6 +392,9 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 [GUINT5: mod_time]   // Local file modification time
 [STRING: filename]   // File to check
 ```
+
+**Original clients**: first sent by 1.42 (NewMain). 5.00r7's update-package downloader also
+uses 34 (with a modification time) and `PLI_VERIFYWANTSEND (47)` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`protocol/v5x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5x-clients.md)).
 
 ### PLI_ADJACENTLEVEL (35) - Request Adjacent Level
 **Trigger**: Client requests neighboring level data
@@ -1813,11 +1820,18 @@ only when the `sendplayertriggers` option is on (the default).
 > PLO_LARGEFILEEND   (69): [filename]
 > ```
 
+**Original clients** (2.17 to 2.31): the client stores the name; 2.31 also clears the stored
+size ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+
 ### PLO_LARGEFILEEND (69) - Large File End
 **Trigger**: Large file transfer completes
 ```
 [STRING: filename]   // Completed file name (raw, to end of packet)
 ```
+
+**Original clients** (2.17 to 2.31): only if the name equals the one stored from 68 does the
+client process the accumulated stream as one received file. A mismatched name drops it
+([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
 
 ### PLO_RC_CHAT (74) - RC Chat
 **Trigger**: RC client chat message
@@ -1853,6 +1867,9 @@ NPC-server's machine. The enum comment says 5.07 and later clients do not handle
 ```
 [GUINT5: file_size]  // File size in bytes
 ```
+
+**Original clients** (2.17 to 2.31): the `GINT5` size is stored; nothing else happens on this
+packet ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
 
 ### PLO_RAWDATA (100) - Raw Data
 **Trigger**: Raw binary data transfer. The file queue emits it only for clients on the
@@ -1933,6 +1950,10 @@ of the *following* packet. The `PLO_FILE (102)` packet follows it.
 ```
 [STRING: package]    // Completed package name
 ```
+
+**Original clients**: fires the script event `onUpdatePackageDownloaded`, and
+`onPackagesDownloadComplete` after the last one. 4.20r8 restarts itself when its own
+executable was in the package ([`protocol/v4x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v4x-clients.md); [`protocol/v5x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5x-clients.md)).
 
 ### PLO_BOARDLAYER (107) - Board Layer
 **Trigger**: Additional level layer data, sent after the board on level entry. Sent as a raw
