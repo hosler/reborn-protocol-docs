@@ -279,6 +279,7 @@ NPC ids are GINT3 everywhere.
 | PLI_NC_WEAPONDELETE | 118 | raw weapon name |
 | PLI_NC_CLASSDELETE | 119 | raw class name |
 | PLI_NC_LEVELLISTGET | 150 | empty |
+| PLI_NC_LEVELLISTSET | 151 | the edited level list (sent by the NPC Control client's level-list editor) |
 
 ### NC — PLO (server → client)
 
@@ -297,6 +298,31 @@ NPC ids are GINT3 everywhere.
 | PLO_NC_WEAPONLISTGET | 167 | repeated `gchar(len)+weaponName` (non-default weapons) |
 | PLO_NC_CLASSDELETE | 188 | raw class name |
 | PLO_NC_WEAPONGET | 192 | (≥ NCVER_2_1) `gchar(len)+name` + `gchar(len)+image` + script (`\n`→`\xa7`) |
+
+#### What the original NPC Control client does
+
+The following is from static reads of the original NPC Control client (2002 and 2004 builds),
+reported in [`tools/npc-control.md`](https://github.com/squirelworks/Graal_analysis/blob/main/tools/npc-control.md) and [`protocol/npc-control.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/npc-control.md). It is not verified against the reference.
+
+- **Routing on the NC socket.** Received ids 33, 80, 157 to 164 and 167 go to the NC handler;
+  every other id, `PLO_DISCMESSAGE (16)` included, goes to the RC handler.
+- **Which control sends which id.** 103 when the NPC list is opened, on Enter and for
+  Attributes; 104 for Delete (after a confirm); 105 Reset; 106 Script; 107 Quick warp or the
+  warp dialog; 108 Edit flags; 111 the Add NPC dialog; 112 opening a class; 114 the Local NPCs
+  dialog; 115 and 150 are console buttons; 116 opens a weapon; 118 deletes one.
+- **One editor, many saves.** All NC texts open in one shared editor window with a mode.
+  Save sends 109, 110, 113, 117 or 151 according to the mode. Attributes (157) and level dumps
+  (164) are view-only and can only be saved locally as `.rtf`.
+- **`PLI_NC_NPCADD (111)` types.** The Add NPC dialog's type is one of `OBJECT`, `ANIMAL`,
+  `POLICE`, `HORSE`, `BOAT`, `HOUSEC`.
+- **`PLO_NC_NPCADD (158)`.** The client accepts the 50/51/52 props in any order and any subset,
+  so the level-only update the reference sends on a level change works.
+- **Class delete.** 119 and 188 are handled from the 2004 build; the 2002 build has no class
+  delete button and does not handle 188.
+- **`PLO_NC_WEAPONLISTGET (167)`** is read as repeated length-prefixed names to the end of the
+  packet.
+- Not yet measured: the reply after 114 (local NPCs), and whether the 33 script length
+  changes for large scripts.
 
 ### NC login sequence
 
