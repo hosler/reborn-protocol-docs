@@ -554,6 +554,11 @@ string, splits it on newlines and discards the result. The request in the other
 direction is `PLO_HASPROCESSRUNNING (183)`, which the client answers with
 `PLI_PROCESSRUNNING (45)` (gs2lib `IEnums.h:76`, `:304`).
 
+**Original clients** (2.17 and later, not 3.04): the body is the client's list of open window
+titles, not process names. 2.17 sends it just before the login props without being asked;
+2.22 sends it in answer to `PLO_LISTPROCESSES (182)`, and 4.20r8 lists the titles of all open
+windows ([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md); [`protocol/v4x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v4x-clients.md)).
+
 ### PLI_PROCESSRUNNING (45) - Process Running Reply
 **Trigger**: Client answers `PLO_HASPROCESSRUNNING (183)`
 ```
@@ -561,6 +566,10 @@ direction is `PLO_HASPROCESSRUNNING (183)`, which the client answers with
 ```
 Layout from the gs2lib `IEnums.h:76` comment. The reference server registers no handler
 for this id.
+
+**Original clients** (2.17 and later): the flag is 1 if the string from
+`PLO_HASPROCESSRUNNING (183)` occurs anywhere in the client's own list, else 0
+([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
 
 ### PLI_ENTERLEVEL (46) - Level Entered
 **Trigger**: Client entered a new level
@@ -2240,6 +2249,14 @@ is commented out because it crashes Windows v6 clients (`server/src/player/Playe
 ```
 // No additional data
 ```
+
+**Original clients**: 2.17 to 2.31 answer with `PLI_PROCESSLIST (44)`. In 5.00r7, 182 and 183 are
+a process scan used as an anti-cheat check ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv); [`protocol/v5x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5x-clients.md)).
+
+`PLO_HASPROCESSRUNNING (183)`, its sibling, carries the names to look for as the rest of the
+packet. `PLO_TAKESCREENSHOT (184)` carries a file name: 2.17 to 2.31 accept it only with a
+`.png` extension, save a screenshot under the screenshots folder and send nothing back
+([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
 
 ### PLO_BOARDHEIGHTS (185) - Board Height Layer
 **Trigger**: The server sends this packet when it delivers a gmap segment with height
