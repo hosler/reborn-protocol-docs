@@ -372,6 +372,9 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 warning when `count` differs from the server's own packet counter, or when that counter
 is above 10000. It then resets the counter to 0. It sends nothing back.
 
+**Original clients**: only 1.33 to 1.39 have a send site for it; 2.05 and later do not send it,
+so the reference's check never runs for them ([`client-internals/version-profiles/v133-v139.toml`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/version-profiles/v133-v139.toml); [`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md)).
+
 ### PLI_WEAPONADD (33) - Add Weapon
 **Trigger**: Player gains a weapon
 ```
@@ -411,6 +414,10 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 [STRING: language]   // Language code (e.g., "English")
 ```
 
+**Original clients**: first sent by 2.02 rev2. 2.17 to 2.31 send it first after login
+(`English` seen), followed by `PLI_TAMPERCHECK (39)`; 6.01r1 and 6.03r7 send it right after
+login with no 39 ([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md); [`protocol/v6x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v6x-clients.md)).
+
 ### PLI_TRIGGERACTION (38) - Trigger Action
 **Trigger**: Player activates a trigger/sign action
 ```
@@ -424,11 +431,26 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 **Trigger**: Client reports hashes of parts of its own memory
 ```
 [GINT5: memory_hash1]  // layout from the gs2lib IEnums.h:71 comment
-[GINT5: memory_hash2]
+[GINT5: memory_hash2]  // (the real clients send 10 raw bytes, constant per build; see below)
 ```
 **Source**: gs2lib `IEnums.h:71` names it `PLI_TAMPERCHECK` and gives the layout in a
 comment. The server handler reads the packet as one string and discards it
 (`msgPLI_TAMPERCHECK`, `PlayerClientPackets.cpp:1323-1327`). It is not a map request.
+
+**What the real clients send.** Only 2.17, 2.22 and 2.31 send it; 3.04, 3.153 and 6.x do not.
+It is 10 raw bytes, a constant per build, identical across logins, accounts and login keys
+([`version-profiles/tampercheck-values.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/tampercheck-values.tsv)):
+
+| Client | Bytes |
+|---|---|
+| 2.17 | `2a 7b ad 19 5e 23 12 43 d8 2c` |
+| 2.22 | `25 0e 4d 0f 96 2b 03 ed e6 31` |
+| 2.31 | `29 16 55 b7 60 2e 87 c9 eb 82` |
+
+It is sent right after `PLI_LANGUAGE (37)` at login. 2.17 sends it once. 2.22 sends it again on
+every gmap edge crossing and after every client-initiated level-link request, but not after
+a server-side warp. 2.31 sends it again about every 3.2 s ([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md); [`protocol/lab-checks-2026-10-24.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/lab-checks-2026-10-24.md)). Whether a server
+could reject a different value is untested, since the reference discards it.
 
 ### PLI_SHOOT (40) - Shoot Projectile (v1)
 **Trigger**: Player fires a projectile
@@ -543,6 +565,11 @@ Unverified beyond the gs2lib `IEnums.h:74` comment: the reference server registe
 handler for this id. It falls through to `Player::msgPLI_NULL`, which logs the packet as
 unknown and disconnects the player after the third invalid packet
 (`server/src/player/Player.cpp:283,1657-1675`).
+
+**Original clients** (2.17 and later, not 6.03r7): the client sends one message per click in
+the player list, matching the enum layout: `GSHORT` player id, then 1 to mute or 0 to unmute.
+So a server without a handler disconnects any player who mutes three others within a
+minute ([`protocol/lab-checks-2026-10-24.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/lab-checks-2026-10-24.md), buddy/ignore/mute section).
 
 ### PLI_PROCESSLIST (44) - Process List
 **Trigger**: Client reports its running processes
