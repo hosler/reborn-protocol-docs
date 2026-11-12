@@ -177,6 +177,11 @@ text still works for any message that does not contain those digits. It relays
 `PLO_TOALL >> short id >> char len << message` to every other player that does not have the
 `PLFLAG_NOTOALL` flag set.
 
+**Original clients**: the 2.05 client sends `PLI_TOALL` only when the chat-bar text, lower-cased
+and trimmed, starts with `toall:`. It sends the text after that prefix, trimmed, at most 200
+bytes. All other chat-bar text goes out as the `CURCHAT` player prop instead. 5.00r7 also
+sends 6 for chat-bar `toall` commands ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)).
+
 ### PLI_HORSEADD (7) - Add Horse
 **Trigger**: Player places/spawns a horse
 ```
@@ -356,6 +361,9 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 [GUSHORT: player_id]...        // Player IDs (repeated player_count times)
 [STRING: message]              // Message text
 ```
+
+**Original clients** (1.28 beta 2 and later): the message after the id list is gtokenized
+text, to the end of the packet. Players in jail can PM only RC accounts ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)).
 
 ### PLI_NPCWEAPONDEL (29) - Delete NPC Weapon
 **Trigger**: Player removes weapon from inventory
@@ -1670,6 +1678,12 @@ A default weapon (`PLO_DEFAULTWEAPON (43)`) skips all of this.
 > a raw 16-bit big-endian value. If you decode it as `(b0<<8)|b1`, you get incorrect IDs.
 > Second, the body is a quoted-CSV structure (`"<sender>","Private message:",<msg>`), not
 > a bare message string.
+
+**What the original clients parse.** The 2.05 client reads the body after `from_id` as a
+quoted, comma-separated list and uses the last two items, `"type","message"`. The type is
+a label shown before the text: `"Private message:"`, `"Mass message:"`, `"Server Message:"`,
+`"Guild message:"`, or empty. Mass and guild PMs are the same packet with a different label
+([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)).
 
 ### PLO_PUSHAWAY (38) - Push Away
 **Trigger**: A force pushes the player. The reference server never sends it
