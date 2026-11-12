@@ -340,6 +340,10 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 [GINT3: npc_id]      // NPC ID (if NPC caused damage)
 ```
 
+**Original clients** (1.21 and later): the knockback bytes are written as `(dx + 4) × 16` and
+`(dy + 4) × 16`, so −4 to 4 tiles in 1/16 steps, and the optional `GINT3` is present only when
+an NPC dealt the hit ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), combat-and-objects section).
+
 ### PLI_EXPLOSION (27) - Create Explosion
 **Trigger**: Player creates an explosion effect
 ```
@@ -404,6 +408,9 @@ is above 10000. It then resets the counter to 0. It sends nothing back.
 [GCHAR: tile_y]      // Y position (in half-tiles)
 [GINT3: npc_id]      // NPC ID (optional, if hit came from NPC)
 ```
+
+**Original clients**: sent from 2.01; no call site was matched in 2.22 or 2.31. The power byte
+is the power doubled, as in the server's half-heart units ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLI_LANGUAGE (37) - Set Language
 **Trigger**: Player changes language setting
@@ -1703,6 +1710,16 @@ chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1
 > `PLI_HURTPLAYER (26)` has the identical field layout (with `victim_id` instead of
 > `attacker_id`), `npc_id` also a **GINT3 (3 bytes)**.
 
+**How the 2.05 client applies it** ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), hits section):
+- `dx` and `dy` decode as `(byte − 0x60) / 16`, knockback −4 to 4; `power` decodes as
+  `(byte − 32) / 2` hearts, capped at 1.0 per hit.
+- With 6 or more bytes after the player id, the hit came from an NPC, and distance is
+  measured from that NPC instead of the attacking player.
+- The hit applies only when the attacker (player or NPC) is within 10 tiles and the local
+  player can be hurt at that moment.
+- 40 and `PLO_HITOBJECTS (46)` share one handler with a flag that picks the layout; the same
+  handler takes UDP id 21 (the GS1 `hitplayer` peer message, [`protocol/udp-p2p.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/udp-p2p.md)).
+
 ### PLO_STARTMESSAGE (41) - Start Message
 **Trigger**: Sent once at login with the server's start message
 (`server/src/player/PlayerClient.cpp:519`). The enum comment says 6.037 does not handle it.
@@ -1747,6 +1764,10 @@ chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1
 ```
 (`server/src/Server.cpp:1949` for the player form, `:1955` for the NPC form.)
 
+**How the 2.05 client applies it**: `power` is `(byte − 32) / 2`, capped at 1.0. It hurts the
+local player only when the player's centre is within 2 tiles of `(x, y)` on each axis
+([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), hits section).
+
 ### PLO_STAFFGUILDS (47) - Staff Guilds
 **Trigger**: Server sends staff guild information
 ```
@@ -1769,6 +1790,13 @@ client's `PLI_TRIGGERACTION` body unchanged (`PlayerClientPackets.cpp:1311`). Th
 starts with the same GINT3 npc, GCHAR x and GCHAR y (`PlayerClientPackets.cpp:1056-1057`), so
 every form carries all five fields. It does that
 only when the `sendplayertriggers` option is on (the default).
+
+**How the 2.05 client applies it.** It needs more than 5 bytes. The `action` event fires on
+the local player's scripts only when the source (the NPC if `npc_id > 0`, else the sending
+player) is within 10 tiles; the text is split at the first comma. For the player's own
+weapon scripts, 2.05r2 adds a second gate: the target must be strictly within 2 tiles of the
+player's (1.5, 2) anchor on each axis, and the source must not be the local player. Accepted
+events are queued, and a duplicate of a pending action name is dropped ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`protocol/payload-and-trigger-205r2.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/payload-and-trigger-205r2.md)).
 
 ### PLO_PLAYERWARP2 (49) - Player Warp v2
 **Trigger**: Player warps with GMAP coordinates
