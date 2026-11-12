@@ -22,6 +22,7 @@ implementation guidelines for Reborn servers and clients.
    protocol/encryption
    protocol/versions-encryption
    protocol/packet-structures
+   protocol/client-id-coverage
    protocol/version-gated-behavior
    protocol/npc-properties
    protocol/rc-nc-protocols
