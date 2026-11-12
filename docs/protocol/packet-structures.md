@@ -1221,6 +1221,15 @@ name, which may contain spaces (`server/src/level/LevelLink.cpp:82-98`).
 - The client handles the warp when it walks into the link area.
 - Special values: "playerx"/"playery" mean "keep player's current position" (a stored `-1` is sent as `playerx`/`playery`)
 
+**How the original clients parse it** (2.00, 2.04, 2.05 rev2, 2.17.1, 2.22 and 2.31, static
+reads in [`version-profiles/plo-levellink-layouts.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-levellink-layouts.tsv)). Not verified against the reference:
+- The text is split on spaces and needs at least 5 fields; with fewer the client raises
+  "Wrong link data!". `x y w h` are whole tiles read as floats. `destx` and `desty` are fields
+  5 and 6, or empty, and a literal `-1` becomes `playerx` / `playery`.
+- The destination level is **field 0**. These clients do not take the last six tokens as
+  the numbers, so a level name with a space cannot be linked to them, even though the
+  reference parser accepts one.
+
 ### PLO_BADDYPROPS (2) - Baddy Properties
 **Trigger**: Baddy properties change or player enters level
 ```

@@ -125,6 +125,15 @@ GMAP system handles seamless transitions automatically. This client-side practic
 unverified against the decompiled reference client. The server sends links to clients
 under the conditions in the Packet Structure section, not "for backward compatibility".
 
+#### Where the original client tests a link
+
+A lab test of the 2.05 rev2 client against one server (straight walks only, measured to half
+a tile; [`protocol/link-test-2026-11-04.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/link-test-2026-11-04.md)) found that the client takes a link when **one point** enters the link
+rectangle: the player's centre, (x + 1.5, y + 2), pushed 1 to 1.5 tiles ahead in the walking
+direction. So a 1×1 link that is off that centre line is walked past without triggering.
+2.17.1 and 2.22 also have a helper that builds a default link with `destx` and `desty` preset
+to `playerx` and `playery`, used for editor and edge cases ([`version-profiles/plo-levellink-layouts.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-levellink-layouts.tsv)).
+
 ### Implementation Strategy
 
 ```python
