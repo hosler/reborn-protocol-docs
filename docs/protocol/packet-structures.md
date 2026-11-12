@@ -1471,6 +1471,9 @@ There is no player id. The server-built form is `LevelHorse::getPacket`
 The relay forwards the client's `PLI_HORSEADD` body unchanged
 (`PlayerClientPackets.cpp:261`).
 
+**Original clients**: the 2.05 client caps the bush count at 6 and adds `.gif` when the image
+name has no extension ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), level-data section).
+
 ### PLO_HORSEDEL (18) - Horse Removed
 **Trigger**: The server destroys a horse
 ```
@@ -1479,6 +1482,9 @@ The relay forwards the client's `PLI_HORSEADD` body unchanged
 ```
 There is no player id (`server/src/level/Level.cpp:2390`;
 `server/src/player/packets/PlayerClientPackets.cpp:279`).
+
+**Original clients**: the 2.05 client removes any horse within 2 tiles of that point, not only
+one at the exact position ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_ARROWADD (19) - Arrow Added
 **Trigger**: Player fires arrow
