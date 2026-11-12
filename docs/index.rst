@@ -25,6 +25,7 @@ implementation guidelines for Reborn servers and clients.
    protocol/version-gated-behavior
    protocol/npc-properties
    protocol/rc-nc-protocols
+   protocol/early-generations
    protocol/gmap
    protocol/gserver-behavior
    protocol/level-link-implementation
