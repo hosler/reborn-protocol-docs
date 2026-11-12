@@ -628,6 +628,55 @@ That is `PLI_BUNDLE` ("Bundled packets contain multiple packets"). So a server f
 6.11 clients needs the private key that matches the script's public key. Without it, the
 server cannot read the client stream.
 
+#### What the connector script controls
+
+Because the script builds the login, the 6.11 client's token, header, cipher and **both id
+tables** belong to the server's script, not the client. The script gets these methods on the
+connection object: `connecttogameserver`, `setprotocol`, `sendraw`, `senddata(id, data)`,
+`flush`, `setsslparameters`, `getsslcipher` / `getsslsubject` / `getsslissuer`,
+`setencryptionparsekey`, `setencryptionout(type, key, iv)`, `getpassword`, `setloginaccount`,
+`requestbasefiles`, `setoutdatahandlers`, `clearindatahandlers`, `setindatahandlers`,
+`defaultinhandler(id, data)` and `tclient_setencryptionin(type, key, iv)`. Before `onCreated`
+runs, the client sets `scriptip`, `scriptsslcipher`, `scriptsslsubject` and `scriptsslissuer`
+so the script can check where it came from; if no connector loads, a built-in
+`StartScript_Fail` runs instead. None of this exists in 6.01 or 6.03: they have no connector,
+no RC4 or AES and no script-set id tables. This is from static reads of the Mac 6.11 and
+Windows 6.1.1.3 clients in squirelworks' notes ([`protocol/v6x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v6x-clients.md); [`manual/02-protocol/10-server-defined.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/10-server-defined.md)), not verified against the reference.
+
+- **Outgoing table.** `setoutdatahandlers` loads a 256-entry table from the client's internal
+  message number to a wire id. A negative entry does not send. `0xFE` raises the matching
+  `onSend*` script event instead of sending. Any other value is the packet id.
+- **Incoming table.** `setindatahandlers` takes (wire id, handler) pairs. A handler below
+  `0x5F` is one of 95 native handlers; `0xFE` passes the packet to the script; `0xFF` ignores
+  it; `0xFC` and `0xFD` set the two special ids (the key and bundle roles above). The native
+  handlers are also callable from script by name, about 90 `tclient_*` functions such as
+  `tclient_setplayerprops` and `tclient_setlevelboard`.
+- **Slot order is not wire order**, so a server for 6.11 must send the table. Slot 54 and
+  the slots above 56 have no event, and the login and language messages are sent by the
+  script itself. The named send slots, with the event each raises when it holds `0xFE`:
+
+| Slot | Event | Slot | Event | Slot | Event |
+| ---: | --- | ---: | --- | ---: | --- |
+| 0 | `onSendWantWeaponScript` | 19 | `onSendTakeExtra` | 38 | `onSendLevelWarp` |
+| 1 | `onSendWantClassScript` | 20 | `onSendRemoveExtra` | 39 | `onSendLevelWarpModtime` |
+| 2 | `onSendWantGaniScript` | 21 | `onSendOpenChest` | 40 | `onSendDownloadFile` |
+| 3 | `onSendToAllChat` | 22 | `onSendShot` | 41 | `onSendBoardModify` |
+| 4 | `onSendIsPKer` | 23 | `onSendBaddyProperties` | 42 | `onSendBoardModify2` |
+| 5 | `onSendCarryThrown` | 24 | `onSendBaddyHurt` | 43 | `onSendPreloadLevel` |
+| 6 | `onSendAddHorse` | 25 | `onSendWeaponImage` | 44 | `onSendPlayerProperties` |
+| 7 | `onSendDelHorse` | 26 | `onSendRCChat` | 45 | `onSendNPCProperties` |
+| 8 | `onSendAddBomb` | 27 | `onSendRequestText` | 46 | `onSendFlag` |
+| 9 | `onSendDelBomb` | 28 | `onSendSetText` | 47 | `onSendUnsetFlag` |
+| 10 | `onSendServerWarp` | 29 | `onSendFileDeletion` | 48 | `onSendProjectile` |
+| 11 | `onSendTriggerAction` | 30 | `onSendFolderDeletion` | 49 | `onSendUpdatePackage` |
+| 12 | `onSendFireSpying` | 31 | `onSendFileRename` | 50 | `onSendPrivateMessage` |
+| 13 | `onSendExplosion` | 32 | `onSendFilesMove` | 51 | `onSendUploadStart` |
+| 14 | `onSendWeaponHit` | 33 | `onSendHaveWindow` | 52 | `onSendSaveFile` |
+| 15 | `onSendPlayerHurt` | 34 | `onSendEnterLevel` | 53 | `onSendUploadEnd` |
+| 16 | `onSendDeleteNPC` | 35 | `onSendWantImage` | 55 | `onSendPingAnswer` |
+| 17 | `onSendDeleteWeapon` | 36 | `onSendImageUpdate` | 56 | `onSendWindowList` |
+| 18 | `onSendExtra` | 37 | `onSendImageUpdateCRC` | | |
+
 ### Server-to-client direction
 
 The capture's first server packet starts `01 02 00 01 21 fd`. The reference clients decode
