@@ -186,12 +186,19 @@ text still works for any message that does not contain those digits. It relays
 [STRING: image]      // Horse image filename
 ```
 
+**Original clients**: sent from 1.33 on; the New World beta clients do not send it. The third
+byte is `dir + 4 × bushes` (direction in the low 2 bits), and the image name runs to the end
+of the message with no length prefix ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLI_HORSEDEL (8) - Remove Horse
 **Trigger**: Horse is removed/destroyed
 ```
 [GUCHAR: tile_x]     // X position (in half-tiles)
 [GUCHAR: tile_y]     // Y position (in half-tiles)
 ```
+
+**Original clients**: sent from 1.33 on, not by the New World betas. The server re-emits it
+as `PLO_HORSEDEL (18)` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLI_ARROWADD (9) - Shoot Arrow
 **Trigger**: Player fires an arrow
