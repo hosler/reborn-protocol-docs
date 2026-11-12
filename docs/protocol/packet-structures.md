@@ -1436,6 +1436,9 @@ newline, but its wire byte is 255; 234 is the value that gives `0x0A` and it is 
 (`server/src/utilities/PropertySerializers.cpp:473-485`, sent at
 `server/src/player/PlayerClient.cpp:1263`).
 
+**Original clients**: the warp stays pending until the level data arrives; the client does
+not move the player on this packet alone ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), player-state section).
+
 ### PLO_WARPFAILED (15) - Warp Failed
 **Trigger**: Player warp attempt fails
 ```
@@ -1444,6 +1447,9 @@ newline, but its wire byte is 255; 234 is the value that gives `0x0A` and it is 
 The server writes `<< levelName` (`server/src/player/PlayerClient.cpp:1211`;
 `PlayerClientOriginal.cpp:87`), and `<< level->levelName` from `enterLevel`
 (`server/src/player/PlayerClient.cpp:1294`).
+
+**Original clients**: the 2.05 client ignores the text and shows a short failed-warp state
+([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_DISCMESSAGE (16) - Disconnect Message
 **Trigger**: The server disconnects the player
@@ -1783,6 +1789,10 @@ only when the `sendplayertriggers` option is on (the default).
 
 > The trailing level name (e.g. `"chicken.gmap"`) is easy to miss. The server appends
 > `<< level->levelName` after `gmap_y`. Several parsers stopped at `gmap_y` and dropped it.
+
+**Original clients** (2.17 to 2.31): `z` is read and not used. `gmap_x` and `gmap_y` apply only
+when the level name ends in `.gmap`. They are clamped to the map's grid, and the name is
+replaced by the level in that cell ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
 
 ### PLO_ADDPLAYER (55) - Add Player (Legacy)
 **Trigger**: Player joins server (pre-v5.07)
@@ -2218,6 +2228,21 @@ client showed that it closes the connection and logs in again to the new host wi
 login, with no list-server step. While a 4.x-6.x client is connected to a server whose name starts with
 "login", it draws no characters and no HUD. A `PLO_SERVERWARP` to a server with another
 name ends that mode.
+
+**How the 2.17.1 to 2.31 clients split the text.** The client's comma-text reader skips
+whitespace (bytes 1 to 0x20) before an item. A quoted item ends at its closing quote, two
+quotes in a row are one quote, and an unclosed quote runs to the end. An unquoted item ends
+at a comma or at any byte of 0x20 or less. A comma at the very end adds no item; an empty
+item between commas is kept. A NUL ends the text. So a server name with a space must be
+quoted: `x,Main Server,h,1` reads as five items and connects to the host `Server` ([`client-internals/decomp-findings-2026-10-25-g/03-id178-comma-text.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-g/03-id178-comma-text.md)).
+
+Item 1 becomes the current server's name, without a two-character type prefix when its
+second character is a space. 2.31 also puts it in the window caption: alone if it contains
+"graal" in any case, else after `Graal: `. Lab runs of 2.31 showed that item 1 is not needed
+to connect (a bogus name still works) and that a decoy host in item 0 is never contacted.
+With host and port in other positions the client closes the old connection, makes no new
+one, and shows "The connection couldn't be established!". With only three items it does
+nothing. The old connection closes 2 to 3 ms before the new connection's SYN ([`version-profiles/lab-serverwarp178.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/lab-serverwarp178.tsv)).
 
 ### PLO_RPGWINDOW (179) - RPG Window
 **Trigger**: Sent once at login to clients 2.1 and later
