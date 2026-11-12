@@ -181,6 +181,34 @@ NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 | PLO_NPCSERVERADDR | 79 | `gshort(npcServerPlayerId)` + raw `"ip,port"`. The ip is the RC's own address when that equals the server's local ip, else the NPC-server host (`ns_ip`, or the list server's address for the server when `ns_ip` is `auto`; `NPCServer.cpp:65-68`). Sent only to an RC holding `PLPERM_NPCCONTROL` (`NPCServer.cpp:122-134`) |
 | PLO_RC_MAXUPLOADFILESIZE | 103 | `gint5` upload-size limit in bytes |
 
+#### What the original RC clients send, by build
+
+The following is from static reads of the original RC clients (rc133 from 1999 through the
+2004 build), reported in [`tools/remotecontrol-lineage.md`](https://github.com/squirelworks/Graal_analysis/blob/main/tools/remotecontrol-lineage.md) and [`tools/remotecontrol.md`](https://github.com/squirelworks/Graal_analysis/blob/main/tools/remotecontrol.md), with a 2004 wire capture in [`protocol/rc-capture-2026-11-04.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/rc-capture-2026-11-04.md). Each row lists the
+constant ids at the RC socket's send sites, so ids sent through a computed value are missing
+and each row is a floor. It is not verified against the reference.
+
+| Build | Ids sent |
+|---|---|
+| rc133 | 1, 51–64 |
+| 2000/8/19, 2000/10/25 | 1, 2, 6, 28, 55–58, 61–64, 67–79, 82 |
+| 2001/01/27 | 1, 2, 6, 28, 55–58, 61–64, 68, 70–74, 76–79, 82 |
+| 2001/08/20 | 1, 2, 6, 28, 61–64, 68, 70–79, 82–88 |
+| 2002/01/04 | 1, 2, 6, 28, 61–64, 68–79, 82–88 |
+| 2002/05/02 | 1, 2, 6, 28, 51–54, 61–64, 68–79, 82–92, 94, 96–98, plus the NC ids |
+| 2004 | 2, 6, 28, 51–54, 61–64, 68–76, 78, 79, 82, 84, 86, 88–92, 94, 96–98 (on the wire also 73, 76, 83, 85, 87) |
+
+**Ids 51 to 54 changed meaning.** In rc133, 51 is the account list's Edit (get account), 52
+and 53 are Apply in the account editor, 54 is Delete, 59 gets a player's props and 60 sets
+them. From 2000/8/19 accounts move to 70 to 78, and 51 to 54 are unused until 2002/05/02 brings
+them back as server options and folder config. A server that talks to rc133 cannot use the
+later names for 51 to 54.
+
+**What the 2004 RC handles from the server**: 13, 16, 30, 35, 37, 55–59, 61–70, 72–74, 76, 77, 79,
+100, 103 and 180. Id 55 (`PLO_ADDPLAYER`) creates or updates a player-list row from a
+14-bit id and a prop stream; a new row defaults to 3 hearts, `sword1.gif`, `body.png` and
+`onlinestartlocal.graal`.
+
 ### `getPropsForRCPacket()` blob (inside PLO_RC_PLAYERPROPSGET, after `gshort(id)`)
 
 1. `gchar(len) + account name`
