@@ -203,6 +203,11 @@ text still works for any message that does not contain those digits. It relays
 [GCHAR: power]       // Arrow power/damage (read with `readGChar`, `PlayerClientPackets.cpp:293`)
 ```
 
+**What the original clients write** (1.33 and later; read from 2.05): `flags` is `dir & 3`,
++4 to first remove a matching shot, +8 when the shot is the sender's own. The last byte is
+the projectile type, 0 arrow, 1 fireball, 2 fireblast, 3 nuke, sent as **`type + 33`**, not
+the usual `+ 32` bias ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLI_FIRESPY (10) - Fire Spy
 **Trigger**: Player uses fire spy weapon
 ```
@@ -217,6 +222,8 @@ byte after the sender player ID.
 ```
 // No additional data
 ```
+
+**Original clients**: sent from 1.21; the New World beta clients do not send it ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLI_ITEMADD (12) - Drop Item
 **Trigger**: Player drops an item
@@ -245,6 +252,9 @@ byte after the sender player ID.
 ```
 [GUSHORT: killer_id] // Player ID of the killer
 ```
+
+**Original clients**: first sent by the 1.3 test build ([`manual/02-protocol/04-pli.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/04-pli.md),
+client checks section).
 
 ### PLI_BADDYPROPS (15) - Baddy Property Update
 **Trigger**: Client updates baddy properties (intended to come from the level leader)
@@ -1484,6 +1494,9 @@ There is no player id (`server/src/level/Level.cpp:2390`;
 [GCHAR: power]       // Arrow power
 ```
 
+**Original clients**: the receiver needs at least 5 bytes after the player id and decodes
+the last byte as `b − 33` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLO_FIRESPY (20) - Fire Spy
 **Trigger**: Player uses fire spy
 ```
@@ -1491,11 +1504,16 @@ There is no player id (`server/src/level/Level.cpp:2390`;
 [GCHAR: length_power] // Length and power data
 ```
 
+**Original clients**: the receiver uses only the length part (`byte >> 3`); the low 3 bits
+are ignored ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLO_THROWCARRIED (21) - Throw Carried Object
 **Trigger**: Player throws carried object
 ```
 [GUSHORT: player_id] // Player who threw object
 ```
+
+**Original clients**: dropped when the player id is unknown to the client ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_ITEMADD (22) - Item Added
 **Trigger**: A player drops an item or the server spawns one
