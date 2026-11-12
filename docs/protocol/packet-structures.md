@@ -1680,6 +1680,9 @@ A default weapon (`PLO_DEFAULTWEAPON (43)`) skips all of this.
 ```
 The layout is from the enum comment (gs2lib `IEnums.h:207`).
 
+**Original clients**: the 2.05 client decodes each byte as `v / 16 - 4` and ignores the
+packet unless the player's level is the active level ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLO_LEVELMODTIME (39) - Level Modification Time
 **Trigger**: The server sends it unsolicited on every level entry, after the board and
 chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1499`;
@@ -2059,11 +2062,17 @@ says it "might delete all npcs with an id under 1000" (gs2lib `IEnums.h:273`).
 // No additional data
 ```
 
+**Original clients**: the local player is frozen for 600 ticks (30 s at 50 ms a tick) unless
+`PLO_UNFREEZEPLAYER (155)` comes first. The freeze is skipped while some dialogs are open
+([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+
 ### PLO_UNFREEZEPLAYER (155) - Unfreeze Player
 **Trigger**: Player movement is restored
 ```
 // No additional data
 ```
+
+**Original clients**: ends a freeze from 154 at once ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLO_SETACTIVELEVEL (156) - Set Active Level
 **Trigger**: Set level for receiving objects
