@@ -29,6 +29,7 @@ implementation guidelines for Reborn servers and clients.
    protocol/gserver-behavior
    protocol/level-link-implementation
    protocol/serverside-behavior
+   protocol/udp-peer-channel
 
 .. toctree::
    :maxdepth: 2
