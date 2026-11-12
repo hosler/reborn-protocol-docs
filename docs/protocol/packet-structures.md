@@ -269,6 +269,10 @@ the leader, which is the first player in the level's list (`msgPLI_BADDYPROPS`,
 documented only in a comment. The server does not parse them. It forwards the raw bytes as
 `PLO_BADDYHURT` to the level leader only, and ignores the packet when there is no leader.
 
+**What the original clients write**: the knockback bytes are `(dx + 4) × 16` and
+`(dy + 4) × 16`, the same form as `PLI_HURTPLAYER`; the "midpoint 64" is that encoding for
+`dx = 0`. Sent from 1.21; the New World betas do not send it ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLI_BADDYADD (17) - Add Baddy
 **Trigger**: Player spawns a baddy
 ```
@@ -278,6 +282,9 @@ documented only in a comment. The server does not parse them. It forwards the ra
 [GUCHAR: power]      // Baddy power/health (capped at 12)
 [STRING: image]      // Baddy image filename
 ```
+
+**Original clients**: sent from 1.21, not by the New World betas. The image runs to the end of
+the packet. The server answers with `PLO_BADDYPROPS (2)` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
 
 ### PLI_FLAGSET (18) - Set Flag/Variable
 **Trigger**: Player/script sets a client or server flag
@@ -1248,6 +1255,17 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
 > Prop **4 (POWERIMAGE)** is a power byte followed by a length-prefixed image string.
 > A parser can lose synchronization if it reads power as a bare byte. pyReborn reliably
 > reads ID/X/Y/TYPE. Clients that only need the type can stop after prop 3.
+
+**Original clients**: an unknown baddy id creates the baddy (2.05). What the 2.22 client does
+with the props ([`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md); [`client-internals/baddies-222.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/baddies-222.md)):
+- X and Y (1, 2) are clamped to 0 to 63 tiles and also taken as the start position.
+- POWERIMAGE (4): an empty image means the default image for the type.
+- MODE (5): 0 walk, 1 look, 2 hunt, 3 hurt, 4 bumped, 5 die, 6 swamp soldier, 7 frog jumping,
+  8 octopus ink, 9 dead. On mode 5 the server switches to 9 after 2 s, and 9 removes the
+  baddy on the client.
+- ANI (6) is, in 2.22, the AI step counter, not an animation frame: 44 when looking about
+  starts, 16 when the hunt starts, then 0, 3, 2, 1 while chasing.
+- DIR (7) holds two directions: `v >> 2` the body, `v & 3` the head.
 
 ### PLO_NPCPROPS (3) - NPC Properties  
 **Trigger**: NPC properties change or player enters level
