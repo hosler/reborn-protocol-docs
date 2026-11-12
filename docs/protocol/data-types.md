@@ -332,6 +332,30 @@ Each byte: color index (+ 32 for encoding)
 > width if the first interpretation overruns, leaves bytes, or produces an invalid/decreasing
 > next ID. Never merge partial results from the failed attempt.
 
+#### The colour indexes
+
+Each byte is an index into a fixed table of 20 named colours. This is the table the 2.05
+client holds, with its RGB values ([`client-internals/body-colours-and-attributes.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/body-colours-and-attributes.md); not verified against the reference):
+
+| Index | Colour | RGB | Index | Colour | RGB |
+|---:|---|---|---:|---|---|
+| 0 | white | 255, 255, 255 | 10 | blue | 0, 0, 255 |
+| 1 | yellow | 255, 255, 0 | 11 | darkblue | 0, 0, 198 |
+| 2 | orange | 255, 173, 107 | 12 | brown | 132, 0, 0 |
+| 3 | pink | 255, 132, 132 | 13 | cynober | 0, 255, 255 |
+| 4 | red | 255, 0, 0 | 14 | purple | 255, 0, 255 |
+| 5 | darkred | 206, 24, 41 | 15 | darkpurple | 132, 0, 132 |
+| 6 | lightgreen | 132, 255, 132 | 16 | lightgray | 206, 206, 206 |
+| 7 | green | 0, 255, 0 | 17 | gray | 132, 132, 132 |
+| 8 | darkgreen | 0, 198, 0 | 18 | black | 0, 0, 8 |
+| 9 | lightblue | 132, 132, 255 | 19 | transparent | 0, 0, 0 |
+
+How the client applies them: a body picture is a palette image. Before drawing, palette
+entry 5 takes the skin colour, 6 the coat, 4 the sleeves, 3 the shoes and 1 the belt; entry 0
+always takes colour 18 (black, the outline), and in the stock bodies entry 2 is the clear
+colour. A new 2.05 player is orange, darkred, black, darkred, black (2, 5, 18, 5, 18) with
+`body.png` and `head0.gif`; the reference gives a new account 2, 0, 10, 4, 18 instead.
+
 ### Status Flags (Bitfield)
 
 ```
