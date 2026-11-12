@@ -844,6 +844,30 @@ notes, not confirmed against the reference):
   "1.411 and earlier" and "pre-2.x", which do not cover 2.05. That 2.05 uses this form is
   an observation, not confirmed.
 
+#### How the 2.05 client reads individual props
+
+Several props have a short default form that the server source does not spell out. As the
+2.05 client reads them ([`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md), 2.05 coverage section; summarized in [`manual/02-protocol/06-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/06-props.md)):
+
+| Prop | What 2.05 reads |
+|---|---|
+| 8 SWORDPOWER | a value 0 to 4 alone means the default `sword<n>.gif`; otherwise `power + 30`, then the image as a GSTRING |
+| 9 SHIELDPOWER | 0 to 3 alone are the defaults; otherwise `power + 10`, then the image |
+| 11 HEADGIF | a value below 100 means `head<n>.gif`; otherwise `len + 100`, then the name (at most 100 bytes) |
+| 17 SPRITE | direction + 4 × animation index; `0x80` in one special state |
+| 19 CARRYSPRITE | −1 for none, 0, 200, 201, or tile-based values |
+| 30, 31 IPADDR, UDPPORT | feed the UDP peer channel |
+| 36 RATING | rating = `b0 × 32 + ((b1 & 0x7F) >> 2)`, deviation = `(b1 & 3) × 128 + b2` (the raw GCHAR bytes after −32), which is the reference's packing read byte by byte |
+| 7, 23 | sent by 2.05 as constants: bomb power 10 and effect colours 0 |
+
+Stream-level details of the same client:
+
+- The other-player stream checks the remaining length before multi-byte props and clamps
+  string lengths. The **self** stream does not length-check the fixed-size props 3, 13, 14 and
+  24, so a truncated one reads a few bytes past the end before the loop stops.
+- The self stream needs at least 2 bytes left to start a prop; a lone trailing id byte is
+  dropped (2.00 and 2.05, [`version-profiles/plo-playerprops-layouts.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-playerprops-layouts.tsv)).
+
 ### Packet-context policy is intentional
 
 The shared wire descriptor table does not give each packet context the same semantics.
