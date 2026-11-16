@@ -186,9 +186,9 @@ text still works for any message that does not contain those digits. It relays
 [STRING: image]      // Horse image filename
 ```
 
-**Original clients**: sent from 1.33 on; the New World beta clients do not send it. The third
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): sent from 1.33 on; the New World beta clients do not send it. The third
 byte is `dir + 4 × bushes` (direction in the low 2 bits), and the image name runs to the end
-of the message with no length prefix ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+of the message with no length prefix.
 
 ### PLI_HORSEDEL (8) - Remove Horse
 **Trigger**: Horse is removed/destroyed
@@ -197,8 +197,8 @@ of the message with no length prefix ([`protocol/packet-layouts.md`](https://git
 [GUCHAR: tile_y]     // Y position (in half-tiles)
 ```
 
-**Original clients**: sent from 1.33 on, not by the New World betas. The server re-emits it
-as `PLO_HORSEDEL (18)` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): sent from 1.33 on, not by the New World betas. The server re-emits it
+as `PLO_HORSEDEL (18)`.
 
 ### PLI_ARROWADD (9) - Shoot Arrow
 **Trigger**: Player fires an arrow
@@ -1486,8 +1486,8 @@ There is no player id. The server-built form is `LevelHorse::getPacket`
 The relay forwards the client's `PLI_HORSEADD` body unchanged
 (`PlayerClientPackets.cpp:261`).
 
-**Original clients**: the 2.05 client caps the bush count at 6 and adds `.gif` when the image
-name has no extension ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), level-data section).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`, level-data section; not verified against the reference): the 2.05 client caps the bush count at 6 and adds `.gif` when the image
+name has no extension. The reference server applies no bush cap (`server/src/player/packets/PlayerClientPackets.cpp:266`).
 
 ### PLO_HORSEDEL (18) - Horse Removed
 **Trigger**: The server destroys a horse
@@ -1498,8 +1498,8 @@ name has no extension ([`protocol/packet-layouts.md`](https://github.com/squirel
 There is no player id (`server/src/level/Level.cpp:2390`;
 `server/src/player/packets/PlayerClientPackets.cpp:279`).
 
-**Original clients**: the 2.05 client removes any horse within 2 tiles of that point, not only
-one at the exact position ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the 2.05 client removes any horse within 2 tiles of that point, not only
+one at the exact position. The reference server removes only a horse at exactly that position (`server/src/level/Level.cpp:2404-2412` at GServer-v2 beta4).
 
 ### PLO_ARROWADD (19) - Arrow Added
 **Trigger**: Player fires arrow
