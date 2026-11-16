@@ -189,10 +189,10 @@ text still works for any message that does not contain those digits. It relays
 `PLO_TOALL >> short id >> char len << message` to every other player that does not have the
 `PLFLAG_NOTOALL` flag set.
 
-**Original clients**: the 2.05 client sends `PLI_TOALL` only when the chat-bar text, lower-cased
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`; not verified against the reference): the 2.05 client sends `PLI_TOALL` only when the chat-bar text, lower-cased
 and trimmed, starts with `toall:`. It sends the text after that prefix, trimmed, at most 200
 bytes. All other chat-bar text goes out as the `CURCHAT` player prop instead. 5.00r7 also
-sends 6 for chat-bar `toall` commands ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)).
+sends `PLI_TOALL (6)` for chat-bar `toall` commands.
 
 ### PLI_HORSEADD (7) - Add Horse
 **Trigger**: Player places/spawns a horse
@@ -395,8 +395,10 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 [STRING: message]              // Message text
 ```
 
-**Original clients** (1.28 beta 2 and later): the message after the id list is gtokenized
-text, to the end of the packet. Players in jail can PM only RC accounts ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)).
+**Reported client behaviour** (1.28 beta 2 and later; squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`; not verified against the reference): the message after the id list is gtokenized
+text, to the end of the packet.
+
+The reference server lets a jailed player PM only staff accounts and answers anyone else with a "From jail you can only send PMs to admins (RCs)" message (`server/src/player/Player.cpp:1850-1855`).
 
 ### PLI_NPCWEAPONDEL (29) - Delete NPC Weapon
 **Trigger**: Player removes weapon from inventory
@@ -1754,11 +1756,10 @@ classic script, line breaks are `§`. That is byte `A7` from a Latin-1 server an
 > Second, the body is a quoted-CSV structure (`"<sender>","Private message:",<msg>`), not
 > a bare message string.
 
-**What the original clients parse.** The 2.05 client reads the body after `from_id` as a
-quoted, comma-separated list and uses the last two items, `"type","message"`. The type is
+**What the original clients parse** (reported in squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`; not verified against the reference). The 2.05 client reads the body after `from_id` as a
+quoted, comma-separated list and shows the type before the message (for a message containing a line break the reference server sends more than two items after a blank first one, `server/src/player/Player.cpp:1196-1215`, so which items the 2.05 client takes is not settled). The type is
 a label shown before the text: `"Private message:"`, `"Mass message:"`, `"Server Message:"`,
-`"Guild message:"`, or empty. Mass and guild PMs are the same packet with a different label
-([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)).
+`"Guild message:"`, or empty. Mass and guild PMs are the same packet with a different label.
 
 ### PLO_PUSHAWAY (38) - Push Away
 **Trigger**: A force pushes the player. The reference server never sends it
