@@ -549,9 +549,11 @@ A modern list-server exchange is:
    switches both directions to GEN_5
    (`graal-serverlist/server/src/PlayerConnection.cpp:312-323`).
 4. Send the credential/server-list request as GEN_5. The reference server answers
-   in GEN_5 from then on. Whether the closed production list server's first response
-   bundle is already GEN_5 and begins with type `0x04` is **unverified**: the reference
-   code only shows that the open server switches after parsing the initialization packet.
+   in GEN_5 from then on. The recorded production session
+   (`pyReborn/tests/fixtures/listserver_session_live.json`, 2026-07-25) shows that the
+   closed production list server's first response frames are already GEN_5: each begins
+   with type `0x04`. The reference code alone only shows that the open server switches
+   after parsing the initialization packet.
 
 The open list server has two sibling initialization packets besides `PLI_V2ENCRYPTKEYCL`
 (`graal-serverlist/server/src/PlayerConnection.cpp:23-25`):
