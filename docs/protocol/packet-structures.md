@@ -146,7 +146,7 @@ Property format:
 ```
 [GUCHAR: tile_x]           // X position (in half-tiles)
 [GUCHAR: tile_y]           // Y position (in half-tiles)
-[GUCHAR: player_power]     // Player ID (upper 6 bits) + Power (lower 2 bits)
+[GUCHAR: player_power]     // Player ID (upper 6 bits) + Power (lower 2 bits); clients send `power | 8` for their own bomb (see below)
 [GUCHAR: time_to_explode]  // Timer in 0.05s increments; remaining time = (value + 1) * 50 ms
 ```
 **Source**: `PlayerClient::msgPLI_BOMBADD` (`PlayerClientPackets.cpp:215-242`). The reference
@@ -308,6 +308,8 @@ documented only in a comment. The server does not parse them. It forwards the ra
 ```
 [STRING: flag_data]  // Format: "flag_name=value" or "flag_name"
 ```
+
+The reference server turns `name=` with an empty value into a delete (`PlayerClientPackets.cpp:589-594`).
 
 **Reported client behaviour** (1.21 and later; read from the 2.05 sender; squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference):
 - The body is the whole rest of the message, `name` or `name=value`. There is no length prefix.
@@ -1710,7 +1712,7 @@ reading it. The field names come from the commented-out reads at
 ### PLO_FLAGSET (28) - Flag Set
 **Trigger**: Server or player sets a flag
 ```
-[STRING: flag_data]  // "flag_name=value" format
+[STRING: flag_data]  // "flag_name=value", or "flag_name" alone for a flag with no value
 ```
 
 **Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`, player-state section; not verified against the reference): the body may be `name` alone or `name=value` (the reference server sends `name` alone for a flag with no value, `server/src/player/Player.cpp:1009`). The 2.05 client adds the
@@ -1811,8 +1813,8 @@ classic script, line breaks are `§`. That is byte `A7` from a Latin-1 server an
 
 > There are two important details. First, `from_id` is a **GSHORT** (reborn-encoded), not
 > a raw 16-bit big-endian value. If you decode it as `(b0<<8)|b1`, you get incorrect IDs.
-> Second, the body is a quoted-CSV structure (`"<sender>","Private message:",<msg>`), not
-> a bare message string.
+> Second, the body is a quoted-CSV structure (`"","Private message:",<msg>`, with a blank
+> first item, `server/src/player/Player.cpp:1211-1212`), not a bare message string.
 
 **What the original clients parse** (reported in squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`; not verified against the reference). The 2.05 client reads the body after `from_id` as a
 quoted, comma-separated list and shows the type before the message (for a message containing a line break the reference server sends more than two items after a blank first one, `server/src/player/Player.cpp:1196-1215`, so which items the 2.05 client takes is not settled). The type is
@@ -2559,10 +2561,10 @@ PM servers, global PMs and buddy tracking (gs2lib `IEnums.h:311`).
 > read predicts positions at half value (an odd value flips the sign) and gravity at 4×
 > the intended value for gani names under 128 bytes. No lab test confirms this yet.
 
-### PLO_RESETCLIENT (194) - Clear Weapons
-**Trigger**: Remove all weapons from player
+### PLO_RESETCLIENT (194) - Reset Client
+**Trigger**: Sent at login before the weapon list, to reset the client's state
 ```
-// No additional data - clears weapon list
+// No additional data - resets client state, see below
 ```
 
 The reference enum comment says it deletes non-login weapons and classes and all NPCs, that v5 clients also clear every loaded level and cache, and that v6 clients reset the main game object (gs2lib `IEnums.h:315`). Reported for two builds: 4.20r8 clears its weapon and class script lists; 5.00r7 clears every loaded level and the level caches (squirelworks' client-analysis notes, `protocol/v4x-clients.md`, `protocol/v5x-clients.md`; not verified against the reference). The server sends it at login before the weapon list (`server/src/player/PlayerClient.cpp:494`, weapons at `:581-605`).
