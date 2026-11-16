@@ -473,8 +473,8 @@ the player's weapons, the 2.05 client sends this id with the weapon name instead
 warning when `count` differs from the server's own packet counter, or when that counter
 is above 10000. It then resets the counter to 0. It sends nothing back.
 
-**Original clients**: only 1.33 to 1.39 have a send site for it; 2.05 and later do not send it,
-so the reference's check never runs for them ([`client-internals/version-profiles/v133-v139.toml`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/version-profiles/v133-v139.toml); [`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `client-internals/version-profiles/v133-v139.toml`; `protocol/packet-ids.md`; not verified against the reference): only 1.33 to 1.39 have a send site for it; 2.05 and later do not send it,
+so the reference's check never runs for them.
 
 ### PLI_WEAPONADD (33) - Add Weapon
 **Trigger**: Player gains a weapon
@@ -533,9 +533,9 @@ byte as hearts, while the client byte is in half-hearts.
 [STRING: language]   // Language code (e.g., "English")
 ```
 
-**Original clients**: first sent by 2.02 rev2. 2.17 to 2.31 send it first after login
-(`English` seen), followed by `PLI_TAMPERCHECK (39)`; 6.01r1 and 6.03r7 send it right after
-login with no 39 ([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md); [`protocol/v6x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v6x-clients.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-ids.md`; `protocol/v6x-clients.md`; not verified against the reference): first sent by 2.02 rev2. 2.17 to 2.31 send it first after login
+(`English` seen, reported), followed by `PLI_TAMPERCHECK (39)`; 6.01r1 and 6.03r7 send it right after
+login with no 39.
 
 ### PLI_TRIGGERACTION (38) - Trigger Action
 **Trigger**: Player activates a trigger/sign action
@@ -556,9 +556,8 @@ login with no 39 ([`protocol/packet-ids.md`](https://github.com/squirelworks/Gra
 comment. The server handler reads the packet as one string and discards it
 (`msgPLI_TAMPERCHECK`, `PlayerClientPackets.cpp:1323-1327`). It is not a map request.
 
-**What the real clients send.** Only 2.17, 2.22 and 2.31 send it; 3.04, 3.153 and 6.x do not.
-It is 10 raw bytes, a constant per build, identical across logins, accounts and login keys
-([`version-profiles/tampercheck-values.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/tampercheck-values.tsv)):
+**What the real clients send** (reported by squirelworks from captures, not verified against the reference; squirelworks' client-analysis notes, `version-profiles/tampercheck-values.tsv`). Only 2.17, 2.22 and 2.31 send it; 3.04, 3.153 and 6.x do not.
+It is 10 raw bytes, a constant per build, identical across logins, accounts and login keys:
 
 | Client | Bytes |
 |---|---|
@@ -568,7 +567,7 @@ It is 10 raw bytes, a constant per build, identical across logins, accounts and 
 
 It is sent right after `PLI_LANGUAGE (37)` at login. 2.17 sends it once. 2.22 sends it again on
 every gmap edge crossing and after every client-initiated level-link request, but not after
-a server-side warp. 2.31 sends it again about every 3.2 s ([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md); [`protocol/lab-checks-2026-10-24.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/lab-checks-2026-10-24.md)). Whether a server
+a server-side warp. 2.31 sends it again about every 3.2 s (reported; squirelworks' client-analysis notes, `protocol/packet-ids.md`; `protocol/lab-checks-2026-10-24.md`). Whether a server
 could reject a different value is untested, since the reference discards it.
 
 ### PLI_SHOOT (40) - Shoot Projectile (v1)
@@ -682,13 +681,13 @@ The clients read so far use a fourth form: the 2-byte ×256 value above.
 ```
 Unverified beyond the gs2lib `IEnums.h:74` comment: the reference server registers no
 handler for this id. It falls through to `Player::msgPLI_NULL`, which logs the packet as
-unknown and disconnects the player after the third invalid packet
-(`server/src/player/Player.cpp:283,1657-1675`).
+unknown and disconnects the player on the third invalid packet before its counter is reset,
+which happens once a minute (`server/src/player/Player.cpp:288`, `:1664-1682`;
+`server/src/player/PlayerClient.cpp:276-280`).
 
-**Original clients** (2.17 and later, not 6.03r7): the client sends one message per click in
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/lab-checks-2026-10-24.md`, buddy/ignore/mute section; not verified against the reference): in 2.17 and later, not 6.03r7, the client sends one message per click in
 the player list, matching the enum layout: `GSHORT` player id, then 1 to mute or 0 to unmute.
-So a server without a handler disconnects any player who mutes three others within a
-minute ([`protocol/lab-checks-2026-10-24.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/lab-checks-2026-10-24.md), buddy/ignore/mute section).
+So the reference disconnects a player on the third such packet before the counter reset.
 
 ### PLI_PROCESSLIST (44) - Process List
 **Trigger**: Client reports its running processes
