@@ -21,6 +21,7 @@ implementation guidelines for Reborn servers and clients.
    protocol/strings
    protocol/encryption
    protocol/versions-encryption
+   protocol/listserver-client
    protocol/packet-structures
    protocol/version-gated-behavior
    protocol/npc-properties
