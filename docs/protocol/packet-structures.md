@@ -447,9 +447,8 @@ by that build.
 [STRING: level_name] // Adjacent level name
 ```
 
-**Original clients** (2.01 and later): `mod_time` is all zeros when the client has no cached
-copy of the level. The server answers by sending that gmap neighbour for preloading
-([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), level-navigation section).
+**Reported client behaviour** (2.01 and later; squirelworks' client-analysis notes, `protocol/packet-layouts.md`, level-navigation section; not verified against the reference): `mod_time` is all zeros when the client has no cached
+copy of the level. The server answers by sending that gmap neighbour for preloading (reference: a gmap sub-level or a cached level, followed by `PLO_SETACTIVELEVEL`; `PlayerClientPackets.cpp:1005-1017`).
 
 ### PLI_HITOBJECTS (36) - Hit Objects
 **Trigger**: Player's weapon hits objects/NPCs
@@ -625,14 +624,14 @@ for this id.
 Layout from the gs2lib `IEnums.h:77` comment. The server handler does nothing
 (`msgPLI_ENTERLEVEL`, `PlayerClientPackets.cpp:1426-1429`).
 
-**Original clients**: 2.31 sends it; 2.17.1 and 2.22 have no send site, and 3.04 does not send
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-ids.md` and the lab capture `version-profiles/lab-enterlevel-231.tsv`; not verified against the reference): 2.31 sends it; 2.17.1 and 2.22 have no send site, and 3.04 does not send
 it. In 2.31 it comes from one send site at the start of the routine that switches the
 current level, so it goes out on every level entry: login, gmap edge crossings, doors, edge
 links and server warps. It is the message just before the first props of the new level,
 in the same frame. At login it is the first message of the client's second frame, before
 `PLI_ADJACENTLEVEL (35)` and `PLI_PROCESSLIST (44)`. On a gmap cell crossing, the props after
 it carry the new cell in props 43/44 and a local coordinate that starts again at the cell
-edge ([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md); lab capture [`version-profiles/lab-enterlevel-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/lab-enterlevel-231.tsv)).
+edge.
 
 ### PLI_VERIFYWANTSEND (47) - Verify File Checksum
 **Trigger**: Client verifies file integrity before requesting
@@ -1391,9 +1390,8 @@ board, board changes, items, explosions, baddies and horses land in the level it
 `.gmap` name resolves to the player's own level. It does not set the NPC owner, which only
 `PLO_SETACTIVELEVEL` sets. See [GMAP](gmap.md#client-level-targets).
 
-**Original clients**: the 2.05 client sets the named level, and also makes it the object
-level (the level NPC and object packets apply to) when the server has no NPC server
-([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), level-data section).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`, level-data section; not verified against the reference): the 2.05 client sets the named level, and also makes it the object
+level (the level NPC and object packets apply to) when the server has no NPC server. See the note above for what the later reference client does with the name; the 2.05 behaviour here is reported for that build only.
 
 ### PLO_BOARDMODIFY (7) - Board Modification
 **Trigger**: Another player modifies tiles, or a script/server-initiated board change is
@@ -1469,8 +1467,8 @@ against it.
 // No additional data
 ```
 
-**Original clients**: the leader client runs the level's baddies and timeouts. The 2.05 client
-ignores the packet unless the player's level is the active level ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the leader client runs the level's baddies and timeouts. The 2.05 client
+ignores the packet unless the player's level is the active level.
 
 ### PLO_BOMBADD (11) - Bomb Added
 **Trigger**: Player places bomb
@@ -1811,11 +1809,11 @@ chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1
 [GINT5: mod_time]    // Level modification timestamp
 ```
 
-**Original clients** read this differently by build. 2.05 needs exactly 5 bytes (`GINT5`) and
+**Reported client behaviour**, which differs by build (squirelworks' client-analysis notes, `protocol/packet-layouts.md` and `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference). 2.05 needs exactly 5 bytes (`GINT5`) and
 writes the level to its web-level cache with that time. 2.17 to 2.31 do not parse the body;
-they hand the rest of the packet to the active gmap or level object, if one exists
-([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)). In 2.05 captures with the reference server, an empty `PLO_LEVELBOARD`
-followed the board packet and `PLO_LEVELMODTIME` on level entry.
+they hand the rest of the packet to the active gmap or level object, if one exists.
+In 2.05 captures against the reference server, an empty `PLO_LEVELBOARD`
+appeared around the board and `PLO_LEVELMODTIME` on level entry. GServer-v2 beta4 sends the blank board before the board data (`PlayerClient.cpp:1469-1470`) or instead of it (`:1499-1500`); the server build behind those captures is not known.
 
 ### PLO_HURTPLAYER (40) - Hurt Player
 **Trigger**: Player takes damage
@@ -2244,9 +2242,8 @@ NPC's owner changes (`server/src/level/Level.cpp:1446-1464`), and once after the
 recipient on another level (`server/src/Server.cpp:2400-2412`). See
 [GMAP](gmap.md#npc-framing-on-a-gmap).
 
-**Original clients**: the name may be a level or a `.gmap`. The client sets its object level;
-a `.gmap` name is loaded and made active. 2.31 adds a follow-up step after this whose
-purpose is not yet known ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md` and `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): 2.31 adds a follow-up step after this whose
+purpose is not yet known.
 
 ### PLO_MOVE (165) - NPC Move Command (v1, < CLVER_2_3)
 **Trigger**: Server-driven NPC movement for clients below `CLVER_2_3`. See
