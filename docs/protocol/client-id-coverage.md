@@ -6,10 +6,11 @@ handles, and in what order it talks at login. A server that serves old clients c
 to know what it will receive, and which ids a given client silently ignores.
 
 Everything on this page is from static reads and lab captures of the original client
-binaries, written up in squirelworks' public client-analysis notes,
-[Graal_analysis](https://github.com/squirelworks/Graal_analysis/): chapters
-[2.4 PLI](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/04-pli.md) and [2.5 PLO](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/05-plo.md) of its manual, each row there with its own
-source. None of it is verified against the reference server, which holds no client code.
+binaries, written up in squirelworks' client-analysis notes,
+`manual/02-protocol/04-pli.md` and `manual/02-protocol/05-plo.md`, each row there with its
+own source. None of it is verified against the reference server, which holds no client
+code. For ids the reference leaves unknown, see
+[Packet Structures](packet-structures.md#ids-whose-layout-comes-from-the-reference-enum-comments-and-client-observation).
 
 ## How a client reads a PLO
 
@@ -26,8 +27,11 @@ source. None of it is verified against the reference server, which holds no clie
 
 ## Server-to-client ids handled, by build
 
+All build lists below are reported in squirelworks' notes and not verified against the
+reference.
+
 *Bound* is the highest id the receive switch tests. Builds before 2.00 are listed in the
-notes' version matrix ([`manual/app-c-version-matrix.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/app-c-version-matrix.md)).
+notes' version matrix (squirelworks' client-analysis notes, `manual/app-c-version-matrix.md`).
 For the 2.02 and 2.05 revisions the rows mean distinct static receive routes, not proven
 runtime handling.
 
@@ -46,7 +50,7 @@ runtime handling.
 | 2.17.1 | 79 | 0–25, 27–49, 68, 69, 75, 100, 150, 151, 153–156, 165, 166, 168–185 |
 | 2.22 | 80 | the 2.17.1 set plus 186 |
 | 2.31 | 81 | the 2.22 set without 44, plus 84 and 189 |
-| 3.04 (Linux) | 79 | 0–49, 68, 69, 75, 84, 100–102, 150, 151, 153–156, 165, 166, 168, 169, 171–176, 178–181, 184–186 |
+| 3.04 (Linux) | 79 | 0–25, 27–49, 68, 69, 75, 84, 100–102, 150, 151, 153–156, 165, 166, 168, 169, 171–176, 178–181, 184–186 |
 | 3.153 (Mac OS X) | 88 | the 3.04 set without 44, plus 67, 74, 82, 104, 131–134, 187, 189 |
 | 4.20r8 | 101 | 0–25, 27–43, 45–49, 67–69, 74, 75, 82, 84, 100–102, 104–108, 131–134, 150, 151, 153–156, 165, 166, 168–176, 178–187, 189–191, 193–196 |
 | 4.20r6 (Mac) | 99 | the 4.20r8 set without 41 and 196 |
@@ -58,7 +62,7 @@ Notes on the gaps and steps in that table:
 
 | Rule | Builds |
 | --- | --- |
-| No build in the notes handles 26 (`PLO_NPCACTION`) after 2.03 (it is handled from 1.28 beta 2), or 152 and 167 | 2.04 to 6.03 |
+| No build in the notes handles 26 (`PLO_NPCSETSCRIPT`, `IEnums.h:195`) after 2.03, or 152 and 167. The enum comment dates 26 to 1.31 to 2.03; the notes report it handled from 1.28 beta 2 | 2.04 to 6.03 |
 | Revisions of one version share every handler shape (2.05 rev1 differs by one constant in 8), so any revision stands for the others; on the wire only 2.02 rev2 differs, by its token and id 37 | 2.00 to 2.05 |
 | 2.00 has no active-level reference, since 156 arrives in 2.01; level-addressed messages act on the current level | 2.00 |
 | 2.01 rewrites 0, 14 and 15 so the handler no longer waits for and then requests the level, the code side of map preloading; 154 and 155 go through a shared helper | 2.01 |
@@ -69,7 +73,7 @@ Notes on the gaps and steps in that table:
 | 4.20r8 drops nothing against 3.153 and adds 13 ids | 4.20r8 |
 | 5.00r7's list does not include 100 | 5.00r7 |
 | Against 5.00r7, 6.x drops 41, 75, 132, 133, 165, 169, 171, 175, 181, 184 and 193 and adds 109, 111 and 198 | 6.01r1, 6.03r7 |
-| A later client (5.07 and up, or 6.037, as the source note marks each id) ignores 26, 41, 44, 55, 56, 60, 78, 80, 81, 83, 132, 157, 159–164, 165, 167, 171, 175, 188 and 192 | 5.07, 6.037 |
+| A later client (5.07 and up, or 6.037, as the source note marks each id) ignores 26, 41, 44, 55, 56, 60, 78, 80, 81, 83, 132, 133, 157, 159–164, 165, 167, 171, 175, 188 and 192 | 5.07, 6.037 |
 
 ## Client-to-server ids sent, by build
 
@@ -119,10 +123,10 @@ Exceptions found in particular builds:
 | 6.x sends none of 21 (`PUTNPC`), 25, 31, 39 (`TAMPERCHECK`) or 40 (`SHOOT`) as a constant | 6.01r1, 6.03r7 |
 | 3.04 and 3.153 send no 39 or 44, unlike their Windows twin, and add 36 and 81 | 3.04, 3.153 |
 | 6 (`PLI_TOALL`) is a real sender in every build of the family, with the chat text cut to 200 characters before sending | 2.00 to 2.1 test |
-| No id is removed anywhere from 2.00 to 2.1 test 3, and none of 25, 31 or any id from 39 up has a constant send, so the tamper check (39) is not part of this family | 2.00 to 2.1 test |
+| No id is removed anywhere from 2.00 to 2.1 test 3, and none of 25, 31 or any id from 39 to 79 has a constant send, so the tamper check (39) is not part of this family | 2.00 to 2.1 test |
 | 36 and 38 look like TCP copies of UDP 25 and 26: one routine sends the UDP message, then repeats it over TCP when a flag says the server needs it; what sets the flag is unknown | 2.01 to 2.1 test |
 | 2.02 rev1 has no `PLI_LANGUAGE` (37) send site and sends none in the lab; rev2 is the first build that sends 37 | 2.02 rev1, rev2 |
-| Ids 4.x adds over 3.x: 44 (window list for PLO 182), 50 (large-packet length), 157 and 161 (file requests carrying an `i5` time), 158 (weapon by name), 162 | 4.20r8 |
+| Ids 4.x adds over 3.x: 44 (window list for PLO 182), 50 (`PLI_RAWDATA`, large-packet length), 157 (`PLI_UPDATEGANI`) and 161 (`PLI_UPDATECLASS`) (file requests carrying an `i5` time), 158 (weapon by name), 162 (`PLI_PONG`) (`IEnums.h:80,157,161,162`) | 4.20r8 |
 
 ## What the client sends right after login
 
