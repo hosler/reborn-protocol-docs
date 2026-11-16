@@ -1434,7 +1434,7 @@ NPC-server condition, but only in that branch.
 
 The server builds the string as `"{dest} {x} {y} {w} {h} {destx} {desty}"`
 (`server/src/level/LevelLink.cpp:71-74`). `x`, `y`, `w` and `h` are numbers;
-`destx` and `desty` are kept as strings. A client parses the last six space-separated
+`destx` and `desty` are kept as strings. The reference server parses the last six space-separated
 tokens as the numeric fields (`x y w h destx desty`); everything before them is the level
 name, which may contain spaces (`server/src/level/LevelLink.cpp:82-98`).
 
