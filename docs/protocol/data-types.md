@@ -375,8 +375,13 @@ Each byte: color index (+ 32 for encoding)
 
 #### The colour indexes
 
-Each byte is an index into a fixed table of 20 named colours. This is the table the 2.05
-client holds, with its RGB values ([`client-internals/body-colours-and-attributes.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/body-colours-and-attributes.md); not verified against the reference):
+Each byte is an index into a fixed table of 20 named colours. Indexes 0-19 are the classic
+colours. A server running new-world mode with `enableexbodycolors` can send 20 and above,
+which are HTML colours (`Character.h:43`). The names and indexes match the reference
+(`server/include/object/Character.h:132-156` at origin/beta4, gs2lib `src/IUtil.cpp:28-48`).
+The RGB values are the ones the 2.05 client is reported to hold, from squirelworks'
+client-analysis notes, `client-internals/body-colours-and-attributes.md`; reported, not
+verified against the reference:
 
 | Index | Colour | RGB | Index | Colour | RGB |
 |---:|---|---|---:|---|---|
@@ -391,11 +396,15 @@ client holds, with its RGB values ([`client-internals/body-colours-and-attribute
 | 8 | darkgreen | 0, 198, 0 | 18 | black | 0, 0, 8 |
 | 9 | lightblue | 132, 132, 255 | 19 | transparent | 0, 0, 0 |
 
-How the client applies them: a body picture is a palette image. Before drawing, palette
+How the 2.05 client is reported to apply them (reported, not verified against the
+reference): a body picture is a palette image. The palette entry numbers below are
+positions in that image, not the colour slot order skin, coat, sleeves, shoes, belt above.
+Before drawing, palette
 entry 5 takes the skin colour, 6 the coat, 4 the sleeves, 3 the shoes and 1 the belt; entry 0
 always takes colour 18 (black, the outline), and in the stock bodies entry 2 is the clear
-colour. A new 2.05 player is orange, darkred, black, darkred, black (2, 5, 18, 5, 18) with
-`body.png` and `head0.gif`; the reference gives a new account 2, 0, 10, 4, 18 instead.
+colour. A new 2.05 player is reported to start as orange, darkred, black, darkred, black
+(2, 5, 18, 5, 18) with `body.png` and `head0.gif`. The reference gives a new account
+2, 0, 10, 4, 18 (`Character.h:43` at origin/beta4).
 
 ### Status Flags (Bitfield)
 
