@@ -214,6 +214,19 @@ Inside nested `with` blocks, `this` resolves to the innermost target that is
 not the player object. A player target is skipped while searching outward.
 `thiso` remains the script's original object.
 
+A server's compiler can emit `this` as a plain variable name (`OP_TYPE_VAR`) where ours emits
+`OP_THIS`. `Gs2Utils = this;` on a live login server arrives that way. The reference
+interpreter resolves the bare names `this` (the current this-object, which `with` rebinds),
+`thiso` (the script's original object) and `temp` (the call scope) ahead of every variable
+lookup, when the reference has no explicit parent object. A script variable of that name
+cannot shadow them (`Preagonal/FourPlay/quattroplay/src/TScriptMachine.cpp:5070-5071`
+`temp`, `:5084-5085` `this`, `:5093-5094` `thiso`). The comparison is byte-exact
+(`TString.cpp:849-860`), so only the lowercase spelling matches: `Temp` and `This` stay
+ordinary variables. A write to one of the three names writes into the resolved object and
+does not rebind the name (`TScriptMachine.cpp:5367-5419`); Reborn's interpreter drops that write. The same
+lookup resolves other bare names, such as `params`, `player` and `level`, which this page does
+not cover. The dotted form `this.x` built from a name follows the `with` target too.
+
 Unqualified reads and writes inside `with` search from innermost to outermost,
 but a target participates only when `has()` says the name exists. A missing
 name falls through to temps, the script object, or globals instead of creating
@@ -225,6 +238,8 @@ Evidence:
 
 - `reborn_protocol/gs2/vm.py`, `_op_obj_starts()`, `_op_obj_ends()`,
   `_current_this()`, `_lookup()`, and `_assign_name()`
+- `reborn_protocol/gs2/vm.py`, `_SCOPE_NAMES`, `_lookup()` and `_assign_name()`
+- `tests/test_gs2_bare_scope_names.py`
 - `tests/test_gs2_vm.py`, `test_starts_ends_are_case_insensitive()`,
   `test_this_rebinds_to_innermost_with_target()`,
   `test_this_rebinding_skips_player_target()`, and

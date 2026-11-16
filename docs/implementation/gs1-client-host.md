@@ -127,6 +127,43 @@ Evidence:
 - `pyReborn/pyreborn/gs1_client/runtime.py` (`board_ready`)`
 - `pyReborn/game_tester/gs1_client_conformance.py:798-815`
 
+### NPC and player positions
+
+A script's NPC `x` and `y` use the same whole-map frame on a gmap, in GS1 and GS2 alike. A read
+returns the local position plus the NPC's cell origin. A write stores the value minus the origin
+and keeps the cell. The write applies only when the NPC belongs to a map or `0 <= value < 64`,
+and it drops the NPC's queued moves either way, so on a plain level a write outside that range
+is ignored. `npcs[i].x`, `with (npcs[i])` and the `findnpc` target use the same property. Off
+a gmap every value is unchanged. An NPC's cell comes from its own props whether or not the map
+grid has loaded, so a script that ran before the grid does not end up a cell off. Signs and
+baddies stay segment-local.
+
+The same frame applies to `testnpc`, the hit tests of `hitobjects` and explosions, the `lay`
+and `lay2` item keys, the bomb water probe, `bombs[]`, `findplayer` and the compu and `hitplayer`
+positions. A write on another player's record (`players[i].x =`) stores the value minus that
+player's cell origin. It is clamped to the plain-level range unless the player is on a map or the
+script is a weapon's, and it changes only this client's cached record.
+
+`move dx,dy,time,options` queues a move through `add_npc_move`, the same queue server moves
+use, and `tick_moves` steps it once per tick. The option bits are the ones in
+[GMAP](../protocol/gmap.md#script-coordinates-on-a-gmap): the squeeze mode, wall and water stop,
+face the move, default animation, and the `movementfinished` event. GS2 `this.move` is not
+implemented. The reference also teleports instead of queueing when a player flag is non-zero
+(`TServerNPC.cpp:651-666`); the flag is set to 1 while a sign is shown (`TClient.cpp:2728`).
+pyReborn does not port that branch.
+
+Positions that go back to the server stay local to the player's level and unwrapped: a script's
+`triggeraction`, `putcomp` and `hitobjects`. `hitobjects` sends nothing for a point outside
+0..64. See [GMAP](../protocol/gmap.md#position-frames-sent-by-the-client).
+
+Evidence:
+
+- `Preagonal/FourPlay/quattroplay/src/TServerNPCProperties.cpp:331-345`, `TServerPlayerProperties.cpp:17-34`, `:229-236`
+- `Preagonal/FourPlay/quattroplay/src/TServerNPC.cpp:619-741`, `:1628-1840`
+- `pyReborn/pyreborn/gs1_client/frame.py` (`npc_axis`, `write_npc_axis`, `write_player_axis`)
+- `pyReborn/pyreborn/npc_movement.py` (`add_npc_move`, `tick_moves`)
+- `pyReborn/game_tester/gs1_conformance.py` (seven gmap rows; GS1 on both servers)
+
 ## Scripted combat and palettes
 
 Scripted combat separates network authority from immediate presentation.

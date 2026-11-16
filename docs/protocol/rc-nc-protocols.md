@@ -210,6 +210,28 @@ disconnects that account's NC session instead (`:913-918`). Reference quirk: the
 runs when the setter's NPCCONTROL bit differs from the new mask, whether or not the target's
 own bit changed. A client that waits for it at login waits forever.
 
+### RC ADDPLAYER fields and when it is sent
+
+`PLO_ADDPLAYER (55)` gives an RC its roster entry for a game player: `gshort(id)`,
+`gchar(len) + account`, then `gchar(20)` + level string, `gchar(53)` + status byte,
+`gchar(0)` + nickname, `gchar(82)` + community name. The layout is the same for every RC
+version (`Player.cpp:789`, `:824-829`, `PlayerClient.cpp:1342-1346`). The level is `getLevelName()`: the gmap
+name for a player on a gmap, and the saved account level before the player enters a level
+(`PlayerClient.cpp:1155-1162`). The status defaults to 0 and the community name to the account
+name (`FlatFileAccountLoader.cpp:539-540`).
+
+The server sends it again, not only once:
+
+- at stage 4 of a game player's login, to every non-client, non-NC player
+  (`exchangeMyPropsWithOthers`, `PlayerClient.cpp:618`, `Player.cpp:785-832`), with the level the
+  player saved, before the first warp;
+- at the end of **every** `enterLevel`, to every RC and NC (`PLTYPE_ANYCONTROL`,
+  `PlayerClient.cpp:1341-1347`). This is how an RC learns the current level. A segment hop inside
+  a gmap is not a level entry and sends nothing;
+- at RC login, one entry for each other online player except NC connections, RCs included,
+  in player-list order, after the staff guilds, `PLO_STATUSLIST` and the upload limit
+  (`PlayerRC.cpp:257-274`).
+
 ### PLPERM rights bits and per-packet gating
 
 `adminRights` is a bit mask (`server/include/Account.h:29-48`):

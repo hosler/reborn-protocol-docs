@@ -65,8 +65,8 @@ For the canonical wire-width and encoding notes, see
 | 34 | IMAGEPART | **6 bytes**: `[GSHORT x][GSHORT y][GCHAR w][GCHAR h]` |
 | 35 | BODYIMAGE | `[GCHAR len][string]` |
 | 36-40 | GATTRIB1-5 | `[GCHAR len][string]` |
-| 41 | GMAPLEVELX | `[GCHAR]` |
-| 42 | GMAPLEVELY | `[GCHAR]` |
+| 41 | GMAPLEVELX | `[GCHAR]` the NPC's gmap cell column (`PropertyNumeric<GBYTE1>`, `NPC.h:668`). See [Gmap NPC framing](#gmap-npc-framing) |
+| 42 | GMAPLEVELY | `[GCHAR]` the cell row (`NPC.h:669`) |
 | 43 | Z | `[GCHAR]` `(z_tile + 50)` |
 | 44-47 | GATTRIB6-9 | `[GCHAR len][string]` |
 | 48 | UNKNOWN48 | `PropertyVoid`, 0 bytes (nothing sets it, so it is not sent) |
@@ -79,6 +79,20 @@ For the canonical wire-width and encoding notes, see
 | 75 | X2 | `[GSHORT]` PixelCoordinate: `pixel = val>>1`, negative if `val&1`, `tile = pixel/16` |
 | 76 | Y2 | `[GSHORT]` PixelCoordinate (same as X2) |
 | 77 | Z2 | `[GSHORT]` PixelCoordinate (same as X2) |
+
+### Gmap NPC framing
+
+On a gmap, X/Y (2/3) and X2/Y2 (75/76) stay **segment-local**, and GMAPLEVELX/Y (41/42) carry
+the cell. The gmap loader stamps both props for every cell, including (0,0)
+(`server/src/loader/LevelLoader.cpp:386-391`), and `addNPC` does the same
+(`server/src/Server.cpp:1499-1502`). Only an NPC not stamped by either relies on the reset's
+always-sent set, which stamps the cell props only outside (0,0)
+(`server/src/object/NPC.cpp:144-150`). pygserver always sends both for a gmap NPC
+(`pygserver/pygserver/npc.py:751-756`). A seam crossing sends only the axis that changed
+(`NPC.cpp:457-468`). A packet can therefore hold a lone prop 41 or 42. A receiver keeps the other axis
+from the NPC it already has. A seam crossing inside one gmap is this props update, not
+`PLO_NPCMOVED`. The level names that frame the packets, and the client rules, are in
+[GMAP](gmap.md#npc-framing-on-a-gmap).
 
 ### Variable-width props to watch
 

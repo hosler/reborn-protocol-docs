@@ -308,6 +308,10 @@ documented only in a comment. The server does not parse them. It forwards the ra
 [GUCHAR: tile_x]     // X position (in half-tiles)
 [GUCHAR: tile_y]     // Y position (in half-tiles)
 ```
+A `GUCHAR` holds 0 to 223, so the largest position is 111.5 tiles. On a gmap the server
+reads the position as a **whole-map** tile position and picks the cell from it
+(`PlayerClientPackets.cpp:754-780`, `Server.cpp:1495-1503`). The reference client has no sender for this packet. See
+[GMAP](gmap.md#position-frames-sent-by-the-client).
 
 ### PLI_NPCDEL (22) - Delete NPC
 **Trigger**: Player deletes an NPC
@@ -753,7 +757,7 @@ integer, not one byte or five raw octets. The independent list-server reader cal
 | 50 | JOINLEAVELVL | `[GCHAR]` join/leave-level flag |
 | 51 | DISCONNECT | **`PropertyVoid` — 0 bytes** (no payload). *Not* a "connected" flag byte. |
 | 52 | LANGUAGE | `[GCHAR: length][string]` - client language |
-| 53 | PLAYERLISTSTATUS | **`[GCHAR]` — a single status byte, NOT a string** |
+| 53 | PLAYERLISTSTATUS | **`[GCHAR]` — a single status byte, NOT a string.** An index into the `PLO_STATUSLIST` names. The server stores it per player, takes it from the client's own `PLI_PLAYERPROPS`, ignores an unchanged value, and sends a change to every other connection, RC and NC included (`PlayerProps.cpp:991-1003`, `:1240-1241`). The status is not part of the account. Classic generations never send props above RATING (36) (`PlayerProps.cpp:76-86`). It is **not** in a player's own login props, and **is** in the props others receive when the player joins (`PlayerProps.h:144`, `:163`). The reference names it `PLAYERLISTSTATUS` (`server/include/player/PlayerProps.h:76`); our constants module calls the same id `PSTATUSMSG` (`reborn_protocol/constants.py:385`) |
 | 54-74 | GATTRIB10-30 | `[GCHAR: length][string]` |
 | 75 | OSTYPE | `[GCHAR: length][string]` - client OS |
 | 76 | TEXTCODEPAGE | `[GINT3]` (3 bytes) |
@@ -1314,6 +1318,10 @@ ctab        = {91,92,93,94,77,78,79,80,74,75,71,72,73,86,86,87,88,67}
 ```
 [STRING: level_name] // Current level name
 ```
+The reference client reads this packet as the **level-data target**: chests, signs, links,
+board, board changes, items, explosions, baddies and horses land in the level it names. A
+`.gmap` name resolves to the player's own level. It does not set the NPC owner, which only
+`PLO_SETACTIVELEVEL` sets. See [GMAP](gmap.md#client-level-targets).
 
 ### PLO_BOARDMODIFY (7) - Board Modification
 **Trigger**: Another player modifies tiles, or a script/server-initiated board change is
@@ -1533,7 +1541,9 @@ rollback of a refused drop (`server/src/player/packets/PlayerClientPackets.cpp:3
 
 ### PLO_NPCMOVED (24) - NPC Moved (Level Change)
 **Trigger**: An NPC warps to a different level. The server sends it to **all** players
-(`PLTYPE_ANYPLAYER`), not only to those in the old level.
+(`PLTYPE_ANYPLAYER`), not only to those in the old level. A gmap is one level, so an NPC
+that crosses a seam inside a gmap does not trigger it. That crossing is a props update
+(X2/Y2 and the changed `GMAPLEVELX`/`GMAPLEVELY`); see [GMAP](gmap.md#npc-framing-on-a-gmap).
 ```
 [GINT3: npc_id]      // NPC identifier (3 bytes)
 [GCHAR: x / 8]        // NPC's OLD position in the level it's leaving, in half-tiles
@@ -1789,6 +1799,19 @@ only when the `sendplayertriggers` option is on (the default).
 ```
 [PLAYER_DATA...]     // Player information
 ```
+The RC form is different. One layout serves every RC version; the builders have no version
+branch (`server/src/player/Player.cpp:789`, `:824-829`, `PlayerClient.cpp:1342-1346`):
+```
+[GSHORT: player_id]
+[GCHAR: len][STRING: account]
+[GCHAR: 20][GCHAR len][STRING: level]      // LEVEL; the gmap name for a player on a gmap
+[GCHAR: 53][GCHAR: status]                 // PLAYERLISTSTATUS, 0 until the player sets one
+[GCHAR: 0][GCHAR len][STRING: nickname]    // NICKNAME
+[GCHAR: 82][GCHAR len][STRING: community]  // COMMUNITYNAME, the account name by default
+```
+For the level, `getLevelName()` returns the gmap name on a gmap and the saved account level
+while the player has no level yet (`PlayerClient.cpp:1155-1162`). See
+[RC & NC Protocols](rc-nc-protocols.md#rc-addplayer-fields-and-when-it-is-sent).
 
 ### PLO_DELPLAYER (56) - Delete Player (Legacy)
 **Trigger**: Player leaves server (pre-v5.07)
@@ -2039,6 +2062,9 @@ bytecode tail. A client older than 5.07 gets `PLO_CLASSBYTECODE (133)` with the 
 [STRING: level_name] // Level name
 [GINT3: npc_id]      // NPC identifier
 ```
+The server sends it to a recipient whose own level name differs from the NPC's, and plain
+`PLO_NPCDEL` to a recipient with the same name (`server/src/Server.cpp:1630-1637`). A gmap NPC's
+level name is the gmap name.
 
 ### PLO_HIDENPCS (151) - Hide NPCs
 **Trigger**: NPCs should be hidden. The reference server never sends it. The enum comment
@@ -2070,6 +2096,14 @@ says it "might delete all npcs with an id under 1000" (gs2lib `IEnums.h:273`).
 ```
 [STRING: level_name] // Active level name
 ```
+The reference client reads it as the **NPC owner**. It resolves a `.gmap` name as a map and
+any other name as a level (`Preagonal/FourPlay/quattroplay/src/TClient.cpp:3777-3784`). New NPC
+props packets belong to that level until the next `PLO_SETACTIVELEVEL`. On a gmap the name is
+the gmap name. The server sends it before the first NPC of a block and again whenever the
+NPC's owner changes (`server/src/level/Level.cpp:1446-1464`), and once after the NPC block
+(`server/src/player/PlayerClient.cpp:1555`). A live send wraps a packet in it only for a
+recipient on another level (`server/src/Server.cpp:2400-2412`). See
+[GMAP](gmap.md#npc-framing-on-a-gmap).
 
 ### PLO_MOVE (165) - NPC Move Command (v1, < CLVER_2_3)
 **Trigger**: Server-driven NPC movement for clients below `CLVER_2_3`. See
@@ -2233,6 +2267,11 @@ text as a quoted CSV, split at `#b` (`server/src/player/PlayerClient.cpp:1746-17
 ```
 [STRING: statuses]   // The status names joined with "," and NOT quoted, to end of packet
 ```
+The names come from the `playerlisticons` option; the default is
+`Online,Away,DND,Eating,Hiding,No PMs,RPing,Sparring,PKing`
+(`server/include/Server.h:177`, `bin/servers/default/config/serveroptions.txt:85`). Player
+property 53 (`PLAYERLISTSTATUS`) is a zero-based index into this list. Login order is in
+[Version-Gated Behavior](version-gated-behavior.md#login-order-for-the-player-list-status).
 
 ### PLO_LISTPROCESSES (182) - List Processes
 **Trigger**: Request client process list. The reference server does not send it: the send

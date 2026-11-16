@@ -319,6 +319,19 @@ No client, of any version, currently receives `PLO_LISTPROCESSES` from `sendLogi
 comment explains *why* the server no longer sends it (a crash in Windows v6 clients), which is useful
 context if you are ever tempted to re-enable process-list polling.
 
+### Login order for the player-list status
+
+A game client of version 2.1 or later receives, in this order and before its own login props,
+`PLO_STAFFGUILDS`, then `PLO_STATUSLIST` (`PlayerClient.cpp:525-536`). Its own `PLO_PLAYERPROPS`
+follow in stage 1 (`:547-550`), and the exchange with the other players follows in stage 4
+(`:618`, `Player.cpp:785-832`). A client below 2.1 never gets `PLO_STATUSLIST`. Player prop 53
+is not in the client's own login props. The props of the other players that stage 4 sends do
+carry it (`PlayerProps.h:144`, `:163`).
+
+An RC gets `PLO_STAFFGUILDS`, `PLO_STATUSLIST`, `PLO_RC_MAXUPLOADFILESIZE`, and then the
+exchange. There is no version gate (`PlayerRC.cpp:257-274`). See
+[RC & NC Protocols](rc-nc-protocols.md#rc-login-sequence-server--client-in-order).
+
 ## GS2 Bytecode Delivery Rule
 
 `server/src/object/Weapon.cpp:167-216`, split across two functions. The rule changed

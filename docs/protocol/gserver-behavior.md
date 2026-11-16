@@ -329,7 +329,8 @@ way are simply corrupt by one byte until the flag wiring is fixed upstream.
 
 Several client packet handlers branch on `Server::hasNPCServer()` (true when
 the built-in NPC server is loaded, which `serverside` controls and which is off in the shipped
-`serveroptions.txt`; see [Server-Side Behavior](serverside-behavior.md)). Two that surprise client implementers:
+`bin/servers/default/config/serveroptions.txt:308` (`serverside = false`, upstream `origin/beta4`);
+see [Server-Side Behavior](serverside-behavior.md)). Two that surprise client implementers:
 
 - **The server refuses client NPC mutation when it owns NPCs.**
   `msgPLI_NPCPROPS` and `msgPLI_NPCDEL` immediately return without applying the
@@ -402,3 +403,32 @@ pinned to commit `35056f83c856091eacab50853876bfa9fa6f6967` (bitbucket
 `GServer-v2/build/dependencies/fc/gs2lib-src/`. All
 enum values, `IUtil.cpp` version tables, and `CEncryption` internals cited across this
 documentation set come from that path.
+
+## Reference quirks
+
+- **GS1 colour copies write colour 0.** Since the script-variable rewrite, `#C0`..`#C4`
+  read as text return an empty string: `mc_CharacterProperty` returns an integral property
+  with no string getter (`server/src/scripting/gs1/GS1MessageCodes.cpp:324-326`,
+  `server/src/object/NPC.cpp:1860-1863`, `server/include/scripting/ScriptContainers.h:1247-1259`).
+  Thus `setcharprop #C0,#C0` writes colour 0. Reproduced live;
+  [reported upstream](https://github.com/xtjoeytx/GServer-v2/issues/131).
+  pygserver returns the colour name, as the reference server did before that rewrite
+  (`pygserver/pygserver/gs1/host.py:631-643`).
+- **`PLI_TOALL` cuts chat at its own length's decimal digits.** `msgPLI_TOALL` passes
+  the length byte to the delimiter overload, `readString(readGUChar())`
+  (`server/src/player/Player.cpp:1765`). Reproduced live: a four-character `xx4y` arrives
+  as `xx`. See [the packet's delimiter explanation](packet-structures.md#pli_toall-6---chat-message)
+  and [String Types](strings.md#quick-reference-by-packet).
+- **Client trigger actions miss outside the first gmap cell.** The global point is tested
+  against an NPC box wrapped to local pixels (`server/src/player/packets/PlayerClientPackets.cpp:1057-1059`,
+  `server/include/npcserver/NPCServer.h:260`, `server/include/utilities/Extents.h:612-620`).
+  Read from source only, not reproduced live. See [GMAP](gmap.md#position-frames-sent-by-the-client)
+  for the mismatch and pygserver's behavior.
+- **Modern servers without an NPC server deliver no NPC scripts.**
+  `PropertyGS1Script::serialize` sends a zero-length script prop for every modern-generation
+  server (`server/src/utilities/PropertySerializers.cpp:559-568` at upstream `origin/beta4`),
+  including one with no NPC server to supply scripts. Read from source only, not reproduced live.
+- **An unclosed block comment hangs script loading on older builds.** `Script::minify`
+  loops forever when `/*` has no closing `*/`; upstream commit `c8bdf8a7` fixes the advance
+  past that comment (`server/src/scripting/Script.cpp:413-439`). Reproduced on a build
+  without the fix: a server directory containing such a weapon never finished loading.

@@ -17,10 +17,13 @@ serverside = false
 `serverside` with `.value_or(true)` (`server/src/Server.cpp:975`), so a settings file with
 no `serverside` key loads the NPC server. The `SettingCache` default is `false`
 (`server/include/Server.h:153`), and the shipped
-`bin/servers/default/config/serveroptions.txt:306-308` sets `serverside = false`
-(`funtimes/config/serveroptions.txt` does too). The shipped file therefore starts without an
-NPC server. Setting `true` loads the NPC server, which changes whether the server sends links and signs
-clientside. See the source reference below.
+`bin/servers/default/config/serveroptions.txt:308` sets `serverside = false`
+(upstream `origin/beta4`). The shipped file therefore starts without an NPC server and
+sends links and signs to the client because there is no NPC server
+(`server/src/player/PlayerClient.cpp:1495-1500`). Setting `true` loads the NPC server,
+which changes whether the server sends links and signs clientside.
+`funtimes/config/serveroptions.txt:182` sets `serverside = false`, so that world has no NPC
+server and sends links and signs too. See the source reference below.
 
 ## How It Affects Level Links
 
@@ -94,7 +97,9 @@ if (!m_server->hasNPCServer() || m_server->cached.forceClientsideSigns.getValue(
 > `forceClientsideLinks/Signs` overrides and the bigmap case). Older docs quoted
 > a `getBool("serverside", false)` check that no longer exists in source.
 > The forced overrides are the settings `clientsidelinks` and `clientsidesigns`
-> (`bin/servers/default/config/serveroptions.txt:324-328`, both default `false`).
+> (`bin/servers/default/config/serveroptions.txt:324-328`, both shipped as `false` at
+> upstream `origin/beta4`). Both also default to `false` when absent
+> (`server/include/Server.h:154-155`).
 
 From `GServer-v2/server/src/level/LevelLink.cpp:54-64` (handling special
 values):
@@ -143,6 +148,64 @@ list. Level-part delivery preserves that membership rule:
 `Level::findPlayersInLevelPart`, which filters the same `m_players` set by map
 cell (`GServer-v2/server/src/Server.cpp:2361-2375`,
 `GServer-v2/server/src/level/Level.cpp:3384-3394`).
+
+### Gmap audiences
+
+The reference sends a packet through one of four calls. On a plain level every call reaches
+every player of the level. On a gmap they differ, and the differences are what a client
+sees. `Level::findPlayersInLevelPart` and `findPlayersInRangeForData` select by the
+recipient's cell, `character.mapX`/`mapY`.
+
+| Call | Recipients on a gmap | Source |
+|------|----------------------|--------|
+| `sendPacketToOneLevelPart` | The players in **one cell**: the cell of the position given, which is the sender's cell. Not the 3x3. Clients only. No `PLO_SETACTIVELEVEL` | `server/src/Server.cpp:2361-2375`, `Level.cpp:3384-3394` |
+| `sendPacketToNearby` | The players in the **3x3** around the position, clipped to the grid. No wrapper, because every recipient is in the same `Level` | `Server.cpp:2390-2414`, `Level.cpp:3320-3373` |
+| `sendNonLevelBoundPacketToNearby` | The same 3x3, `PlayerClient` only, never wrapped | `Server.cpp:2377-2388` |
+| `sendPacketToAll` | Every connection except the NPC-server player | `Server.cpp:2329-2342` |
+
+The 3x3 box is inclusive and clipped to `0..size-1` (`Level.cpp:3340-3345`). The wrapper
+in `sendPacketToNearby` exists for a bigmap level that is not a gmap (below).
+
+**Sent to the 3x3** (client packet, handler): `PLI_BOARDMODIFY` on a gmap as `PLO_BOARDMODIFY2`
+(`PlayerClientPackets.cpp:132`), `PLI_SHOWIMGPLAYER` (`:816`), `PLI_HITOBJECTS` (`:1049`),
+`PLI_SHOOT` and `PLI_SHOOT2` (`:1368-1369`, `:1401-1402`), and the `gr.attr` trigger hack, which
+sets a player attribute prop (`:1244-1255`). NPC props, show-image and move packets also go
+to the 3x3 around the NPC (`NPC.cpp:263`, `:302`, `:584`, `:588`, `:1671`), and so does the
+props packet of a new NPC (`Server.cpp:1587-1591`) and the carried-NPC props
+(`PlayerClient.cpp:1581`). The relay of `PLI_HITOBJECTS` carries player id 0 when the client
+names an NPC (`PlayerClientPackets.cpp:1029`).
+
+**Sent to one cell** (the sender's): `PLI_BOMBADD` (only when there is no NPC server),
+`PLI_BOMBDEL` (relayed regardless of NPC-server presence), `PLI_HORSEADD`, `PLI_HORSEDEL`,
+`PLI_ARROWADD`, `PLI_FIRESPY`, `PLI_THROWCARRIED`,
+`PLI_ITEMADD`, `PLI_ITEMDEL`, `PLI_BADDYPROPS`, `PLI_BADDYADD`, `PLI_EXPLOSION` and the
+`PLO_TRIGGERACTION` relay (`PlayerClientPackets.cpp:237`, `:248`, `:261`, `:279`, `:301`,
+`:322`, `:334`, `:379`, `:389`, `:515`, `:573`, `:856`, `:1311`). The audience is the cell
+the sender stands in when the packet arrives, not the cell where a thrown bomb lands.
+
+**Sent to everyone**: nickname, head image and player-list status
+(`PlayerProps.cpp:203`, `:419`, `:1001`, relayed through `sendPacketToAll` at
+`PlayerProps.cpp:1239-1241`). Other player props go to the 3x3 through
+`sendNonLevelBoundPacketToNearby` (`:1243-1244`).
+
+**The player exchange** (`JOINLEAVELVL`) uses the sync box, not the 3x3: see
+[GMAP](gmap.md#range-on-entry-and-hop). The leave notice does not. It goes to the 3x3
+with `sendPacketToNearby` and the leaving player receives the matching notices from the sync
+box (`PlayerClient.cpp:1388-1396`). Before `enterLevel` calls `leaveLevel`, `warp` stores the
+destination's local pixels and sets the cell to the destination cell for a gmap destination,
+or (0,0) for a non-gmap destination (`PlayerClient.cpp:1246-1274`). On the old level, the leave
+is therefore recorded and announced around the destination cell and position for a gmap
+destination, or cell (0,0) plus the destination's local position for a non-gmap destination
+(`PlayerClient.cpp:1361-1362`, `:1390-1392`). `leaveLevel` returns early when the old gmap has
+no sub-level at that cell, in which case no leave is recorded or announced (`:1356-1359`).
+This was read, not run.
+
+**A bigmap level that is not a gmap** is separate. Each level is its own `Level`, and
+`findPlayersInRangeForData` takes the players of the nine neighbour levels from the `maps`
+grid. `sendPacketToNearby` then wraps the packet in `PLO_SETACTIVELEVEL {source level}` and
+`PLO_SETACTIVELEVEL {recipient level}`, skips recipients below client 2.01, and skips all of
+them when `sendtonearbybigmaplevels` is false (default true, `Server.cpp:2402-2412`,
+`Server.h:128`). pygserver does not model bigmap adjacency.
 
 ### Explosion damage uses a plus, and only targets NPCs
 
