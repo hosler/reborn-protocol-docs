@@ -661,7 +661,7 @@ That is `PLI_BUNDLE` ("Bundled packets contain multiple packets"). So a server f
 6.11 clients needs the private key that matches the script's public key. Without it, the
 server cannot read the client stream.
 
-#### What the connector script controls
+### What the connector script controls
 
 Because the script builds the login, the 6.11 client's token, header, cipher and **both id
 tables** belong to the server's script, not the client. The script gets these methods on the
@@ -672,21 +672,29 @@ connection object: `connecttogameserver`, `setprotocol`, `sendraw`, `senddata(id
 `defaultinhandler(id, data)` and `tclient_setencryptionin(type, key, iv)`. Before `onCreated`
 runs, the client sets `scriptip`, `scriptsslcipher`, `scriptsslsubject` and `scriptsslissuer`
 so the script can check where it came from; if no connector loads, a built-in
-`StartScript_Fail` runs instead. None of this exists in 6.01 or 6.03: they have no connector,
+`StartScript_Fail` runs instead. Reported: none of this exists in 6.01 or 6.03: they have no connector,
 no RC4 or AES and no script-set id tables. This is from static reads of the Mac 6.11 and
-Windows 6.1.1.3 clients in squirelworks' notes ([`protocol/v6x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v6x-clients.md); [`manual/02-protocol/10-server-defined.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/10-server-defined.md)), not verified against the reference.
+Windows 6.1.1.3 clients in squirelworks' client-analysis notes, `protocol/v6x-clients.md`
+and `manual/02-protocol/10-server-defined.md`; reported, not verified against the
+reference. The decompiled mobile engine (a v6-era engine, not the 6.11 desktop builds) has
+the same script API and tables: `Preagonal/FourPlay/quattroplay/src/TClientProperties.cpp:208-227`,
+`:10-21`, `:136-197`, and the event names in `TClient.cpp` (for example `:4199`
+`onSendWantWeaponScript`, `:699` `onSendWindowList`).
 
 - **Outgoing table.** `setoutdatahandlers` loads a 256-entry table from the client's internal
   message number to a wire id. A negative entry does not send. `0xFE` raises the matching
   `onSend*` script event instead of sending. Any other value is the packet id.
 - **Incoming table.** `setindatahandlers` takes (wire id, handler) pairs. A handler below
   `0x5F` is one of 95 native handlers; `0xFE` passes the packet to the script; `0xFF` ignores
-  it; `0xFC` and `0xFD` set the two special ids (the key and bundle roles above). The native
-  handlers are also callable from script by name, about 90 `tclient_*` functions such as
+  it; `0xFC` and `0xFD` set the two special ids (the 0xFC key and 0xFD bundle roles described under
+  [Server-to-client direction](#server-to-client-direction)). The native
+  handlers are also callable from script by name, dozens of `tclient_*` functions (83 in the decompiled mobile engine,
+  `Preagonal/FourPlay/quattroplay/src/TClient.cpp:4587-4669`) such as
   `tclient_setplayerprops` and `tclient_setlevelboard`.
 - **Slot order is not wire order**, so a server for 6.11 must send the table. Slot 54 and
-  the slots above 56 have no event, and the login and language messages are sent by the
-  script itself. The named send slots, with the event each raises when it holds `0xFE`:
+  the slots above 56 have no event; the notes report that the login and language messages
+  are sent by the script itself (not verified against the reference). The named send
+  slots, with the event each raises when it holds `0xFE`:
 
 | Slot | Event | Slot | Event | Slot | Event |
 | ---: | --- | ---: | --- | ---: | --- |
@@ -709,6 +717,11 @@ Windows 6.1.1.3 clients in squirelworks' notes ([`protocol/v6x-clients.md`](http
 | 16 | `onSendDeleteNPC` | 35 | `onSendWantImage` | 55 | `onSendPingAnswer` |
 | 17 | `onSendDeleteWeapon` | 36 | `onSendImageUpdate` | 56 | `onSendWindowList` |
 | 18 | `onSendExtra` | 37 | `onSendImageUpdateCRC` | | |
+
+Slots 6, 7, 23, 24 and 50 (`onSendAddHorse`, `onSendDelHorse`, `onSendBaddyProperties`,
+`onSendBaddyHurt`, `onSendPrivateMessage`) are reported only from the 6.11 desktop builds;
+the decompiled mobile engine has no event for them. The other 51 named slots match the
+mobile engine's event names one for one.
 
 ### Server-to-client direction
 
