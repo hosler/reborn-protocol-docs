@@ -1989,8 +1989,12 @@ classic script, line breaks are `§`. That is byte `A7` from a Latin-1 server an
 [STRING: message]    // Admin message text
 ```
 
-**Text format**: `Admin <account>:` followed by byte `0xA7` (the `§` line break) and the
-text. The 2.05 client shows it as an admin message ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md), admin-and-staff section).
+**Text format**: `<title>:` + byte `0xA7` (the line break) + text. For an admin message the
+title is `Admin <account>` (`server/src/player/packets/PlayerRCPackets.cpp:292,308`); the
+same id also carries `Server message:` and `Word Filter:` notices
+(`server/src/player/Player.cpp:1809,1819`). Already listed in the RC table. Reported: the 2.05
+client shows it as an admin message (squirelworks' client-analysis notes,
+`protocol/chat-pm-rc.md`, admin-and-staff section).
 
 ### PLO_EXPLOSION (36) - Explosion
 **Trigger**: Explosion occurs
@@ -2252,8 +2256,9 @@ size.
 [STRING: message]    // RC chat message
 ```
 
-**Game clients**: 3.153, 4.x, 5.00r7 and 6.x also handle this id, and raise it to script as an
-RC-chat event ([`protocol/v3x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v3x-clients.md)).
+**Game clients** (reported, not verified against the reference): 3.153, 4.x, 5.00r7 and 6.x
+also handle this id, and raise it to script as an RC-chat event (squirelworks' client-analysis
+notes, `protocol/v3x-clients.md`).
 
 ### PLO_PROFILE (75) - Player Profile
 **Trigger**: Profile information response. The game server builds it from the list server's answer (`SVI_PROFILE`), `server/src/ServerList.cpp:568-761` at GServer-v2 beta4.
@@ -2291,18 +2296,28 @@ NPC-server's machine. The enum comment says 5.07 and later clients do not handle
 [STRING: response]   // Server text response
 ```
 
-**What the original clients do with it**: 3.153 raises it to script as the `receivetext`
-event; 5.00r7 also feeds its buddy list from it ([`protocol/v3x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v3x-clients.md); [`protocol/v5x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5x-clients.md)).
+**What the original clients do with it** (reported, not verified against the reference): 3.153
+raises it to script as the `receivetext` event; 5.00r7 also feeds its buddy list from it
+(squirelworks' client-analysis notes, `protocol/v3x-clients.md` and `protocol/v5x-clients.md`).
 
 **Buddy lists and list-server tabs.** These ride on 152/154/82 as gtokenized text, as reported
-in squirelworks' notes ([`client-internals/feature-specs/14-friends-ignore.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/feature-specs/14-friends-ignore.md); server-source reads, not a capture):
-- Buddy requests go in `PLI_SENDTEXT` as `GraalEngine`, `lister`, then `verifybuddies`,
-  `addbuddy` or `deletebuddy`, then the account list. The server forwards those three options
+in squirelworks' client-analysis notes, `client-internals/feature-specs/14-friends-ignore.md`
+(server-source reads, not a capture):
+- Buddy requests go in `PLI_SENDTEXT` as the engine's own weapon name, `lister`, then
+  `verifybuddies`, `addbuddy` or `deletebuddy`, then the account list
+  (`server/src/player/PlayerRequestText.cpp:246-254`). The server forwards those three options
   to the list server, never for guest accounts, and stores nothing itself.
 - The list server answers with `PLO_SERVERTEXT` carrying `weapon`, `lister`, `buddylist`, then
-  a comma list of accounts.
-- `PLI_REQUESTTEXT` options `pmservers`, `pmserverplayers <server>`, `pmunmapserver` and
-  `pmguilds` go to the list server for the cross-server and guild tabs of the player list.
+  a comma list of accounts (the reference list server answers only when the client's
+  load-from-server preference is 1,
+  `graal-serverlist/server/src/ServerConnection.cpp:1507-1519`).
+- `PLI_REQUESTTEXT` types `pmservers` and `pmguilds` are forwarded to the list server as sent
+  (`server/src/player/PlayerRequestText.cpp:129-131`). `pmserverplayers <server>` adds that
+  server to the player's PM list and, the first time, asks the list server for its players
+  (`server/src/player/PlayerRequestText.cpp:133-134`,
+  `server/src/player/PlayerExternalPlayers.cpp:25-46`); `pmunmapserver <server>` only removes
+  it locally (`server/src/player/PlayerRequestText.cpp:135-136`,
+  `server/src/player/PlayerExternalPlayers.cpp:49-75`).
 - A real 2.22 client sent no buddy request on add or delete in a lab run; it only wrote
   `buddyaccounts.txt` locally.
 
