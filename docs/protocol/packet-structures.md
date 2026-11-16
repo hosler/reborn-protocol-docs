@@ -1989,6 +1989,9 @@ classic script, line breaks are `§`. That is byte `A7` from a Latin-1 server an
 [STRING: message]    // Admin message text
 ```
 
+**Text format**: `Admin <account>:` followed by byte `0xA7` (the `§` line break) and the
+text. The 2.05 client shows it as an admin message ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md), admin-and-staff section).
+
 ### PLO_EXPLOSION (36) - Explosion
 **Trigger**: Explosion occurs
 ```
@@ -2249,6 +2252,9 @@ size.
 [STRING: message]    // RC chat message
 ```
 
+**Game clients**: 3.153, 4.x, 5.00r7 and 6.x also handle this id, and raise it to script as an
+RC-chat event ([`protocol/v3x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v3x-clients.md)).
+
 ### PLO_PROFILE (75) - Player Profile
 **Trigger**: Profile information response. The game server builds it from the list server's answer (`SVI_PROFILE`), `server/src/ServerList.cpp:568-761` at GServer-v2 beta4.
 ```
@@ -2284,6 +2290,21 @@ NPC-server's machine. The enum comment says 5.07 and later clients do not handle
 ```
 [STRING: response]   // Server text response
 ```
+
+**What the original clients do with it**: 3.153 raises it to script as the `receivetext`
+event; 5.00r7 also feeds its buddy list from it ([`protocol/v3x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v3x-clients.md); [`protocol/v5x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5x-clients.md)).
+
+**Buddy lists and list-server tabs.** These ride on 152/154/82 as gtokenized text, as reported
+in squirelworks' notes ([`client-internals/feature-specs/14-friends-ignore.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/feature-specs/14-friends-ignore.md); server-source reads, not a capture):
+- Buddy requests go in `PLI_SENDTEXT` as `GraalEngine`, `lister`, then `verifybuddies`,
+  `addbuddy` or `deletebuddy`, then the account list. The server forwards those three options
+  to the list server, never for guest accounts, and stores nothing itself.
+- The list server answers with `PLO_SERVERTEXT` carrying `weapon`, `lister`, `buddylist`, then
+  a comma list of accounts.
+- `PLI_REQUESTTEXT` options `pmservers`, `pmserverplayers <server>`, `pmunmapserver` and
+  `pmguilds` go to the list server for the cross-server and guild tabs of the player list.
+- A real 2.22 client sent no buddy request on add or delete in a lab run; it only wrote
+  `buddyaccounts.txt` locally.
 
 ### PLO_LARGEFILESIZE (84) - Large File Size
 **Trigger**: Large file size notification
