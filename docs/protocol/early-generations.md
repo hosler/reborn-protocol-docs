@@ -85,7 +85,7 @@ deflated (zlib 1.0.4) and written as `[len_hi][len_lo][zlib stream]`. There is n
 threshold: every flush is compressed. Id 100 (`PLO_RAWDATA`) already exists and switches the
 reader to a byte count for file data. This is GEN_2's framing with no cipher. The reference server still sends and reads this
 framing for `PLTYPE_CLIENT` logins whose token resolves (gs2lib `CFileQueue.cpp:180-203`,
-`IPacketHandler.h:260-263`; length is a big-endian `uint16`, `CString.cpp:1663-1670`).
+`IPacketHandler.h:261-266`; length is a big-endian `uint16`, `CString.cpp:1663-1670`).
 
 **Login.** The first message is a normal id-0 line: a type byte (`' '` = player; the 1.x
 GServers take `'!'` as RemoteControl), the 8-byte `GSERVnnn` token, then the account and the

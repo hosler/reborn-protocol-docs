@@ -88,9 +88,9 @@ use the information at the link.
 - If the warp fails, the handler warps the player back to its current level at its current
   position (`:92-97`). If that also fails, it warps to the configured unstick level and
   tile (`:98-104`). The handler itself writes no `PLO_WARPFAILED`, but the calls it makes do:
-  `warp(string)` sends it when the level cannot be loaded (`PlayerClient.cpp:1211`), and
+  `warp(string)` sends it when the level cannot be loaded (`PlayerClient.cpp:1213`), and
   `enterLevel` sends it, with `level->levelName`, when the level data cannot be sent
-  (`PlayerClient.cpp:1294`).
+  (`PlayerClient.cpp:1300`, `:1312`).
 
 **Variant**: PLI_LEVELWARPMOD (30) - includes modification time:
 ```
@@ -214,8 +214,8 @@ of the message with no length prefix.
 [GUCHAR: tile_y]     // Y position (in half-tiles)
 ```
 
-**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): sent from 1.33 on, not by the New World betas. The server re-emits it
-as `PLO_HORSEDEL (18)`.
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): sent from 1.33 on, not by the New World betas. The reference server re-emits it
+as `PLO_HORSEDEL (18)` (`PlayerClientPackets.cpp:279`).
 
 ### PLI_ARROWADD (9) - Shoot Arrow
 **Trigger**: Player fires an arrow
@@ -420,7 +420,9 @@ This is not verified against the reference. The record format below matches the 
 - Tags: 0 name (`GCHAR` length + bytes; empty removes the image), 1 x, 2 y, 3 layer − 1,
   4 visible part (`0x20` whole image, or `0x21` + left and top as two 7-bit bytes each, then
   width and height), 5 red, green, blue and alpha (a value over 200 in the 2.x clients,
-  reported; the v6 engine divides by 255), 6 zoom (value over 10, reported), 7 draw order −
+  reported; the reference server writes the same scale, each channel clamped to 0..1 and
+  multiplied by 200, `server/src/object/ShowImg.cpp:238-242`; the v6 engine divides by 255),
+  6 zoom (value over 10; the reference server writes zoom times 10, `ShowImg.cpp:245-248`), 7 draw order −
   0x52, 8 mode (squirelworks' client-analysis notes, `client-internals/decomp-findings-2026-10-25-g/image-text-format.tsv`). 2.05 sends tags 0 to 6 only (reported).
 - A leading `0x29` (`GCHAR` 9) marks a **full** list: the receiver then removes every image
   of that player the text did not name. With no images the full list is the marker alone,
@@ -468,7 +470,7 @@ when the packet is long enough (`Preagonal/FourPlay/quattroplay/src/TClient.cpp:
 **Reported client behaviour** (1.28 beta 2 and later; squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`; not verified against the reference): the message after the id list is gtokenized
 text, to the end of the packet.
 
-The reference server lets a jailed player PM only staff accounts and answers anyone else with a "From jail you can only send PMs to admins (RCs)" message (`server/src/player/Player.cpp:1850-1855`).
+The reference server blocks a jailed non-staff player from PMing a non-staff player and answers with a "From jail you can only send PMs to admins (RCs)" message (`server/src/player/Player.cpp:1850-1855`).
 
 ### PLI_NPCWEAPONDEL (29) - Delete NPC Weapon
 **Trigger**: Player removes weapon from inventory
@@ -738,7 +740,7 @@ for this id.
 [GCHAR: 1]
 ```
 Layout from the gs2lib `IEnums.h:77` comment. The server handler does nothing
-(`msgPLI_ENTERLEVEL`, `PlayerClientPackets.cpp:1426-1429`).
+(`msgPLI_ENTERLEVEL`, `PlayerClientPackets.cpp:1431-1434`).
 
 **Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-ids.md` and the lab capture `version-profiles/lab-enterlevel-231.tsv`; not verified against the reference): 2.31 sends it; 2.17.1 and 2.22 have no send site, and 3.04 does not send
 it. In 2.31 it comes from one send site at the start of the routine that switches the
@@ -903,8 +905,8 @@ also goes peer to peer as UDP id 22.
 client version or handshake. Each byte is a palette index (+32 encoded). See
 [Colors](data-types.md#colors-5-or-8-bytes) for safe width retry.
 **ID (14)**: `[GSHORT: player_id]` (2 bytes)
-**X (15)**: `[GCHAR: x * 2]` - signed half-tiles; decoded values `>=216` are
-negative signed bytes before division by 2. *Not* pixels/2.
+**X (15)**: `[GCHAR: x * 2]` - signed half-tiles; the sign rule is under
+[Data Types](data-types.md#coordinate-frames-in-gmaps). *Not* pixels/2.
 **Y (16)**: same signed half-tile encoding as X
 **SPRITE (17)**: `[GCHAR: (sprite << 2) | direction]` - direction = low 2 bits, sprite/frame = rest
 **STATUS (18)**: `[GCHAR: status_flags]` - Player status bits
@@ -1725,10 +1727,10 @@ described under PLI_TOALL.
 [STRING: level_name] // New level name
 ```
 `x` and `y` are `PropertyTileCoordinate` values: the server writes `pixel / 8` as one
-GCHAR and replaces 223 with 224. The source comment says 223 would overflow into the
-newline, but its wire byte is 255; 234 is the value that gives `0x0A` and it is not remapped
-(`server/src/utilities/PropertySerializers.cpp:473-485`, sent at
-`server/src/player/PlayerClient.cpp:1263`).
+GCHAR, clamped to -16 to 111.5 tiles, and nudges -11 tiles to -10.5. The sign rule is under
+[Data Types](data-types.md#coordinate-frames-in-gmaps)
+(`server/src/utilities/PropertySerializers.cpp:484-509`, sent at
+`server/src/player/PlayerClient.cpp:1262`).
 
 **Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`, player-state section; not verified against the reference): the warp stays pending until the level data arrives; the client does
 not move the player on this packet alone. The reference server sends `PLO_PLAYERWARP` and the level data back to back (`server/src/player/PlayerClientOriginal.cpp:53-56`).
@@ -1738,9 +1740,9 @@ not move the player on this packet alone. The reference server sends `PLO_PLAYER
 ```
 [STRING: level_name] // The level that could not be loaded
 ```
-The server writes `<< levelName` (`server/src/player/PlayerClient.cpp:1211`;
+The server writes `<< levelName` (`server/src/player/PlayerClient.cpp:1213`;
 `PlayerClientOriginal.cpp:87`), and `<< level->levelName` from `enterLevel`
-(`server/src/player/PlayerClient.cpp:1294`).
+(`server/src/player/PlayerClient.cpp:1300`, `:1312`).
 
 **Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the 2.05 client ignores the text and shows a short failed-warp state.
 
@@ -2054,7 +2056,7 @@ packet unless the player's level is the active level. The v6 engine decodes the 
 
 ### PLO_LEVELMODTIME (39) - Level Modification Time
 **Trigger**: The server sends it unsolicited on every level entry, after the board and
-chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1499`;
+chests, so the client can cache the level (`server/src/player/PlayerClient.cpp:1521`;
 `PlayerClientOriginal.cpp:162`, only when it sent the board)
 ```
 [GINT5: mod_time]    // Level modification timestamp
@@ -2620,10 +2622,12 @@ has a maintainer comment: `// Unhandled by 6.037.` (gs2lib `IEnums.h:286`).
 [GCHAR: index + 10]  // Showimg slot; the server accepts indexes 0-199
 [PROP_DATA...]       // showimg property pairs: [GCHAR: prop_id][value] ...
 ```
-Index 9 is special: it makes the client erase all of the NPC's showimgs, and the
+A GCHAR value of 9 (byte 0x29) is special: it makes the client erase all of the NPC's showimgs, and the
 level-entry form starts with it (`NPC.cpp:274`). The property ids are listed in the enum
-comment (gs2lib `IEnums.h:287`: 0 image, 1 x, 2 y, 3 layer, 4 image part, 5 and 6 particle
-data, 7 angle, 8 particle). The server serializes them in
+comment (gs2lib `IEnums.h:287`; its guesses for 5 to 8 are particle and angle). The reference
+server's names are 0 IMAGE, 1 X, 2 Y, 3 LAYER, 4 IMAGEPART, 5 COLORS, 6 ZOOM, 7 Z, 8 DRAWMODE
+(`server/include/object/ShowImg.h:73-85`); the tag list under `PLI_SHOWIMGPLAYER (24)` uses
+those meanings. The server serializes them in
 `ShowImg::getAllPropsPacket`. The record format is described under `PLI_SHOWIMGPLAYER (24)`.
 
 ### PLO_GHOSTMODE (170) - Ghost Mode
@@ -2641,7 +2645,7 @@ field. The v6 engine in the C# client's reference tree stores it as a plain ghos
 
 ### PLO_BIGMAP (171) - Big Map Data
 **Trigger**: Sent at login to clients 2.1 and later when the `bigmap` option is set to
-four comma-separated tokens (`server/src/player/PlayerClient.cpp:495-501`), and by the
+four comma-separated tokens (`server/src/player/PlayerClient.cpp:496-502`), and by the
 GS1 `setmap` command (`server/src/scripting/gs1/GS1Commands.cpp:2630`). Same layout as
 `PLO_MINIMAP`. The enum comment says 6.037 does not handle it.
 ```
@@ -2773,7 +2777,7 @@ nothing (the four-field rule is stated above). The old connection closes 2 to 3 
 
 ### PLO_RPGWINDOW (179) - RPG Window
 **Trigger**: Sent once at login to clients 2.1 and later
-(`server/src/player/PlayerClient.cpp:514-516`). `sendRPGMessage` sends it again later with the
+(`server/src/player/PlayerClient.cpp:516-518`). `sendRPGMessage` sends it again later with the
 text as a quoted CSV, split at `#b` (`server/src/player/PlayerClient.cpp:1746-1751`)
 ```
 [CSV: text...]       // Two quoted strings: "Welcome to <server name>.","<vendor> <app> programmed by <credits>."

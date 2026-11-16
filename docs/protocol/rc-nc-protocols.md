@@ -181,7 +181,7 @@ NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 | PLO_NPCSERVERADDR | 79 | `gshort(npcServerPlayerId)` + raw `"ip,port"`. The ip is the RC's own address when that equals the server's local ip, else the NPC-server host (`ns_ip`, or the list server's address for the server when `ns_ip` is `auto`; `NPCServer.cpp:65-68`). Sent only to an RC holding `PLPERM_NPCCONTROL` (`NPCServer.cpp:122-134`) |
 | PLO_RC_MAXUPLOADFILESIZE | 103 | `gint5` upload-size limit in bytes |
 
-#### What the original RC clients send, by build
+### What the original RC clients send, by build (client → server)
 
 The following is from static reads of the original RC clients (rc133 from 1999 through the
 2004 build), reported in squirelworks' client-analysis notes, `tools/remotecontrol-lineage.md` and `tools/remotecontrol.md`, with a 2004 wire capture in `protocol/rc-capture-2026-11-04.md`. Each row lists the
@@ -225,7 +225,7 @@ as live ids gets no reply.
 ### RC login sequence (server → client, in order)
 
 `PLO_SIGNATURE (25)` (`gchar(73)`) → `PLO_NEWWORLDMODE` or `PLO_KINGDOMSMODE` (only on
-those server modes; `Player.cpp:744-752`) → `PLO_RESETCLIENT (194)` → `PLO_RC_CHAT (74)` motd lines → server-list-connected →
+those server modes; `Player.cpp:753`, `:755-759`) → `PLO_RESETCLIENT (194)` → `PLO_RC_CHAT (74)` motd lines → server-list-connected →
 "New RC" broadcast → `PLO_STAFFGUILDS (47)` → `PLO_STATUSLIST (180)` →
 `PLO_RC_MAXUPLOADFILESIZE (103)` → player-prop exchange for everyone online →
 "Currently online" chat.

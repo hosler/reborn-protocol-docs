@@ -358,7 +358,7 @@ if (m_versionId >= CLVER_2_1) { /* ... PLO_STATUSLIST ... */ }
 Clients below 2.1 never receive `PLO_BIGMAP`, `PLO_MINIMAP`, `PLO_RPGWINDOW`, or
 `PLO_STATUSLIST` at login.
 
-**(d) Dead: `PLO_LISTPROCESSES` for `< CLVER_6_015`** (`:538-542`). Genuinely commented out:
+**(d) Dead: `PLO_LISTPROCESSES` for `< CLVER_6_015`** (`:540-544`). Genuinely commented out:
 ```cpp
 // Ask for processes. This causes windows v6 clients to crash
 /*
@@ -373,7 +373,7 @@ context if you are ever tempted to re-enable process-list polling.
 ### Login order for the player-list status
 
 A game client of version 2.1 or later receives, in this order and before its own login props,
-`PLO_STAFFGUILDS`, then `PLO_STATUSLIST` (`PlayerClient.cpp:525-536`). Its own `PLO_PLAYERPROPS`
+`PLO_STAFFGUILDS`, then `PLO_STATUSLIST` (`PlayerClient.cpp:527-537`). Its own `PLO_PLAYERPROPS`
 follow in stage 1 (`:547-550`), and the exchange with the other players follows in stage 4
 (`:618`, `Player.cpp:785-832`). A client below 2.1 never gets `PLO_STATUSLIST`. Player prop 53
 is not in the client's own login props. The props of the other players that stage 4 sends do

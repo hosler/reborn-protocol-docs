@@ -126,7 +126,7 @@ Exceptions found in particular builds:
 | No id is removed anywhere from 2.00 to 2.1 test 3, and none of 25, 31 or any id from 39 to 79 has a constant send, so the tamper check (39) is not part of this family | 2.00 to 2.1 test |
 | 36 and 38 look like TCP copies of UDP 25 and 26: one routine sends the UDP message, then repeats it over TCP when a flag says the server needs it; what sets the flag is unknown | 2.01 to 2.1 test |
 | 2.02 rev1 has no `PLI_LANGUAGE` (37) send site and sends none in the lab; rev2 is the first build that sends 37 | 2.02 rev1, rev2 |
-| Ids 4.x adds over 3.x: 44 (window list for PLO 182), 50 (`PLI_RAWDATA`, large-packet length), 157 (`PLI_UPDATEGANI`) and 161 (`PLI_UPDATECLASS`) (file requests carrying an `i5` time), 158 (weapon by name), 162 (`PLI_PONG`) (`IEnums.h:80,157,161,162`) | 4.20r8 |
+| Ids 4.x adds over 3.04: 44 (window list for PLO 182), 50 (`PLI_RAWDATA`, large-packet length), 157 (`PLI_UPDATEGANI`) and 161 (`PLI_UPDATECLASS`) (file requests carrying an `i5` time), 158 (weapon by name), 162 (`PLI_PONG`) (`IEnums.h:80,157,161,162`) | 4.20r8 |
 
 ## What the client sends right after login
 

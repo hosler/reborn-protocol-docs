@@ -375,7 +375,7 @@ packet goes to `parseLoginPacket`, which reads it to the newline with no decrypt
 (`IPacketHandler.h:227-235`, `:375-395`). The generation is chosen only while that login is
 handled (`PlayerLogin.cpp:60-99`, `PlayerClient.cpp:297-316`). RC2 (type 6) switches to
 GEN_5 (`PlayerRC.cpp:146-156`). NC (type 3) always gets GEN_2, which is zlib only and reads
-no key (`PlayerNC.cpp:111-127`, `IPacketHandler.h:260-263`).
+no key (`PlayerNC.cpp:111-127`, `IPacketHandler.h:261-266`).
 
 The client side comes from static reads of the 2.22 and 2.31 clients and the Delphi
 RemoteControl, and lab captures of real 2.22 sessions, reported in squirelworks'
@@ -434,7 +434,7 @@ larger workspace and doubles it on a retry status only while the next request is
 | Gen | Framing |
 |---|---|
 | **GEN_1** | Raw. `processPacketBundle` returns immediately — no decompression, no decrypt. |
-| **GEN_2** | `bundle.zuncompress2I(usedDeflate)` only (`IPacketHandler.h:260-263`). No compression-type byte, no encryption. |
+| **GEN_2** | `bundle.zuncompress2I(usedDeflate)` only (`IPacketHandler.h:261-266`). No compression-type byte, no encryption. |
 | **GEN_3** | `bundle.zuncompress2I(usedDeflate)` at the **bundle** level (`IPacketHandler.h:266-269`). The single-byte-insertion decrypt runs later, **per individual packet** after the bundle is split on newlines (`parsePacketsFromBundle`, `IPacketHandler.h:332-334`): `if (gen == GEN_3) Encryption.decrypt(curPacket);` — i.e. GEN_3 "encryption" is applied once per packet, not once per bundle. |
 | **GEN_4** | `Encryption.limitFromType(COMPRESS_BZ2)` then `Encryption.decrypt(bundle)` (XOR, limited to 4 four-byte blocks = 16 bytes) applied to the **whole bundle**, *then* `bundle.bzuncompressI()`. Always BZ2 — there is no compression-type byte for GEN_4. |
 | **GEN_5** | Read + strip a 1-byte compression-type indicator (`0x02`/`0x04`/`0x06`) from the front of the bundle, `limitFromType(pType)` to pick the XOR block-limit, partial XOR-decrypt, then decompress per the type byte (zlib/bz2/none). |

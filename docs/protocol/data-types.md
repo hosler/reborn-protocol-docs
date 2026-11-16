@@ -334,7 +334,7 @@ At origin/beta4 since 1b9b9925, wire bytes `0xF8`-`0xFF` are +108 to +111.5 tile
 - The clients are reported to read the byte **unsigned**: `(byte - 32) / 2`. A byte below
   `0x20` gives a negative value. No byte is read as a signed 8-bit value. Static reads of
   clients from 1.21 to 6.03r7 are reported to show the same decode. The decompiled mobile
-  engine reads it this way, including `0x00` as -16 (`Preagonal/FourPlay/quattroplay/src/TServerPlayer.cpp:30-41`).
+  engine reads it this way, including `0x00` as -16 (`Preagonal/FourPlay/quattroplay/src/TServerPlayer.cpp:1680-1682`, helper at `:38-41`).
 - So the lowest value a server can send to those clients is -15.5 tiles, and -11 tiles
   cannot be sent at all.
 - The pre-rename GServer-v2 reader (`TPlayerProps.cpp`, before commit 0ca668c6 renamed
@@ -452,7 +452,7 @@ wire widths.
 |-------|-------|----------|-------|
 | 0 | IMAGE | GCHAR length + string | Length-prefixed image name |
 | 1 | SCRIPT | GSHORT length + raw bytes | Modern servers may send length 0 |
-| 2-3 | X/Y | GCHAR | Signed **half-tiles** (`pixel / 8`), the same as player X/Y; the writer replaces 223 with 224 (`PropertySerializers.cpp:473-485`) |
+| 2-3 | X/Y | GCHAR | Signed **half-tiles** (`pixel / 8`), the same as player X/Y; the sign rule and the writer's range clamp are described under [one-byte X/Y](#coordinate-frames-in-gmaps) (`PropertySerializers.cpp:484-509`) |
 | 4 | POWER | GCHAR | Hit points in half-hearts |
 | 5 | RUPEES | GINT3 | 3-byte value, not a direction byte |
 | 6-7 | ARROWS/BOMBS | GCHAR | Single-byte counts |
