@@ -666,12 +666,13 @@ account name matches. Otherwise it forwards the whole packet, id byte included, 
 list server as `SVO_SETPROF`. The list server skips the id byte and reads the nine
 length-prefixed fields above (`graal-serverlist/server/src/ServerConnection.cpp:904-926`).
 
-**Original clients** (1.39 and later; not 6.03r7): the 2.05 client fills the fields from the
+**Reported client behaviour** (1.39 and later; not 6.03r7; squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`; not verified against the reference): the 2.05 client fills the fields from the
 profile window, each trimmed. Field 3 (gender) is `-`, `male` or `female`; field 5 is an ICQ
 number in that build. The quote is the quote box's lines joined with spaces and cut to 220
 characters. The Send button also works in **another** online player's profile window, and
-then field 0 is that player's account. That is why the reference's account check matters:
-a server must not take field 0 as proof of who is editing ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)).
+then field 0 is that player's account.
+
+That is why the reference's account check matters: the server drops the packet unless field 0 equals the sender's account (`server/src/player/Player.cpp:1894-1895`), so a server must not take field 0 as proof of who is editing.
 
 ## Player Properties (PLI_PLAYERPROPS Data)
 
@@ -1939,20 +1940,23 @@ while the player has no level yet (`PlayerClient.cpp:1155-1162`). See
 ```
 
 ### PLO_PROFILE (75) - Player Profile
-**Trigger**: Profile information response, relayed from the list server
+**Trigger**: Profile information response. The game server builds it from the list server's answer (`SVI_PROFILE`), `server/src/ServerList.cpp:568-761` at GServer-v2 beta4.
 ```
 [GCHAR: len][STRING: account]   // field 0, the profile's owner
-[GCHAR: len][STRING: name]      // fields 1-9: same order as PLI_PROFILESET
-...                             // read until the end of the packet
+[GCHAR: len][STRING: ...]       // fields 1-9, the list server's nine fields, PLI_PROFILESET order
+[GCHAR: len][STRING: online]    // "<h> hrs <m> mins <s> secs", always appended
+[GCHAR: len][STRING: ...]       // then more lines: for clients below 2.1 the fixed stat list
+                                // (kills, deaths, max power, rating, AP, rupees, sword power, spin);
+                                // for later clients the configured profile variables, "caption=value"
 ```
 
-**Original clients**: the body is a run of `GCHAR length + text` fields read to the end of
-the packet, in the same order as `PLI_PROFILESET`. The 2.05 client needs at least 10 fields;
+The server sends nothing when the profile's owner is a 6.015 or later client (`server/src/ServerList.cpp:583`). The enum comment says 6.037 does not handle the packet (gs2lib `IEnums.h:244`).
+
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`, profiles section, and `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): the body is a run of `GCHAR length + text` fields read to the end of
+the packet, in the same order as `PLI_PROFILESET`. The 2.05 client needs at least 10 fields (the reference server always sends 11 or more);
 with fewer it ignores the packet. It drops field 0 and saves fields 1 to 9 to a local
 per-account profile file. The 2.17 to 2.31 clients deliver it to the open profile window
-of that account, or to the best match in the player list. The in-game stats shown in the
-same window (online time, kills, deaths, rating and so on) are not in this packet
-([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md), profiles section; [`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+of that account, or to the best match in the player list. The profile window's in-game stats come from the appended lines above.
 
 ### PLO_NPCSERVERADDR (79) - NPC-Server Address
 **Trigger**: Sent to an RC login that holds the NPC-control right, when the server has an
