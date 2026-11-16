@@ -1572,10 +1572,15 @@ The server writes `<< levelName` (`server/src/player/PlayerClient.cpp:1211`;
 [STRING: reason]     // Disconnect reason
 ```
 
-**Original clients**: the text is stored as the disconnect reason; the server is expected to
-close the connection after it ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)). Clients from 2.17 on also handle `PLO_UPGRADEURL (169)`:
+The reference sends it and then deletes the player (`server/src/player/Player.cpp:494-505`).
+
+`PLO_UPGRADEURL (169)`: when sent along with a disconnect, the reconnect button becomes
+"Upgrade" and opens the URL (gs2lib `IEnums.h:290`). The reference never sends it.
+
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; `protocol/packet-ids.md`; not verified against the reference): the text is stored as the disconnect reason; the server is expected to
+close the connection after it. Clients from 2.17 on also handle `PLO_UPGRADEURL (169)`:
 its text is a URL that is stored, and with a disconnect the reconnect button becomes
-"Upgrade" and opens it ([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md)).
+"Upgrade" and opens it.
 
 ### PLO_HORSEADD (17) - Horse Added
 **Trigger**: The server spawns a horse
@@ -1875,10 +1880,12 @@ appeared around the board and `PLO_LEVELMODTIME` on level entry. GServer-v2 beta
 [STRING: message]    // Server start message, to end of packet
 ```
 
-**Original clients** (2.17 to 2.31): the text is RTF or HTML. The client trims it and stores it
+The text is HTML in the reference (`server/src/Server.cpp:876`).
+
+**Reported client behaviour** (squirelworks' client-analysis notes, `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): in 2.17 to 2.31 the text may also be RTF. The client trims it and stores it
 as `servermessage.rtf` or `servermessage.html`. Only when it differs from the stored copy is
 the file rewritten and shown in the start-message viewer, so an unchanged message is not
-shown again on the next login ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+shown again on the next login.
 
 ### PLO_NEWWORLDTIME (42) - New World Time
 **Trigger**: The server broadcasts the world time to all players every 5 seconds
@@ -1925,11 +1932,14 @@ client adds that built-in weapon.
 ### PLO_STAFFGUILDS (47) - Staff Guilds
 **Trigger**: Server sends staff guild information at login
 ```
-[STRING: guild_data] // "guild", repeated: each name quoted and followed by a comma
+[STRING: guild_data] // the names joined with commas; a name is quoted only if it holds a comma, quote, backslash or non-printable byte; no trailing comma
 ```
+The layout is what the reference builds with `string::toCSV`
+(`server/src/player/PlayerClient.cpp:528`, `server/include/utilities/StringUtils.h:975-1013`).
 
-**Original clients**: the 2.05 and 2.17 to 2.31 clients store the list as the staff-guild
-list ([`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md), admin-and-staff section; [`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/chat-pm-rc.md`, admin-and-staff section; `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): the 2.05 and 2.17 to 2.31 clients store the list as the staff-guild
+list. The v6 engine does the same
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:2758-2761`).
 
 ### PLO_TRIGGERACTION (48) - Trigger Action
 **Trigger**: The server runs a trigger action for a level, or a player sends one
@@ -2495,8 +2505,8 @@ text as a quoted CSV, split at `#b` (`server/src/player/PlayerClient.cpp:1746-17
 [CSV: text...]       // Two quoted strings: "Welcome to <server name>.","<vendor> <app> programmed by <credits>."
 ```
 
-**Original clients** (2.17 to 2.31): the client creates the RPG window on first use and gives
-it the text ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): in 2.17 to 2.31 the client creates the RPG window on first use and gives
+it the text.
 
 ### PLO_STATUSLIST (180) - Status List
 **Trigger**: Sent at login to clients 2.1 and later with the server's status-list options
@@ -2510,8 +2520,8 @@ The names come from the `playerlisticons` option; the default is
 property 53 (`PLAYERLISTSTATUS`) is a zero-based index into this list. Login order is in
 [Version-Gated Behavior](version-gated-behavior.md#login-order-for-the-player-list-status).
 
-**Original clients** (2.17 to 2.31): the text is passed to the status-list window only if that
-window already exists ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): in 2.17 to 2.31 the text is passed to the status-list window only if that
+window already exists.
 
 ### PLO_LISTPROCESSES (182) - List Processes
 **Trigger**: Request client process list. The reference server does not send it: the send
