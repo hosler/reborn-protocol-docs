@@ -371,24 +371,29 @@ name instead. The reference server ignores the packet when it has an NPC-server 
 `PLO_SHOWIMGPLAYER (32) >> short player_id << body` to nearby players, excluding the
 sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 
-**What the body is.** In the original clients (2.05 to 2.31) this is the list of images the
-sender's weapon scripts show (`showimg` and the `changeimg*` commands), sent as changes
-against the list sent last ([`client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md); [`client-internals/id24-205.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/id24-205.md)):
+**What the body is.** squirelworks reports that in the original clients (2.05 to 2.31) this is
+the list of images the sender's weapon scripts show (`showimg` and the `changeimg*` commands),
+sent as changes against the list sent last (squirelworks' client-analysis notes,
+`client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md`; `client-internals/id24-205.md`).
+This is not verified against the reference. The record format below matches the reference's
+`PLO_SHOWIMGNPC` layout (gs2lib `IEnums.h:287`) and the v6 engine's parser
+(`Preagonal/FourPlay/quattroplay/src/TServerPlayer.cpp:769-946`):
 
 - A record starts with `0x2A + index` (index 0 to 199). Tag bytes `0x20 + tag` follow, each
   with its data. A byte of `0x2A` or more starts the next record. An unknown tag skips one
   data byte; a tag with no data ends the text.
 - Tags: 0 name (`GCHAR` length + bytes; empty removes the image), 1 x, 2 y, 3 layer − 1,
   4 visible part (`0x20` whole image, or `0x21` + left and top as two 7-bit bytes each, then
-  width and height), 5 red, green, blue and alpha over 200, 6 zoom over 10, 7 draw order −
-  0x52, 8 mode ([`client-internals/decomp-findings-2026-10-25-g/image-text-format.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-g/image-text-format.tsv)). 2.05 sends tags 0 to 6 only.
+  width and height), 5 red, green, blue and alpha (a value over 200 in the 2.x clients,
+  reported; the v6 engine divides by 255), 6 zoom (value over 10, reported), 7 draw order −
+  0x52, 8 mode (squirelworks' client-analysis notes, `client-internals/decomp-findings-2026-10-25-g/image-text-format.tsv`). 2.05 sends tags 0 to 6 only (reported).
 - A leading `0x29` (`GCHAR` 9) marks a **full** list: the receiver then removes every image
   of that player the text did not name. With no images the full list is the marker alone,
-  which is the single byte every real client was seen to send.
+  which is the single byte every captured client sent (reported).
 - A full list goes out when a countdown wraps: every 61st call in 2.05, every 102 ticks in
-  2.17.1 to 2.31. That fits the ~5.1 s period seen on the wire. An empty text is not sent.
+  2.17.1 to 2.31 (reported). That fits the ~5.1 s period seen on the wire. An empty text is not sent.
 - 2.05 sends a UDP copy when it can and the TCP copy only when UDP does not reach every
-  player in the level; 2.31 always sends the TCP copy.
+  player in the level; 2.31 always sends the TCP copy (reported). The reference has no UDP path.
 
 ### PLI_HURTPLAYER (26) - Hurt Player
 **Trigger**: Player damages another player
@@ -1785,10 +1790,11 @@ nearby players (`server/src/player/packets/PlayerClientPackets.cpp:816`).
 ```
 The NPC form of this packet is `PLO_SHOWIMGNPC (166)`.
 
-**Original clients**: the receiver applies the record format described under
+**Reported client behaviour** (squirelworks' client-analysis notes, `client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md`; not verified against the reference): the receiver applies the record format described under
 `PLI_SHOWIMGPLAYER (24)` to that player's images. A new image starts with layer 1, colours 200
 each, zoom 10 and mode 0, and fields other than the name apply only to an image that already
-exists ([`client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-g/01-id24-image-list.md)).
+exists. The v6 engine confirms the last rule
+(`Preagonal/FourPlay/quattroplay/src/TServerPlayer.cpp:837-882`).
 
 ### PLO_NPCWEAPONADD (33) - NPC Weapon Added
 **Trigger**: Player gains a weapon (login, or a script gives it)
@@ -2379,7 +2385,7 @@ Index 9 is special: it makes the client erase all of the NPC's showimgs, and the
 level-entry form starts with it (`NPC.cpp:274`). The property ids are listed in the enum
 comment (gs2lib `IEnums.h:287`: 0 image, 1 x, 2 y, 3 layer, 4 image part, 5 and 6 particle
 data, 7 angle, 8 particle). The server serializes them in
-`ShowImg::getAllPropsPacket`. The per-property encodings are not derived here.
+`ShowImg::getAllPropsPacket`. The record format is described under `PLI_SHOWIMGPLAYER (24)`.
 
 ### PLO_GHOSTMODE (170) - Ghost Mode
 **Trigger**: Player enters/exits ghost mode. The reference server never sends it and the
