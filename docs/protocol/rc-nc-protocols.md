@@ -301,7 +301,7 @@ NPC ids are GINT3 everywhere.
 | PLI_NC_WEAPONDELETE | 118 | raw weapon name |
 | PLI_NC_CLASSDELETE | 119 | raw class name |
 | PLI_NC_LEVELLISTGET | 150 | empty |
-| PLI_NC_LEVELLISTSET | 151 | the edited level list (sent by the NPC Control client's level-list editor) |
+| PLI_NC_LEVELLISTSET | 151 | `gstring(levels)` (gs2lib `IEnums.h:149`). Sent by the original NPC Control client's level-list editor (reported, not verified against the reference). beta4 declares the id but has no handler (`server/include/network/IPacketHandler.h:139`; `server/src/player/PlayerNC.cpp:30-51`) |
 
 ### NC — PLO (server → client)
 
@@ -324,10 +324,12 @@ NPC ids are GINT3 everywhere.
 #### What the original NPC Control client does
 
 The following is from static reads of the original NPC Control client (2002 and 2004 builds),
-reported in [`tools/npc-control.md`](https://github.com/squirelworks/Graal_analysis/blob/main/tools/npc-control.md) and [`protocol/npc-control.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/npc-control.md). It is not verified against the reference.
+reported in squirelworks' client-analysis notes, `tools/npc-control.md` and `protocol/npc-control.md`. It is not verified against the reference.
 
 - **Routing on the NC socket.** Received ids 33, 80, 157 to 164 and 167 go to the NC handler;
-  every other id, `PLO_DISCMESSAGE (16)` included, goes to the RC handler.
+  every other id, `PLO_DISCMESSAGE (16)` included, goes to the RC handler. (This list leaves
+  out 188 and 192, which the server also sends to NC clients: reported, not checked against
+  the notes.)
 - **Which control sends which id.** 103 when the NPC list is opened, on Enter and for
   Attributes; 104 for Delete (after a confirm); 105 Reset; 106 Script; 107 Quick warp or the
   warp dialog; 108 Edit flags; 111 the Add NPC dialog; 112 opening a class; 114 the Local NPCs
@@ -335,10 +337,12 @@ reported in [`tools/npc-control.md`](https://github.com/squirelworks/Graal_analy
 - **One editor, many saves.** All NC texts open in one shared editor window with a mode.
   Save sends 109, 110, 113, 117 or 151 according to the mode. Attributes (157) and level dumps
   (164) are view-only and can only be saved locally as `.rtf`.
-- **`PLI_NC_NPCADD (111)` types.** The Add NPC dialog's type is one of `OBJECT`, `ANIMAL`,
-  `POLICE`, `HORSE`, `BOAT`, `HOUSEC`.
+- **`PLI_NC_NPCADD (111)` types.** The Add NPC dialog offers these types: `OBJECT`, `ANIMAL`,
+  `POLICE`, `HORSE`, `BOAT`, `HOUSEC` (reported; the reference accepts any type string,
+  `server/src/player/packets/PlayerNCPackets.cpp:359-422`).
 - **`PLO_NC_NPCADD (158)`.** The client accepts the 50/51/52 props in any order and any subset,
-  so the level-only update the reference sends on a level change works.
+  so the level-only update the reference sends on a level change works (the reference sends
+  the level-only form at `server/src/object/NPC.cpp:221`).
 - **Class delete.** 119 and 188 are handled from the 2004 build; the 2002 build has no class
   delete button and does not handle 188.
 - **`PLO_NC_WEAPONLISTGET (167)`** is read as repeated length-prefixed names to the end of the
