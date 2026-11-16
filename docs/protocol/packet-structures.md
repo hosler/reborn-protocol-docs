@@ -344,8 +344,11 @@ only (the reference server also accepts `name=value`; it then deletes only a fla
 [GCHAR: tile_y]      // Y coordinate in tiles
 ```
 
-**Original clients**: sent from 1.21; the New World beta clients do not send it. The server
-replies with `PLO_LEVELCHEST` in the 3-byte opened form ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Original clients** (reported, not verified against the reference): sent from 1.21; the New
+World beta clients do not send it. The server replies with `PLO_LEVELCHEST` in the 3-byte
+opened form (the reference sends this form in reply to `PLI_OPENCHEST`,
+`server/src/player/packets/PlayerClientPackets.cpp:730-749`; squirelworks' client-analysis
+notes, `protocol/packet-layouts.md`).
 
 ### PLI_PUTNPC (21) - Place NPC
 **Trigger**: Player places an NPC (when putnpc enabled)
@@ -1465,11 +1468,14 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
 > NPCs use a **distinct `NPCProp` enum**. Prop 5 is RUPEES (not a direction), 17 is ID,
 > 75/76/77 are X2/Y2/Z2. See the full table in [NPC Properties](npc-properties.md).
 
-**Original clients** (2.05): ids below 1000 are level NPCs, created in the object level; 1000
-and up are server-wide. A new NPC gets the `playerenters` event if the player is in that
-level. In 2.05r2 the script prop (NPCPROP 1) is applied only when the NPC has no script yet,
-though its bytes are still consumed. So the SCRIPT prop cannot replace a script; the 1.28 to
-2.03 clients had `PLO_NPCACTION (26)` for that ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`protocol/payload-and-trigger-205r2.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/payload-and-trigger-205r2.md)).
+**Original clients** (2.05; reported, not verified against the reference): ids below 1000 are
+level NPCs, created in the object level; 1000 and up are server-wide. A new NPC gets the
+`playerenters` event if the player is in that level. In 2.05r2 the script prop (NPCPROP 1) is
+applied only when the NPC has no script yet, though its bytes are still consumed. So the
+SCRIPT prop cannot replace a script; the 1.31 to 2.03 clients had `PLO_NPCSETSCRIPT (26)` for
+that (gs2lib `IEnums.h:195`; see [PLO_NPCSETSCRIPT (26)](#plo_npcsetscript-26---npc-set-script);
+squirelworks' client-analysis notes, `protocol/packet-layouts.md` and
+`protocol/payload-and-trigger-205r2.md`).
 
 ### PLO_LEVELCHEST (4) - Level Chest
 **Trigger**: Player opens chest or enters level with chests
@@ -1490,10 +1496,12 @@ though its bytes are still consumed. So the SCRIPT prop cannot replace a script;
 > Coordinates are **whole tiles**, not half-tiles. `PLI_OPENCHEST` must echo the same
 > whole-tile coordinates. Otherwise, the server will not match the chest.
 
-**Original clients** (2.05): a closed chest (`opened == 0`) with fewer than 5 bytes is dropped.
+**Original clients** (2.05; reported, not verified against the reference): a closed chest
+(`opened == 0`) with fewer than 5 bytes is dropped.
 An opened chest draws nothing by itself; the chest graphic comes from the board tiles, so on
 a board with no chest tiles the 3-byte form leaves no trace. That is why a level can show
-no chests even though the server sent them ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`client-internals/decomp-findings-2026-10-25-l/04-public-server-run.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/decomp-findings-2026-10-25-l/04-public-server-run.md)).
+no chests even though the server sent them (squirelworks' client-analysis notes,
+`protocol/packet-layouts.md` and `client-internals/decomp-findings-2026-10-25-l/04-public-server-run.md`).
 
 ### PLO_LEVELSIGN (5) - Level Sign
 **Trigger**: Player enters level with signs
@@ -1526,8 +1534,9 @@ ctab        = {91,92,93,94,77,78,79,80,74,75,71,72,73,86,86,87,88,67}
 ```
 `signSymbols` are controller/keyboard glyphs (A/B/X/Y buttons, u/d/l/r dpad, etc.).
 
-**Original clients** (2.05): the packet needs at least 2 bytes (the position); the text may
-be empty ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Original clients** (2.05; reported, not verified against the reference): the packet needs
+at least 2 bytes (the position); the text may be empty (squirelworks' client-analysis notes,
+`protocol/packet-layouts.md`).
 
 ### PLO_LEVELNAME (6) - Level Name
 **Trigger**: Player enters level
@@ -1570,11 +1579,16 @@ sets the layer prefix.
 **Source**: `server/src/level/LevelBoardChange.cpp:73-81` (build), `Level::alterBoard`
 (`server/src/level/Level.cpp:1610`, tiles read via `readGShort()`).
 
-**Original clients** (2.05): the packet is applied only when its length is at least
-`w × h × 2 + 4`. In a two-client capture with the reference server, the server sent
-`PLO_BOARDMODIFY` with the reported bytes to both clients, the reporter included, and 15.0 s
-later (`respawntime = 15`) sent the original tiles back ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), board-change-on-the-wire
-section).
+**Original clients** (2.05; reported, not verified against the reference): the packet is
+applied only when its length is at least `w × h × 2 + 4`. In a two-client capture with the
+reference server (squirelworks' client-analysis notes, `protocol/packet-layouts.md`,
+board-change-on-the-wire section), the capture showed the reporter receiving the first
+`PLO_BOARDMODIFY` too. That is not what beta4's source does and may come from a different
+server build: the reference relays the reported change to the other players only
+(`server/src/player/packets/PlayerClientPackets.cpp:127-128`), so the reporter does not get it
+back. 15.0 s later (`respawntime`, default 15; a 2x2 change only,
+`server/src/level/Level.cpp:1670-1672`) it sends the original tiles to every client in the
+level (`server/src/level/LevelBoardChange.cpp:50-57`).
 
 ### PLO_BOARDMODIFY2 (186) - Board Modification (GMAP / Map-Position Form)
 **Trigger**: Board change on a gmap (sent to the nearby segments,
