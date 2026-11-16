@@ -120,6 +120,9 @@ One exception: when the `clientsidepushpull` option is on (default true, `server
 stone, `Level::alterBoard` rejects it and sends a `PLO_BOARDMODIFY` for the same area
 back to the sender (`Level.cpp:1660-1664`).
 
+One 2.05 capture, reported in squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference: when a bomb destroyed bushes, the other player on the level (not the
+bomb's owner) sent one `PLI_BOARDMODIFY` per destroyed 2×2 patch, eight in one frame.
+
 ### PLI_PLAYERPROPS (2) - Player Property Update
 **Trigger**: Player properties change (movement, appearance, stats, etc.)
 ```
@@ -152,15 +155,14 @@ client has already counted down to 2.75 s when it sends the packet
 (`PlayerClientPackets.cpp:222-225`). So a value of 55 means 2.8 s remaining. The reference
 defines no default value.
 
-**What the original clients write in the third byte.** The 2.05 client does not write a
+**What the original clients write in the third byte** (reported in squirelworks' client-analysis notes, `protocol/packet-layouts.md`, board-change-on-the-wire section; not verified against the reference). The 2.05 client does not write a
 player id there. It writes `power + 8`, where bit 3 (value 8) marks the bomb as the
 sender's own. A receiver takes the power as `v & 7` and bit 3 as "mine". The reference
-reads the same byte as `(player << 2) | power`, so the two disagree for any byte with bit
-3 set. A captured 2.05 bomb carried x 78, y 28, power byte 9 (power 1 plus the owner flag)
-and fuse 55 ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md), board-change-on-the-wire section).
-
-When a bomb destroyed bushes in that capture, the other player on the level (not the
-bomb's owner) sent one `PLI_BOARDMODIFY` per destroyed 2×2 patch, eight in one frame.
+decodes the same byte as `(player << 2) | power` but ignores the player bits: it relays the
+body unchanged and uses the sender's own id, and with an NPC-server it keeps only
+`power & 3` (`PlayerClientPackets.cpp:217-237`). A captured 2.05 bomb carried x 78, y 28,
+power byte 9 (power 1 plus the owner flag) and fuse 55. The decompiled reference client
+agrees on the mechanism (`Preagonal/FourPlay/quattroplay/src/TClient.cpp:1677`, `:3565-3571`).
 
 ### PLI_BOMBDEL (5) - Remove Bomb
 **Trigger**: Bomb explodes or is removed
@@ -377,8 +379,8 @@ sender. The reference enum name is `PLI_SHOWIMGPLAYER` (gs2lib `IEnums.h:56`).
 [GUCHAR: power]      // Explosion power
 ```
 
-**Original clients** (1.31 and later): `power` is written with the same owner bit as
-`PLI_BOMBADD`, power + 8 when the explosion is the sender's ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (1.31 and later; squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): `power` is written with the same owner bit as
+`PLI_BOMBADD`, power + 8 when the explosion is the sender's (the decompiled reference client does the same, `Preagonal/FourPlay/quattroplay/src/TClient.cpp:1409`).
 
 ### PLI_PRIVATEMESSAGE (28) - Private Message
 **Trigger**: Player sends PM to other players
@@ -1436,8 +1438,8 @@ against it.
 The server-built form is `server/src/level/Level.cpp:2098`. The relay of a client's bomb
 prepends the sender id to the client body (`server/src/player/packets/PlayerClientPackets.cpp:237`).
 
-**Original clients**: power is `v & 7`; bit 3 (value 8) marks the bomb as belonging to the
-player whose id leads the packet ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): power is `v & 7`; bit 3 (value 8) marks the bomb as belonging to the
+player whose id leads the packet (the decompiled reference client reads it so, `Preagonal/FourPlay/quattroplay/src/TClient.cpp:3565-3571`).
 
 ### PLO_BOMBDEL (12) - Bomb Removed
 **Trigger**: Bomb explodes or is removed
@@ -1449,8 +1451,8 @@ There is **no** player id. The server builds `>> x >> y` (`server/src/level/Leve
 relays the client's `PLI_BOMBDEL` body unchanged (`PlayerClientPackets.cpp:248`), and uses the
 same two bytes to roll back a refused bomb (`PlayerClientPackets.cpp:233`).
 
-**Original clients**: the client removes the bomb at exactly that point; there is no
-tolerance ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the client removes the bomb at exactly that point; there is no
+tolerance.
 
 ### PLO_TOALL (13) - Chat Message
 **Trigger**: Player sends public chat
@@ -1716,8 +1718,8 @@ A default weapon (`PLO_DEFAULTWEAPON (43)`) skips all of this.
 (`server/src/level/Level.cpp:2224`; the relay of a client's explosion is
 `server/src/player/packets/PlayerClientPackets.cpp:855`.)
 
-**Original clients**: the 2.05 client takes `power & 7`, clamped to 1 to 3, and bit 3 (value
-8) as "owned by that player" ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the 2.05 client takes `power & 7`, clamped to 1 to 3, and bit 3 (value
+8) as "owned by that player" (the decompiled reference client does the same, `Preagonal/FourPlay/quattroplay/src/TClient.cpp:3599-3605`).
 
 ### PLO_PRIVATEMESSAGE (37) - Private Message
 **Trigger**: Player receives PM
