@@ -399,9 +399,10 @@ to GEN_5 are sent as `[uint16 length][payload]`.
 #### What the original clients do on their side of the frame
 
 The reference describes the server's framing. The original clients add limits of their own,
-which a server must stay inside. These are from static reads and captures of the clients,
-summarized in squirelworks' client-analysis notes ([`manual/02-protocol/01-framing.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/01-framing.md), with per-row sources); they are not
-verified against the reference.
+which a server is reported to need to stay inside. These are from static reads and captures
+of the clients, summarized in squirelworks' client-analysis notes,
+`manual/02-protocol/01-framing.md` (with per-row sources); they are not verified against
+the reference.
 
 | Rule | Builds |
 |---|---|
@@ -409,22 +410,24 @@ verified against the reference.
 | 1.39 flushes when the queue would pass 4095 bytes and writes the frame in 256-byte slices | 1.39 |
 | The client drops the connection when more than `0x40000` (256 KiB) is queued unsent | 1.39, 2.00 to 2.05, 2.17, 2.22, 2.31 |
 | The same limit is `0x800000` bytes for the gen-5 RemoteControl | RemoteControl |
-| The sender refuses a payload that already contains `\n`; 6.x reports "Illegal characters in the outgoing data". Binary data must use the raw-data escape | 1.39, 2.05, 6.01r1, 6.03r7 |
-| An account or password of 224 bytes or more is sent in the login as length byte `0xFF` followed by its first 223 bytes | 4.20r6, 4.20r8, 5.00r7, 6.01r1, 6.03r7 |
-| A frame of `0xFFFF` bytes or more is sent as length `0xFFFF` followed by a 4-byte big-endian length (the escape described under v7 below exists in the 6.0x classic mode too) | 6.01r1, 6.03r7 |
-| Before a payload sent as id 93 (and 163 in 6.x) the client sends `PLI_RAWDATA (50)` with an `i3` length, capped at `0x37FFFF` | 4.20r8, 5.00r7, 6.01r1, 6.03r7 |
+| The sender refuses a payload that already contains `\n`; 6.x reports "Illegal characters in the outgoing data". Binary data must use the raw-data escape. The decompiled mobile engine logs a similar refusal only before its protocol is set (`Preagonal/FourPlay/quattroplay/src/TGraalConnection.cpp:1325-1331`) | 1.39, 2.05, 6.01r1, 6.03r7 |
+| An account or password of 224 bytes or more is sent in the login as length byte `0xFF` followed by its first 223 bytes. A stock server reads the length with `readGUChar()` (maximum 223), `PlayerClient.cpp:348-349` | 4.20r6, 4.20r8, 5.00r7, 6.01r1, 6.03r7 |
+| A frame of `0xFFFF` bytes or more is sent as length `0xFFFF` followed by a 4-byte big-endian length (the same escape described under [v7 mode 0](#v7-worlds-engine-builds) below; the reference server cannot receive it: `retrievePacketBundle` reads a `uint16` and nothing else, `IPacketHandler.h:242-251` at origin/beta4, so a frame of 65535 bytes or more from these clients would be misframed) | 6.01r1, 6.03r7 |
+| Before a payload sent as id 93 (and 163 in 6.x) the client sends `PLI_RAWDATA (50)` with an `i3` length, capped at `0x37FFFF`. The reference names PLI 93 `PLI_RC_FILEBROWSER_UP` (gs2lib `IEnums.h:123`) and has no PLI 163; these two ids are whichever packets the notes call the script-upload pair. The raw-data announcement itself matches `PLI_RAWDATA (50)` (`IEnums.h:80`) and the decompiled client (`Preagonal/FourPlay/quattroplay/src/TGraalConnection.cpp:1283-1292`) | 4.20r8, 5.00r7, 6.01r1, 6.03r7 |
 | 2.05 links zlib 1.1.2; 2.02 to 2.02 rev2 import an external `zlib.dll` instead of a compiled-in unit. The wire format is the same | 2.00 to 2.1 test |
 
 **zlib header.** Real clients compress at the best zlib level, so their streams start
 `78 DA` (2.05, 2.17.1, 2.22, 2.31 captures). A public list server was seen to accept gen-5
 frames that start `78 9C` (the default level); whether a classic frame with that header is
-accepted was not measured ([`protocol/login-frames-by-version-2026-10-25.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/login-frames-by-version-2026-10-25.md)).
+accepted was not measured (reported, not verified against the reference; squirelworks'
+client-analysis notes, `protocol/login-frames-by-version-2026-10-25.md`).
 
 **Mac PowerPC receive.** Four Mac receivers (shared v3, 4.04r2, 4.20r6, shared v5) wait for a
 complete body after the 2-byte length. v3 and 4.04r2 decompress into a fixed buffer and
 accept a frame only if its output fits, with no retry. Shared v5 starts with a 64 KiB or
 larger workspace and doubles it on a retry status only while the next request is at most
-4 MiB ([`protocol/macos-ppc-receive-decompression.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/macos-ppc-receive-decompression.md)).
+4 MiB (reported, not verified against the reference; squirelworks' client-analysis notes,
+`protocol/macos-ppc-receive-decompression.md`).
 
 ### Payload transform — `IPacketHandler::processPacketBundle` (`IPacketHandler.h:250-307`)
 
