@@ -350,6 +350,10 @@ reads the position as a **whole-map** tile position and picks the cell from it
 [GINT3: npc_id]      // NPC identifier to delete
 ```
 
+**Original clients** (1.21 and later): the 2.05 client sends it only for NPCs with id > 0.
+When the NPC is one of the player's weapons it sends `PLI_NPCWEAPONDEL (29)` with the weapon
+name instead ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+
 ### PLI_WANTFILE (23) - Request File
 **Trigger**: Client needs a file (image, level, etc.)
 ```
@@ -1860,6 +1864,9 @@ client adds that built-in weapon.
 // No additional data - informs client not to update NPC props
 ```
 
+**Original clients**: after this packet the client stops applying NPC props itself
+([`protocol/packet-ids.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-ids.md); [`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)). It also changes which level `PLO_LEVELNAME (6)` makes the object level.
+
 ### PLO_FILEUPTODATE (45) - File Up To Date
 **Trigger**: Requested file is current
 ```
@@ -2203,12 +2210,19 @@ The server sends it to a recipient whose own level name differs from the NPC's, 
 `PLO_NPCDEL` to a recipient with the same name (`server/src/Server.cpp:1630-1637`). A gmap NPC's
 level name is the gmap name.
 
+**Original clients** (2.17 to 2.31): the NPC is removed from that named level only
+([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+
 ### PLO_HIDENPCS (151) - Hide NPCs
 **Trigger**: NPCs should be hidden. The reference server never sends it. The enum comment
 says it "might delete all npcs with an id under 1000" (gs2lib `IEnums.h:273`).
 ```
 // No additional data
 ```
+
+**What the original clients do**: 2.17 to 2.31 remove the NPCs with ids 1 to 999 from the
+active level. Id 0 is excluded, and server-wide NPCs (1000 and up) are not touched. This
+settles the "might delete" in the enum comment ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
 
 ### PLO_SAY2 (153) - Say/Sign Text
 **Trigger**: Display text/sign content
