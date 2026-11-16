@@ -184,7 +184,7 @@ NPC ids are **GINT3** (3 bytes) throughout both sub-protocols.
 #### What the original RC clients send, by build
 
 The following is from static reads of the original RC clients (rc133 from 1999 through the
-2004 build), reported in [`tools/remotecontrol-lineage.md`](https://github.com/squirelworks/Graal_analysis/blob/main/tools/remotecontrol-lineage.md) and [`tools/remotecontrol.md`](https://github.com/squirelworks/Graal_analysis/blob/main/tools/remotecontrol.md), with a 2004 wire capture in [`protocol/rc-capture-2026-11-04.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/rc-capture-2026-11-04.md). Each row lists the
+2004 build), reported in squirelworks' client-analysis notes, `tools/remotecontrol-lineage.md` and `tools/remotecontrol.md`, with a 2004 wire capture in `protocol/rc-capture-2026-11-04.md`. Each row lists the
 constant ids at the RC socket's send sites, so ids sent through a computed value are missing
 and each row is a floor. It is not verified against the reference.
 
@@ -198,16 +198,20 @@ and each row is a floor. It is not verified against the reference.
 | 2002/05/02 | 1, 2, 6, 28, 51–54, 61–64, 68–79, 82–92, 94, 96–98, plus the NC ids |
 | 2004 | 2, 6, 28, 51–54, 61–64, 68–76, 78, 79, 82, 84, 86, 88–92, 94, 96–98 (on the wire also 73, 76, 83, 85, 87) |
 
-**Ids 51 to 54 changed meaning.** In rc133, 51 is the account list's Edit (get account), 52
+**Ids 51 to 54 changed meaning.** Reported, not verified against the reference: in rc133, 51 is the account list's Edit (get account), 52
 and 53 are Apply in the account editor, 54 is Delete, 59 gets a player's props and 60 sets
 them. From 2000/8/19 accounts move to 70 to 78, and 51 to 54 are unused until 2002/05/02 brings
 them back as server options and folder config. A server that talks to rc133 cannot use the
-later names for 51 to 54.
+later names for 51 to 54. On beta4 these ids are `PLI_RC_SERVEROPTIONSGET/SET` and
+`PLI_RC_FOLDERCONFIGGET/SET` (gs2lib `IEnums.h:81-84`); 55 to 59 are deprecated no-ops there
+(`server/src/player/packets/PlayerRCPackets.cpp:176-204`), so an rc133 client that uses them
+as live ids gets no reply.
 
-**What the 2004 RC handles from the server**: 13, 16, 30, 35, 37, 55–59, 61–70, 72–74, 76, 77, 79,
+**What the 2004 RC handles from the server** (reported): 13, 16, 30, 35, 37, 55–59, 61–70, 72–74, 76, 77, 79,
 100, 103 and 180. Id 55 (`PLO_ADDPLAYER`) creates or updates a player-list row from a
-14-bit id and a prop stream; a new row defaults to 3 hearts, `sword1.gif`, `body.png` and
-`onlinestartlocal.graal`.
+`gshort` id, the account name and a prop stream; a new row defaults to 3 hearts, `sword1.gif`,
+`body.png` and `onlinestartlocal` plus the level-file extension. The reference also sends 25,
+47 and 194 to an RC at login; the notes do not say whether the 2004 RC handles them.
 
 ### `getPropsForRCPacket()` blob (inside PLO_RC_PLAYERPROPSGET, after `gshort(id)`)
 
