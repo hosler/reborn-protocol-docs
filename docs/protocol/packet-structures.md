@@ -714,7 +714,7 @@ reference list binds `FULLHEARTS` to `account.maxHitpoints`
 **ARROWSCOUNT (4)**: `[GCHAR: arrow_count]`
 **BOMBSCOUNT (5)**: `[GCHAR: bomb_count]`
 **GLOVEPOWER (6)**: `[GCHAR: glove_power]` (0-3)
-**BOMBPOWER (7)**: `[GCHAR: bomb_power]` (0-3)
+**BOMBPOWER (7)**: `[GCHAR: bomb_power]` (0-3 as the reference uses it; it stores a plain numeric byte, `server/include/object/Player.h:707` at GServer-v2 beta4, and the 2.05 client is reported to send 10, see below)
 **SWORDPOWER (8)**: Variable format (see below)
 **SHIELDPOWER (9)**: Variable format (see below)
 
@@ -921,27 +921,26 @@ notes, not confirmed against the reference):
 
 #### How the 2.05 client reads individual props
 
-Several props have a short default form that the server source does not spell out. As the
-2.05 client reads them ([`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md), 2.05 coverage section; summarized in [`manual/02-protocol/06-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/06-props.md)):
+The reference spells out the forms of props 8, 9, 11, 17 and 36 above; this table lists how the 2.05 client is reported to read them, plus props the reference does not describe from the client side. Reported in squirelworks' client-analysis notes, `protocol/player-props.md` (2.05 coverage section) and `manual/02-protocol/06-props.md`; not verified against the reference:
 
 | Prop | What 2.05 reads |
 |---|---|
-| 8 SWORDPOWER | a value 0 to 4 alone means the default `sword<n>.gif`; otherwise `power + 30`, then the image as a GSTRING |
-| 9 SHIELDPOWER | 0 to 3 alone are the defaults; otherwise `power + 10`, then the image |
-| 11 HEADGIF | a value below 100 means `head<n>.gif`; otherwise `len + 100`, then the name (at most 100 bytes) |
-| 17 SPRITE | direction + 4 × animation index; `0x80` in one special state |
-| 19 CARRYSPRITE | −1 for none, 0, 200, 201, or tile-based values |
+| 8 SWORDPOWER | same as the reference forms above (`PropertySerializers.cpp:98-218`) |
+| 9 SHIELDPOWER | same as the reference forms above (`PropertySerializers.cpp:98-218`) |
+| 11 HEADGIF | a value below 100 means `head<n>.gif`; otherwise `len + 100`, then the name (the reference allows up to 123 bytes, `PropertySerializers.h:107`; a 100-byte cap in 2.05 is reported, not verified) |
+| 17 SPRITE | same packing as the reference (`PropertySerializers.cpp:626-647`); `0x80` in one special state is reported, not verified |
+| 19 CARRYSPRITE | −1 for none, 0, 200, 201, or tile-based values. The decompiled mobile engine writes the same set: none 0x1f (-1), 0x41 -> 0, 0x42 -> 200, 0xef -> 201, else sprite - 4 (`Preagonal/FourPlay/quattroplay/src/TPlayer.cpp:3221-3236`) |
 | 30, 31 IPADDR, UDPPORT | feed the UDP peer channel |
-| 36 RATING | rating = `b0 × 32 + ((b1 & 0x7F) >> 2)`, deviation = `(b1 & 3) × 128 + b2` (the raw GCHAR bytes after −32), which is the reference's packing read byte by byte |
-| 7, 23 | sent by 2.05 as constants: bomb power 10 and effect colours 0 |
+| 36 RATING | rating = `b0 × 32 + ((b1 & 0x7F) >> 2)`, deviation = `(b1 & 3) × 128 + b2` (the raw GCHAR bytes after −32), which is the reference's packing read byte by byte (`PropertySerializers.cpp:350-361`) |
+| 7, 23 | reported as constants in 2.05: bomb power 10 and effect colours 0 (the mobile engine does the same: `Preagonal/FourPlay/quattroplay/src/TPlayer.cpp:3162-3164`, `:3251-3254`). The reference stores prop 7 as a plain numeric byte (`server/include/object/Player.h:707` at GServer-v2 beta4), and a value of 10 is what these clients send |
 
-Stream-level details of the same client:
+Stream-level details of the same client, reported for 2.00 and 2.05 and not verified against the reference:
 
 - The other-player stream checks the remaining length before multi-byte props and clamps
   string lengths. The **self** stream does not length-check the fixed-size props 3, 13, 14 and
   24, so a truncated one reads a few bytes past the end before the loop stops.
 - The self stream needs at least 2 bytes left to start a prop; a lone trailing id byte is
-  dropped (2.00 and 2.05, [`version-profiles/plo-playerprops-layouts.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-playerprops-layouts.tsv)).
+  dropped (2.00 and 2.05, squirelworks' client-analysis notes, `version-profiles/plo-playerprops-layouts.tsv`).
 
 ### Packet-context policy is intentional
 
