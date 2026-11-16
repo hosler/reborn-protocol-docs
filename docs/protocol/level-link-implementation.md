@@ -107,6 +107,20 @@ The destination coordinates accept special values:
 Example: A link with `destx="playerx" desty="32"` keeps the player's X position. It puts
 the player at Y=32 in the destination level.
 
+#### Where the original client tests a link
+
+Reported, not verified against the reference. A lab test of the 2.05 rev2 client against one
+server (straight walks only, measured to half a tile; squirelworks' client-analysis notes,
+`protocol/link-test-2026-11-04.md`) found that the client takes a link when **one point**
+enters the link rectangle: the player's centre, (x + 1.5, y + 2), pushed 1 to 1.5 tiles ahead
+in the walking direction. FourPlay's link test uses the same kind of single probe point
+(`Preagonal/FourPlay/quattroplay/src/TPlayer.cpp:6101-6160`), so the mechanism is not specific
+to 2.05; the 1.5 / 2 / 1-1.5 offsets are the lab figures, reported. So a 1×1 link that is off
+that centre line is walked past without triggering.
+2.17.1 and 2.22 also have a helper that builds a default link with `destx` and `desty` preset
+to `playerx` and `playery`, used for editor and edge cases (squirelworks' client-analysis
+notes, `version-profiles/plo-levellink-layouts.tsv`).
+
 ## GMAP Implementation
 
 ### Understanding GMAP Links
@@ -124,15 +138,6 @@ filters them itself: with an NPC-server present, its own link test skips them on
 GMAP system handles seamless transitions automatically. This client-side practice is
 unverified against the decompiled reference client. The server sends links to clients
 under the conditions in the Packet Structure section, not "for backward compatibility".
-
-#### Where the original client tests a link
-
-A lab test of the 2.05 rev2 client against one server (straight walks only, measured to half
-a tile; [`protocol/link-test-2026-11-04.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/link-test-2026-11-04.md)) found that the client takes a link when **one point** enters the link
-rectangle: the player's centre, (x + 1.5, y + 2), pushed 1 to 1.5 tiles ahead in the walking
-direction. So a 1×1 link that is off that centre line is walked past without triggering.
-2.17.1 and 2.22 also have a helper that builds a default link with `destx` and `desty` preset
-to `playerx` and `playery`, used for editor and edge cases ([`version-profiles/plo-levellink-layouts.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-levellink-layouts.tsv)).
 
 ### Implementation Strategy
 
