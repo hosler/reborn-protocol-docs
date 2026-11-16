@@ -225,14 +225,18 @@ if (isClient() && m_versionId < CLVER_2_14)
 ### Unknown tokens get the pre-2.1 file layout
 
 Every gate above compares `m_versionId`, and `m_versionId` comes only from the login token's
-position in gs2lib's `clientVersions[]`. A token that the server allows but that is not in
+position in gs2lib's `clientVersions[]` (`getVersionID`, gs2lib `IUtil.cpp:271-281`). A token that the server allows but that is not in
 the table resolves to `CLVER_UNKNOWN` (0). That is below `CLVER_2_1`, so the client gets
 every pre-2.1 path: no modtime, no large-file packets, and a failure for files over 64000
-bytes.
+bytes (`Player.cpp:621-628`, `:638-652` at origin/beta4). The token table and the
+allowed-versions rejection are in
+[Versions and Encryption](versions-encryption.md#tokens-from-real-clients-205-and-the-tokens-the-table-does-not-list).
 
-The 5.24 and 6.00 beta builds show the effect. Their tokens (`G3D15010`, `G3D03048`) are not
-in the table. The client always reads `PLO_FILE` as `[GINT5 modtime][GCHAR name_len][name]`.
-Given the short form, it takes the name length and the first four name characters as the
+In squirelworks' lab (reported, not verified against the reference) the 5.24 and 6.00 beta
+builds showed the effect. Their tokens (`G3D15010`, `G3D03048`) are not in the table. These
+clients are reported to always read `PLO_FILE` as `[GINT5 modtime][GCHAR name_len][name]`
+(not verified against the reference, which holds no such client). The 2.05 case above is the
+same misread. Given the short form, it takes the name length and the first four name characters as the
 modtime, and the fifth character as the name length. For `sword1.png` it reads `d` (68) as
 the length, so the "name" is `1.png` plus 63 bytes of PNG data. The client then reports that
 it cannot open that file for writing. When the token is added to the table, the same server
@@ -244,21 +248,30 @@ step: an entry added to one and not the other shifts every later version id.
 
 ### What 5.x and 6.x clients request at login
 
+The following is reported in squirelworks' client-analysis notes. The packet ids and
+layouts are the reference's (`IEnums.h:55,66,78`); the order and the builds are not
+verified against the reference.
+
 - 5.00r7 to 6.03r7 open with `basepackage.gupd`. The client sends it as
   `PLI_VERIFYWANTSEND (47)` (`GINT5 crc32` + name) when it has a cached copy for that
   server, and as `PLI_WANTFILE (23)` when it does not. The cache is per server name: a
   5.00r7 client sent 47 on the `Login` server and 23 on the next server after the warp.
+  A server that wants to serve the update package must answer 47 for a `.gupd` name by
+  sending the file. beta4 skips the checksum comparison for `.gupd`
+  (`PlayerClientPackets.cpp:1445-1447`), so it never sends `PLO_FILEUPTODATE` for it.
 - Then `PLI_UPDATEFILE (34)` for cached images and animations, for example `idle.gani`,
   `sprites.png`, `body.png`, `head0.png` and `shield1.png`.
 - Then `PLI_WANTFILE (23)` for the fonts (`arial.ttf`, `arialbd.ttf`) and for
   `tiledefs<server>.txt`.
 
-A real 5.00r7 client, with its token in the table, saved a 541,248-byte file sent as
-`68`, `84`, `102` chunks (each with modtime and name) and `69` byte for byte.
+A 5.00r7 client, with its token added to the server's table (reported; the stock table has
+no 5.00 token, the lowest 5.x entry is `G3D22067`, `IUtil.cpp:119`), is reported to have
+saved a 541,248-byte file byte for byte. The server sends it as `PLO_LARGEFILESTART (68)`,
+`PLO_LARGEFILESIZE (84)`, `PLO_FILE (102)` chunks of up to 32000 bytes (each with modtime
+and name) and `PLO_LARGEFILEEND (69)` (`Player.cpp:631-658`).
 
-Source: Graal_analysis
-[`protocol/file-transfer.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/file-transfer.md).
-It has the lab captures for 5.00r7, 5.24r4, 5.30r3 and 6.03r7.
+Source: squirelworks' client-analysis notes, `protocol/file-transfer.md` (lab captures for
+5.00r7, 5.24r4, 5.30r3 and 6.03r7); reported, not verified against the reference.
 
 ## PLPROP_COLORS Width: Two Independent Switches
 
