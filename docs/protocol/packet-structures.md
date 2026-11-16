@@ -1830,8 +1830,9 @@ a label shown before the text: `"Private message:"`, `"Mass message:"`, `"Server
 ```
 The layout is from the enum comment (gs2lib `IEnums.h:207`).
 
-**Original clients**: the 2.05 client decodes each byte as `v / 16 - 4` and ignores the
-packet unless the player's level is the active level ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the 2.05 client decodes each byte as `v / 16 - 4`, where `v` is the value after the usual `- 32`, and ignores the
+packet unless the player's level is the active level. The v6 engine decodes the bytes differently, as `(byte - 32) * 0.5 - 1.5`
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:5353-5359`), so the formula depends on the build.
 
 ### PLO_LEVELMODTIME (39) - Level Modification Time
 **Trigger**: The server sends it unsolicited on every level entry, after the board and
@@ -2262,9 +2263,13 @@ those builds this answers the enum comment's "might delete"; other builds are no
 // No additional data
 ```
 
-**Original clients**: the local player is frozen for 600 ticks (30 s at 50 ms a tick) unless
-`PLO_UNFREEZEPLAYER (155)` comes first. The freeze is skipped while some dialogs are open
-([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md); [`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+The reference sends 154 and 155 from script commands
+(`server/src/player/PlayerClient.cpp:1757-1766`).
+
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): the local player is frozen for 600 ticks (30 s if a tick is 50 ms) unless
+`PLO_UNFREEZEPLAYER (155)` comes first. The freeze is skipped while some dialogs are open.
+The v6 engine also freezes for 600 ticks but counts ticks at 60 a second
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:3200-3206`, `TInitStatics.cpp:3380`).
 
 ### PLO_UNFREEZEPLAYER (155) - Unfreeze Player
 **Trigger**: Player movement is restored
@@ -2272,7 +2277,8 @@ those builds this answers the enum comment's "might delete"; other builds are no
 // No additional data
 ```
 
-**Original clients**: ends a freeze from 154 at once ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): 155 ends a freeze from 154 at once. The v6 engine does the same
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:3211-3216`).
 
 ### PLO_SETACTIVELEVEL (156) - Set Active Level
 **Trigger**: Set level for receiving objects
