@@ -6,13 +6,13 @@ and the clients before them, actually put on the wire. It is for anyone who want
 or study the oldest builds; nothing here is needed for 2.x and later.
 
 All of it comes from static analysis of the shipped executables and a few lab captures,
-written up in squirelworks' public client-analysis notes:
-[`protocol/relay-1998.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/relay-1998.md) and [`protocol/gserv-1999.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/gserv-1999.md). It is not verified
+written up in squirelworks' client-analysis notes, `protocol/relay-1998.md` and
+`protocol/gserv-1999.md`. It is not verified
 against the reference server, which has no code for the relay at all.
 
 ## The two eras side by side
 
-| | 1998 relay (1st Graal beta to 1.1.9) | 1999 GServer (1.21 to 1.39) |
+| | 1998 relay (1st beta to 1.1.9) | 1999 GServer (1.21 to 1.32 tokens; the `GNW` tokens from 1.33 use the same framing) |
 |---|---|---|
 | Server | A lobby that forwards lines between partners; no game logic | GServer: accounts, levels, NPCs, flags, weapons |
 | Framing | Text lines ending in `\n`, no length | `u16` big-endian length, then a zlib stream |
@@ -32,13 +32,14 @@ name `def` and send the real nickname later as data), `P<id>` asks to pair with 
 accepts, `C` leaves the party, `-` leaves the available list, `D<data>` relays data to the
 party. Server to client: `I<id8>` your id (`0000` plus a 4-digit counter), `+<id8>` a player is
 in the same game, `-<id8>` a player left, `P<id8>` the partnership is confirmed (the client
-then pushes its whole state), `C<id8>` the partner left, `D<data>` relayed data. From 15th
-Graal on, the 1.1.9 server also sends `NR` or `NL` after `N`; with `NL` the client starts in
-`onlinestartlocal.graal`.
+then pushes its whole state), `C<id8>` the partner left, `D<data>` relayed data. From the
+15th beta on, the 1.1.9 server also sends `NR` or `NL` after `N`; with `NL` the client
+starts in a local-start level file (`onlinestartlocal` with the level extension).
 
 **Game names.** The name sent with `N` keeps incompatible builds apart: `Zelda2` (1st, 2nd),
-`Graal` (3rd, 4th), `Graal2` (4th alpha), `Graal3` (5th), `Graal4` (6th), `Graal5` (7th to 9th),
-`Graal6` (10th to 12th), `Graal7` (13th), `Graal8` (14th, 15th, 1.1, 1.1.9). On a level the client
+then the game's own name with a digit suffix: the base name (3rd, 4th), the base name + `2`
+(4th alpha), `3` (5th), `4` (6th), `5` (7th to 9th), `6` (10th to 12th), `7` (13th), `8`
+(14th, 15th, 1.1, 1.1.9). On a level the client
 builds the name from `G<n>` plus the level's location instead, so each level is its own room
 and players only meet on the same level with a compatible build.
 
@@ -63,7 +64,7 @@ The types, with the build that added them:
 | `N` | text | Nickname |
 | `O` | carried object id | Carry object |
 | `P` | x, y, sprite | Position and animation, every 100 ms while moving; sprite = `frame·4 + dir` |
-| `Q` | NPC id | `playertouchsme` (2nd Graal on) |
+| `Q` | NPC id | `playertouchsme` (2nd beta on) |
 | `S` | count, colour indices | Sprite colours |
 | `T` | 10 chars, base 128, little end first | Login time; the earliest peer becomes level leader |
 | `U` | x, y, kind, id | Baddy spawned (4th alpha on) |
@@ -77,16 +78,19 @@ The types, with the build that added them:
 Several of these live on as numbered packets with the same meaning in 1.21: board modify,
 bomb, item, horse and throw.
 
-## The 1999 GServer (1.21 to 1.32)
+## The 1999 GServer (1.21 to 1.32 tokens; the `GNW` tokens from 1.33 use the same framing)
 
 **Framing.** Messages queue as `chr(id + 32) + data + "\n"`. On flush the whole buffer is
 deflated (zlib 1.0.4) and written as `[len_hi][len_lo][zlib stream]`. There is no size
 threshold: every flush is compressed. Id 100 (`PLO_RAWDATA`) already exists and switches the
-reader to a byte count for file data. This is GEN_2's framing with no cipher.
+reader to a byte count for file data. This is GEN_2's framing with no cipher. The reference server still sends and reads this
+framing for `PLTYPE_CLIENT` logins whose token resolves (gs2lib `CFileQueue.cpp:180-203`,
+`IPacketHandler.h:260-263`; length is a big-endian `uint16`, `CString.cpp:1663-1670`).
 
 **Login.** The first message is a normal id-0 line: a type byte (`' '` = player; the 1.x
 GServers take `'!'` as RemoteControl), the 8-byte `GSERVnnn` token, then the account and the
-password, each as a GSTRING. It is the gen-3 login shape without the key byte. The connect
+password, each as a GSTRING. It is the gen-3 login shape without the key byte. The reference accepts exactly this
+(`PlayerClient.cpp:318-349` on beta4, [Versions and Encryption](versions-encryption.md)). The connect
 dialog defaults to `guest` / `guest`.
 
 | Client | Token |
@@ -98,10 +102,15 @@ dialog defaults to `guest` / `guest`.
 | 1.31 | `GSERV016` |
 | 1.32 | `GSERV018` |
 
-These tokens are protocol revisions, not dates; the dated `GNW` tokens start with 1.33. The
-period GServers compare the token against a fixed list and refuse anything outside it,
-newer tokens included, with `PLO_DISCMESSAGE (16)`. The 1.3 GServer, for example, answers
-`GSERV016` with "You need at least Graal version 1.3 to play on this server."
+The 1.21 to 1.32 tokens are the ones in the Versions and Encryption table (gs2lib
+`IUtil.cpp:59-65`); the reference also lists `GSERV009` (1.25), and its RC tokens are
+`GSERV023` to `GSERV025`. The RemoteControl rows above are squirelworks' observation.
+
+These tokens are protocol revisions, not dates; the dated `GNW` tokens start with 1.33.
+Reported, not verified against the reference: the period GServers compare the token against
+a fixed list and refuse anything outside it, newer tokens included, with
+`PLO_DISCMESSAGE (16)`. The 1.3 GServer, for example, answers `GSERV016` with "You need at
+least <product> version 1.3 to play on this server."
 
 **Login reply.** A lab capture of the 1.3 GServer after a good login: 9 (own props), 28 (flags,
 only if the account has any), 14 (warp), 100 then a separate frame with 101 and the board,
