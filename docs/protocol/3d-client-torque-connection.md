@@ -1,30 +1,35 @@
-# Graal3D Torque Side Connection
+# 3D Client: Torque-Side Connection
 
-The Graal clients from 3.04 to 5.12 are built on the Torque Game Engine (TGE 1.x). When
+Reported, not verified against the reference: the 3D clients from 3.04 to 5.12 (five builds
+were read: 3.04, 3.153, 4.04r2, 4.20r6, 5.12) are built on the Torque Game Engine (TGE 1.x). When
 such a client joins a 3D server, it opens a second connection: a Torque UDP connection
-next to the normal Graal TCP login. This page describes that second connection. The
-5.24r3 and later clients have no 3D side.
+next to the normal TCP game login. This page describes that second connection. The
+5.24r3 and later clients are reported to have no 3D side (no listed source covers that
+build).
 
-**Sources**: Graal_analysis
-[`torque/network.md`](https://github.com/squirelworks/Graal_analysis/blob/main/torque/network.md)
-and
-[`torque/wire-by-build.md`](https://github.com/squirelworks/Graal_analysis/blob/main/torque/wire-by-build.md).
+**Sources**: squirelworks' client-analysis notes, `torque/network.md` and
+`torque/wire-by-build.md`.
 These notes have static reads of the 3.04, 3.153, 4.04r2, 4.20r6 and 5.12 clients, and a
 lab capture of the real 5.12 client that completes the handshake against a test server.
+Everything below except the `3 ` prefix is reported there and not verified against the
+reference.
 
 ## Two connections to one host
 
-The server list marks a 3D server with a `"3 "` prefix on its name. When the user picks
+The server list marks a 3D server with a `"3 "` prefix on its name
+(`graal-serverlist/server/src/ServerConnection.cpp:313-314`). When the user picks
 such a server, the client:
 
 1. Removes the two-character prefix.
 2. Starts the Torque side. It connects over UDP to **listed port + 1**.
-3. Opens the normal Graal TCP connection to the listed port and logs in as usual. The TCP
+3. Opens the normal TCP game connection to the listed port and logs in as usual. The TCP
    login is the same as for a 2D server.
 
-So a Graal3D server is two servers on one host: a GServer on TCP port *P* and a Torque
-server on UDP port *P* + 1. The client's own UDP port is random, unless the preference
-`$pref::Graal::fixedport` is set. Then the client uses `fixedudpport` (default 14899).
+So a 3D server is two servers on one host: a GServer on TCP port *P* and a Torque
+server on UDP port *P* + 1. The client's own UDP port is random, unless the client's
+`fixedport` preference is set (the same `fixedport`/`fixedudpport` pair that
+[UDP Peer Channel](udp-peer-channel.md) describes for the peer socket; the notes do not say
+whether it is one socket setting). Then the client uses `fixedudpport` (default 14899).
 
 The 3D connection lives only as long as the TCP connection. When the TCP side closes, the
 client shows "You have been disconnected from the game server." and sends a Torque
@@ -42,7 +47,7 @@ of a datagram gives the kind:
 | Type | Name | Direction | Body |
 |---|---|---|---|
 | `0x1A` | ConnectChallengeRequest | C→S | U32 connect sequence |
-| `0x1C` | ConnectChallengeReject | S→C | the Graal clients do not handle it |
+| `0x1C` | ConnectChallengeReject | S→C | the 3D clients do not handle it |
 | `0x1E` | ConnectChallengeResponse | S→C | U32 sequence, 4 × U32 address digest |
 | `0x20` | ConnectRequest | C→S | U32 sequence, 4 × U32 digest, string class name `GameConnection`, then the connect-request fields below |
 | `0x22` | ConnectReject | S→C | U32 sequence, string reason |
@@ -63,11 +68,14 @@ class CRC for that group (U32). Then `GameConnection::writeConnectRequest` write
 
 | Field | 3.04 | 3.153 | 4.04r2 | 4.20r6 | 5.12 |
 |---|---|---|---|---|---|
-| game string | `Torque Game Engine Demo` | `Graal3D` | `Graal3D` | `Graal3D` | `Graal3D` |
+| game string | `Torque Game Engine Demo` | the 3D game string | the 3D game string | the 3D game string | the 3D game string |
 | U32 current protocol | 9 | 19 | 19 | 21 | 24 |
 | U32 minimum protocol | 9 | 19 | 19 | 21 | 24 |
 | string join password | server password | not traced | account password | not traced | account password |
 | U32 argc (≤ 16), then argc strings | script args | not traced | 2: account, nickname | not traced | 2: account, nickname |
+
+The game string is the product name followed by `3D` (seven ASCII characters; the exact
+literal is in squirelworks' notes, `torque/wire-by-build.md`).
 
 - The join password is the account password **in clear**. Torque adds no encryption.
 - The class CRC is not computed. In 4.04r2 and 5.12 the CRC table is static data
@@ -77,14 +85,14 @@ The 5.12 server-side reader rejects a request in these cases:
 
 | Condition | Reason code |
 |---|---|
-| game string is not `Graal3D` | `CHR_GAME` |
+| game string is not the 3D game string | `CHR_GAME` |
 | client current protocol < 24 | `CHR_PROTOCOL_LESS` |
 | client minimum protocol > 24 | `CHR_PROTOCOL_GREATER` |
 | argc > 16 | `CR_INVALID_ARGS` |
 
 ## Connect accept and the class table
 
-In stock TGE the accept body is one U32, the server's protocol. From 3.153 on, the Graal
+In stock TGE the accept body is one U32, the server's protocol. From 3.153 on, the 3D
 clients read a **class-name table** before that U32:
 
 ```
@@ -117,7 +125,7 @@ The client accepts only its own protocol: exactly 24 for 5.12, 21 for 4.20r6, 19
 | object (0) | `Camera`, `DynamicGrass`, `DynamicGrassReplicator`, `DynamicShapeReplicator`, `GameObject`, `Sky`, `Sun`, `TerrainBlock`, `WaterBlock`, `fxSunLight`. 4.20r6 also has `SimpleNetObject` and `twSurfaceReference` |
 | event (1) | `BigDataChunkEvent`, `BigDataStartEvent`, `ConnectionMessageEvent`, `GhostAlwaysObjectEvent`, `NetStringEvent`, `RemoteCommandEvent`, `RequestReloadEvent` (C→S), `TerrainChunkEvent`, `TerrainRequestUpdatesEvent` (C→S). 4.20r6 also has `SimpleMessageEvent` |
 
-`BigDataStartEvent` and `BigDataChunkEvent` are Graal additions. They carry Graal text and
+`BigDataStartEvent` and `BigDataChunkEvent` are additions that stock Torque does not have. They carry game text and
 scripts over the Torque connection.
 
 ## After the accept
@@ -130,7 +138,8 @@ Data packets use the stock Torque `ConnectionProtocol` header. Mission download 
 | 3.153, 4.04r2 (stock TGE game layer) | 1 "Download Datablocks & Targets", 2 "Download Ghost Objects", 3 "Mission Lighting" |
 | 5.12 | 1 "Download Ghost Objects", 2 "Mission Lighting" (no datablocks) |
 
-In 5.12 these steps raise the GS2 event `onGraal3DLoginStep`.
+In 5.12 these steps raise a GS2 login-step event (the event name is in squirelworks' notes,
+`torque/network.md`).
 
 The 5.12 `GameConnection` packets differ from stock TGE. The client sends no `Move`
 structures. It always reports the control object's position (3 × F32) and, when it
@@ -143,10 +152,10 @@ To get a real 5.12 client connected:
 
 1. Answer `0x1A` with `0x1E`. Echo the sequence and send any digest that the server can
    check later.
-2. Accept a `0x20` with class group 0, CRC `0xFFFFFFFF`, game string `Graal3D` and
+2. Accept a `0x20` with class group 0, CRC `0xFFFFFFFF`, the 3D game string and
    protocol 24/24. Check the join password against the account.
 3. Reply `0x24` with the sequence, the class table (every object and event class the
    server will send, by name), a 0 bit, and protocol 24.
-4. Keep the Graal TCP connection alive. If it closes, the client drops the 3D connection.
+4. Keep the TCP game connection alive. If it closes, the client drops the 3D connection.
 
 For 4.04r2 clients use protocol 19 and the three-type class table.

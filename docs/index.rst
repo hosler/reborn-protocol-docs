@@ -27,11 +27,11 @@ implementation guidelines for Reborn servers and clients.
    protocol/npc-properties
    protocol/rc-nc-protocols
    protocol/gmap
-   protocol/graal3d-torque
    protocol/gserver-behavior
    protocol/level-link-implementation
    protocol/serverside-behavior
    protocol/udp-peer-channel
+   protocol/3d-client-torque-connection
 
 .. toctree::
    :maxdepth: 2
