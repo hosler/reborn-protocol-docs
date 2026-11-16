@@ -469,7 +469,7 @@ the player's weapons, the 2.05 client sends this id with the weapon name instead
 ```
 [GUSHORT: count]     // Packets the client counts as sent
 ```
-**Source**: `Player::msgPLI_PACKETCOUNT` (`server/src/player/Player.cpp:1858-1867`) logs a
+**Source**: `Player::msgPLI_PACKETCOUNT` (`server/src/player/Player.cpp:1865-1873`) logs a
 warning when `count` differs from the server's own packet counter, or when that counter
 is above 10000. It then resets the counter to 0. It sends nothing back.
 
@@ -554,7 +554,7 @@ login with no 39.
 ```
 **Source**: gs2lib `IEnums.h:71` names it `PLI_TAMPERCHECK` and gives the layout in a
 comment. The server handler reads the packet as one string and discards it
-(`msgPLI_TAMPERCHECK`, `PlayerClientPackets.cpp:1323-1327`). It is not a map request.
+(`msgPLI_TAMPERCHECK`, `PlayerClientPackets.cpp:1327-1331`). It is not a map request.
 
 **What the real clients send** (reported by squirelworks from captures, not verified against the reference; squirelworks' client-analysis notes, `version-profiles/tampercheck-values.tsv`). Only 2.17, 2.22 and 2.31 send it; 3.04, 3.153 and 6.x do not.
 It is 10 raw bytes, a constant per build, identical across logins, accounts and login keys:
@@ -694,7 +694,7 @@ So the reference disconnects a player on the third such packet before the counte
 ```
 [STRING: process_data] // gtokenized, newline-separated process list
 ```
-**Source**: `msgPLI_PROCESSLIST` (`PlayerClientPackets.cpp:1420-1424`) guntokenizes the
+**Source**: `msgPLI_PROCESSLIST` (`PlayerClientPackets.cpp:1425-1429`) guntokenizes the
 string, splits it on newlines and discards the result. The request in the other
 direction is `PLO_HASPROCESSRUNNING (183)`, which the client answers with
 `PLI_PROCESSRUNNING (45)` (gs2lib `IEnums.h:76`, `:304`).
@@ -1797,7 +1797,7 @@ it after removing the NPC from the old level and before it sets the new one.
 
 ### PLO_SIGNATURE (25) - Player Signature
 **Trigger**: The server sends it once during login, before the server-mode packets
-(`server/src/player/Player.cpp:746`)
+(`server/src/player/Player.cpp:753`)
 ```
 [GCHAR: signature]   // Always 73 (0x49): "more than eight players will be playing"
 ```
@@ -2003,7 +2003,7 @@ Reported by squirelworks for the 2.05 client, not verified against the reference
 
 ### PLO_STARTMESSAGE (41) - Start Message
 **Trigger**: Sent once at login with the server's start message
-(`server/src/player/PlayerClient.cpp:519`). The enum comment says 6.037 does not handle it.
+(`server/src/player/PlayerClient.cpp:521`). The enum comment says 6.037 does not handle it.
 ```
 [STRING: message]    // Server start message, to end of packet
 ```
@@ -2588,7 +2588,7 @@ The reference sends this packet with 0 on every level entry
 
 ### PLO_KINGDOMSMODE (176) - Server Mode: Kingdoms
 **Trigger**: The server option `servermode = kingdoms`. `Player::sendLogin`
-sends it right after `PLO_SIGNATURE` (`Player.cpp:746-752`, origin/beta4), to
+sends it right after `PLO_SIGNATURE` (`Player.cpp:751-757`, origin/beta4), to
 every login type (client, RC and NC) with no client-version test. It comes
 before `PLO_HASNPCSERVER`, `PLO_ONLINEMODE` and the first `PLO_PLAYERPROPS`.
 ```
@@ -2602,7 +2602,7 @@ classic-mode-disable or full-stop packet. A client must not freeze input on 176.
 
 ### PLO_NEWWORLDMODE (177) - Server Mode: New World
 **Trigger**: The server option `servermode = newworld`, sent at the same place
-as 176 (`Player.cpp:751-752`). The two are exclusive: an `if` / `else if`
+as 176 (`Player.cpp:755-759`). The two are exclusive: an `if` / `else if`
 chooses at most one, and `servermode = normal` (the default) sends neither.
 `servermode` is read once at startup (`Server.cpp:196-200`).
 ```
@@ -2664,7 +2664,7 @@ it the text.
 
 ### PLO_STATUSLIST (180) - Status List
 **Trigger**: Sent at login to clients 2.1 and later with the server's status-list options
-(`server/src/player/PlayerClient.cpp:529-536`) and at RC login (`server/src/player/PlayerRC.cpp:264`)
+(`server/src/player/PlayerClient.cpp:532-538`) and at RC login (`server/src/player/PlayerRC.cpp:264`)
 ```
 [STRING: statuses]   // The status names joined with "," and NOT quoted, to end of packet
 ```
@@ -2679,7 +2679,7 @@ window already exists.
 
 ### PLO_LISTPROCESSES (182) - List Processes
 **Trigger**: Request client process list. The reference server does not send it: the send
-is commented out because it crashes Windows v6 clients (`server/src/player/PlayerClient.cpp:538-543`).
+is commented out because it crashes Windows v6 clients (`server/src/player/PlayerClient.cpp:540-544`).
 ```
 // No additional data
 ```
@@ -2867,7 +2867,7 @@ verified against the reference unless a citation is given. `c` = GCHAR, `s` = GS
 | PLO 108 | `PLO_PING` (`:262`) | `c sub`, `s value` | 4.20, 6.01, 6.03 (not 5.x) | `sub` 0: the client answers `PLI 162` with `!` + `s min(value, 0x6FFF)`. `sub` 1: the client stores `value`. Handled before the main dispatch, like 100. The decompiled client does the same (`TClient.cpp:1994-2021`, `:935-957`). The server never sends it |
 | PLI 162 | `PLI_PONG` (`:162`) | `c type`, `s value`. Game clients send type 1 (`!`) on a reply to 108. RC3: empty | as above | The answer to PLO 108. RC3 and the 2010 Linux RC send it empty every 60 s. The server handles it only for RC, as a stub (`PlayerRC.cpp:86`, `packets/PlayerRCPackets.cpp:1608-1612`) |
 | PLO 109 | `PLO_HTTPDOWNLOAD` (`:263`) | `i5 modtime`, `str localname`, `str url` | 5.24r4 to 6.03r7 | Downloads the URL over HTTP and stores it under the local name. The decompiled client parses the same layout (`TClient.cpp:5075-5098`). The server never sends it |
-| PLO 168 | `PLO_ONLINEMODE` (`:289`) | empty | 2.05 to 6.03r7 | Sets a one-time flag on the local player. The server sends it after the login burst (`Player.cpp:762-763`) |
+| PLO 168 | `PLO_ONLINEMODE` (`:289`) | empty | 2.05 to 6.03r7 | Sets a one-time flag on the local player. The server sends it after the login burst (`Player.cpp:769-770`) |
 | PLO 181 | `PLO_PLAYERNOUDP` (`:302`) | `s player_id`, `c toggle` | 2.17 to 5.24r4 | Sets a boolean on that player to `toggle > 0`. The enum comment says the toggle removes the player from the "nearby" list that UDP peer-to-peer uses. The server never sends it |
 | PLO 193 | `PLO_WEAPONHASH` (`:314`) | `i5 crc32`, rest = weapon name | 4.04r2 to 5.12 | Loads the cached `weblevels/weapons/<name>.code` if its zlib CRC32 matches. If not, the client asks for the script with `PLI_UPDATESCRIPT (158)`. The server sends it to clients before 5.07 (`Weapon.cpp:197-199`), and the value is the zlib CRC32 of the bytecode (`:352-353`) |
 | PLO 198 | `PLO_SERVEROPTIONS` (`:318`) | `i5 value` | 5.24 / 6.00 beta and later | Stored, and not read anywhere up to 6.03. The server never sends it |
