@@ -378,7 +378,7 @@ Each byte: color index (+ 32 for encoding)
 Each byte is an index into a fixed table of 20 named colours. Indexes 0-19 are the classic
 colours. A server running new-world mode with `enableexbodycolors` can send 20 and above,
 which are HTML colours (`Character.h:43`). The names and indexes match the reference
-(`server/include/object/Character.h:132-156` at origin/beta4, gs2lib `src/IUtil.cpp:28-48`).
+(`server/include/object/Character.h:132-156` at origin/beta4, gs2lib `IUtil.cpp:28-48`).
 The RGB values are the ones the 2.05 client is reported to hold, from squirelworks'
 client-analysis notes, `client-internals/body-colours-and-attributes.md`; reported, not
 verified against the reference:

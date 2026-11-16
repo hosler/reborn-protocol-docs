@@ -107,7 +107,7 @@ The destination coordinates accept special values:
 Example: A link with `destx="playerx" desty="32"` keeps the player's X position. It puts
 the player at Y=32 in the destination level.
 
-#### Where the original client tests a link
+### Where the original client tests a link
 
 Reported, not verified against the reference. A lab test of the 2.05 rev2 client against one
 server (straight walks only, measured to half a tile; squirelworks' client-analysis notes,
