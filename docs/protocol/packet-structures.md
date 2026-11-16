@@ -227,10 +227,13 @@ as `PLO_HORSEDEL (18)`.
 [GCHAR: power]       // Arrow power/damage (read with `readGChar`, `PlayerClientPackets.cpp:293`)
 ```
 
-**What the original clients write** (1.33 and later; read from 2.05): `flags` is `dir & 3`,
-+4 to first remove a matching shot, +8 when the shot is the sender's own. The last byte is
-the projectile type, 0 arrow, 1 fireball, 2 fireblast, 3 nuke, sent as **`type + 33`**, not
-the usual `+ 32` bias ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**What the original clients write** (1.33 and later; read from 2.05; squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): `flags` is `dir & 3`,
++4 to first remove a matching shot, +8 when the shot is the sender's own. The last byte (the
+`power` field above) is, per squirelworks, the projectile type, 0 arrow, 1 fireball, 2
+fireblast, 3 nuke (reported). The original client sends it as **`value + 33`**, not the usual
+`+ 32` bias; the v6 engine confirms the `- 33` on receipt
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:5416-5427`). The reference reads it with the
+usual bias (`server/src/player/packets/PlayerClientPackets.cpp:293`).
 
 ### PLI_FIRESPY (10) - Fire Spy
 **Trigger**: Player uses fire spy weapon
@@ -247,7 +250,7 @@ byte after the sender player ID.
 // No additional data
 ```
 
-**Original clients**: sent from 1.21; the New World beta clients do not send it ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): sent from 1.21; the New World beta clients do not send it.
 
 ### PLI_ITEMADD (12) - Drop Item
 **Trigger**: Player drops an item
@@ -277,8 +280,8 @@ byte after the sender player ID.
 [GUSHORT: killer_id] // Player ID of the killer
 ```
 
-**Original clients**: first sent by the 1.3 test build ([`manual/02-protocol/04-pli.md`](https://github.com/squirelworks/Graal_analysis/blob/main/manual/02-protocol/04-pli.md),
-client checks section).
+**Reported client behaviour** (squirelworks' client-analysis notes, `manual/02-protocol/04-pli.md`,
+client checks section; not verified against the reference): `PLI_CLAIMPKER (14)` was first sent by the 1.3 test build.
 
 ### PLI_BADDYPROPS (15) - Baddy Property Update
 **Trigger**: Client updates baddy properties (intended to come from the level leader)
@@ -1686,8 +1689,9 @@ one at the exact position. The reference server removes only a horse at exactly 
 [GCHAR: power]       // Arrow power
 ```
 
-**Original clients**: the receiver needs at least 5 bytes after the player id and decodes
-the last byte as `b − 33` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the receiver needs at least 5 bytes after the player id and decodes
+the last byte as `b − 33`. The v6 engine does the same
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:5416-5427`).
 
 ### PLO_FIRESPY (20) - Fire Spy
 **Trigger**: Player uses fire spy
@@ -1696,8 +1700,10 @@ the last byte as `b − 33` ([`protocol/packet-layouts.md`](https://github.com/s
 [GCHAR: length_power] // Length and power data
 ```
 
-**Original clients**: the receiver uses only the length part (`byte >> 3`); the low 3 bits
-are ignored ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the receiver uses only the length part (`byte >> 3`); the low 3 bits
+are ignored. This is reported for the 2.05 client; the v6 engine
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:3753-3774`) and the reference
+(`server/src/player/packets/PlayerClientPackets.cpp:314-330`) also use the low 3 bits as the power.
 
 ### PLO_THROWCARRIED (21) - Throw Carried Object
 **Trigger**: Player throws carried object
@@ -1705,7 +1711,8 @@ are ignored ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graa
 [GUSHORT: player_id] // Player who threw object
 ```
 
-**Original clients**: dropped when the player id is unknown to the client ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `protocol/packet-layouts.md`; not verified against the reference): the packet is dropped when the player id is unknown to the client. The v6 engine does the same
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:3739-3743`).
 
 ### PLO_ITEMADD (22) - Item Added
 **Trigger**: A player drops an item or the server spawns one
