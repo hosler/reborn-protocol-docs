@@ -886,9 +886,13 @@ client version (`server/src/utilities/PropertySerializers.cpp:223-264`).
 > Treating a preset byte as a string length consumes bytes belonging to the next
 > property (`server/src/utilities/PropertySerializers.cpp:282-334`; serialize
 > `:284-295`, deserialize `:297-315`).
-**CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble. Local chat is not a packet
-of its own: it is this prop inside `PLI_PLAYERPROPS`, and the server's chat commands are parsed
-from it. As the 2.05 client sends it ([`client-internals/chat-text.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/chat-text.md); [`protocol/chat-pm-rc.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/chat-pm-rc.md)): chat-bar text that starts with `toall:`
+
+**CURCHAT (12)**: `[GCHAR: length][string]` - Current chat bubble. Local chat is carried by
+this prop inside `PLI_PLAYERPROPS`; the server parses its chat commands from it
+(`server/src/player/PlayerProps.cpp:425-438`, `server/src/player/PlayerClient.cpp:668`).
+Public chat is `PLI_TOALL`, below. Reported, not verified against the reference, for the 2.05
+client (squirelworks' client-analysis notes, `client-internals/chat-text.md` and
+`protocol/chat-pm-rc.md`): chat-bar text that starts with `toall:`
 goes out as `PLI_TOALL` instead; a line longer than 256 characters is cut to its first 253
 characters plus `...` (the receiver draws whatever arrives); when the player's own line times
 out (3 s after the first move) the client sends an **empty** CURCHAT, which is how bubbles are
