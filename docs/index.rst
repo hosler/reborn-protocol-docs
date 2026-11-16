@@ -21,7 +21,10 @@ implementation guidelines for Reborn servers and clients.
    protocol/strings
    protocol/encryption
    protocol/versions-encryption
+   protocol/early-generations
+   protocol/listserver-client
    protocol/packet-structures
+   protocol/client-id-coverage
    protocol/version-gated-behavior
    protocol/npc-properties
    protocol/rc-nc-protocols
@@ -29,6 +32,8 @@ implementation guidelines for Reborn servers and clients.
    protocol/gserver-behavior
    protocol/level-link-implementation
    protocol/serverside-behavior
+   protocol/udp-peer-channel
+   protocol/3d-client-torque-connection
 
 .. toctree::
    :maxdepth: 2

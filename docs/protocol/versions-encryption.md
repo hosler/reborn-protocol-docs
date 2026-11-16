@@ -396,6 +396,39 @@ to server) always has the 2-byte length prefix. It is not GEN_2-specific. The **
 no length prefix (gs2lib `CFileQueue.cpp:162-178`; the `default:` case shares them). GEN_2
 to GEN_5 are sent as `[uint16 length][payload]`.
 
+#### What the original clients do on their side of the frame
+
+The reference describes the server's framing. The original clients add limits of their own,
+which a server is reported to need to stay inside. These are from static reads and captures
+of the clients, summarized in squirelworks' client-analysis notes,
+`manual/02-protocol/01-framing.md` (with per-row sources); they are not verified against
+the reference.
+
+| Rule | Builds |
+|---|---|
+| Outgoing messages collect in one buffer, which is compressed and flushed at `0x1000` bytes or at the end of the tick | 2.00 to 2.05, 2.17; 6.01r1, 6.03r7 |
+| 1.39 flushes when the queue would pass 4095 bytes and writes the frame in 256-byte slices | 1.39 |
+| The client drops the connection when more than `0x40000` (256 KiB) is queued unsent | 1.39, 2.00 to 2.05, 2.17, 2.22, 2.31 |
+| The same limit is `0x800000` bytes for the gen-5 RemoteControl | RemoteControl |
+| The sender refuses a payload that already contains `\n`; 6.x reports "Illegal characters in the outgoing data". Binary data must use the raw-data escape. The decompiled mobile engine logs a similar refusal only before its protocol is set (`Preagonal/FourPlay/quattroplay/src/TGraalConnection.cpp:1325-1331`) | 1.39, 2.05, 6.01r1, 6.03r7 |
+| An account or password of 224 bytes or more is sent in the login as length byte `0xFF` followed by its first 223 bytes. A stock server reads the length with `readGUChar()` (maximum 223), `PlayerClient.cpp:348-349` | 4.20r6, 4.20r8, 5.00r7, 6.01r1, 6.03r7 |
+| A frame of `0xFFFF` bytes or more is sent as length `0xFFFF` followed by a 4-byte big-endian length (the same escape described under [v7 mode 0](#v7-worlds-engine-builds) below; the reference server cannot receive it: `retrievePacketBundle` reads a `uint16` and nothing else, `IPacketHandler.h:242-251` at origin/beta4, so a frame of 65535 bytes or more from these clients would be misframed) | 6.01r1, 6.03r7 |
+| Before a payload sent as id 93 (and 163 in 6.x) the client sends `PLI_RAWDATA (50)` with an `i3` length, capped at `0x37FFFF`. The reference names PLI 93 `PLI_RC_FILEBROWSER_UP` (gs2lib `IEnums.h:123`) and has no PLI 163; these two ids are whichever packets the notes call the script-upload pair. The raw-data announcement itself matches `PLI_RAWDATA (50)` (`IEnums.h:80`) and the decompiled client (`Preagonal/FourPlay/quattroplay/src/TGraalConnection.cpp:1283-1292`) | 4.20r8, 5.00r7, 6.01r1, 6.03r7 |
+| 2.05 links zlib 1.1.2; 2.02 to 2.02 rev2 import an external `zlib.dll` instead of a compiled-in unit. The wire format is the same | 2.00 to 2.1 test |
+
+**zlib header.** Real clients compress at the best zlib level, so their streams start
+`78 DA` (2.05, 2.17.1, 2.22, 2.31 captures). A public list server was seen to accept gen-5
+frames that start `78 9C` (the default level); whether a classic frame with that header is
+accepted was not measured (reported, not verified against the reference; squirelworks'
+client-analysis notes, `protocol/login-frames-by-version-2026-10-25.md`).
+
+**Mac PowerPC receive.** Four Mac receivers (shared v3, 4.04r2, 4.20r6, shared v5) wait for a
+complete body after the 2-byte length. v3 and 4.04r2 decompress into a fixed buffer and
+accept a frame only if its output fits, with no retry. Shared v5 starts with a 64 KiB or
+larger workspace and doubles it on a retry status only while the next request is at most
+4 MiB (reported, not verified against the reference; squirelworks' client-analysis notes,
+`protocol/macos-ppc-receive-decompression.md`).
+
 ### Payload transform — `IPacketHandler::processPacketBundle` (`IPacketHandler.h:250-307`)
 
 | Gen | Framing |
@@ -516,9 +549,11 @@ A modern list-server exchange is:
    switches both directions to GEN_5
    (`graal-serverlist/server/src/PlayerConnection.cpp:312-323`).
 4. Send the credential/server-list request as GEN_5. The reference server answers
-   in GEN_5 from then on. Whether the closed production list server's first response
-   bundle is already GEN_5 and begins with type `0x04` is **unverified**: the reference
-   code only shows that the open server switches after parsing the initialization packet.
+   in GEN_5 from then on. The recorded production session
+   (`pyReborn/tests/fixtures/listserver_session_live.json`, 2026-07-25) shows that the
+   closed production list server's first response frames are already GEN_5: each begins
+   with type `0x04`. The reference code alone only shows that the open server switches
+   after parsing the initialization packet.
 
 The open list server has two sibling initialization packets besides `PLI_V2ENCRYPTKEYCL`
 (`graal-serverlist/server/src/PlayerConnection.cpp:23-25`):
@@ -627,6 +662,68 @@ Every outer packet the client sends after this is 0xFD, wrapping one or more inn
 That is `PLI_BUNDLE` ("Bundled packets contain multiple packets"). So a server for stock
 6.11 clients needs the private key that matches the script's public key. Without it, the
 server cannot read the client stream.
+
+### What the connector script controls
+
+Because the script builds the login, the 6.11 client's token, header, cipher and **both id
+tables** belong to the server's script, not the client. The script gets these methods on the
+connection object: `connecttogameserver`, `setprotocol`, `sendraw`, `senddata(id, data)`,
+`flush`, `setsslparameters`, `getsslcipher` / `getsslsubject` / `getsslissuer`,
+`setencryptionparsekey`, `setencryptionout(type, key, iv)`, `getpassword`, `setloginaccount`,
+`requestbasefiles`, `setoutdatahandlers`, `clearindatahandlers`, `setindatahandlers`,
+`defaultinhandler(id, data)` and `tclient_setencryptionin(type, key, iv)`. Before `onCreated`
+runs, the client sets `scriptip`, `scriptsslcipher`, `scriptsslsubject` and `scriptsslissuer`
+so the script can check where it came from; if no connector loads, a built-in
+`StartScript_Fail` runs instead. Reported: none of this exists in 6.01 or 6.03: they have no connector,
+no RC4 or AES and no script-set id tables. This is from static reads of the Mac 6.11 and
+Windows 6.1.1.3 clients in squirelworks' client-analysis notes, `protocol/v6x-clients.md`
+and `manual/02-protocol/10-server-defined.md`; reported, not verified against the
+reference. The decompiled mobile engine (a v6-era engine, not the 6.11 desktop builds) has
+the same script API and tables: `Preagonal/FourPlay/quattroplay/src/TClientProperties.cpp:208-227`,
+`:10-21`, `:136-197`, and the event names in `TClient.cpp` (for example `:4199`
+`onSendWantWeaponScript`, `:699` `onSendWindowList`).
+
+- **Outgoing table.** `setoutdatahandlers` loads a 256-entry table from the client's internal
+  message number to a wire id. A negative entry does not send. `0xFE` raises the matching
+  `onSend*` script event instead of sending. Any other value is the packet id.
+- **Incoming table.** `setindatahandlers` takes (wire id, handler) pairs. A handler below
+  `0x5F` is one of 95 native handlers; `0xFE` passes the packet to the script; `0xFF` ignores
+  it; `0xFC` and `0xFD` set the two special ids (the 0xFC key and 0xFD bundle roles described under
+  [Server-to-client direction](#server-to-client-direction)). The native
+  handlers are also callable from script by name, dozens of `tclient_*` functions (83 in the decompiled mobile engine,
+  `Preagonal/FourPlay/quattroplay/src/TClient.cpp:4587-4669`) such as
+  `tclient_setplayerprops` and `tclient_setlevelboard`.
+- **Slot order is not wire order**, so a server for 6.11 must send the table. Slot 54 and
+  the slots above 56 have no event; the notes report that the login and language messages
+  are sent by the script itself (not verified against the reference). The named send
+  slots, with the event each raises when it holds `0xFE`:
+
+| Slot | Event | Slot | Event | Slot | Event |
+| ---: | --- | ---: | --- | ---: | --- |
+| 0 | `onSendWantWeaponScript` | 19 | `onSendTakeExtra` | 38 | `onSendLevelWarp` |
+| 1 | `onSendWantClassScript` | 20 | `onSendRemoveExtra` | 39 | `onSendLevelWarpModtime` |
+| 2 | `onSendWantGaniScript` | 21 | `onSendOpenChest` | 40 | `onSendDownloadFile` |
+| 3 | `onSendToAllChat` | 22 | `onSendShot` | 41 | `onSendBoardModify` |
+| 4 | `onSendIsPKer` | 23 | `onSendBaddyProperties` | 42 | `onSendBoardModify2` |
+| 5 | `onSendCarryThrown` | 24 | `onSendBaddyHurt` | 43 | `onSendPreloadLevel` |
+| 6 | `onSendAddHorse` | 25 | `onSendWeaponImage` | 44 | `onSendPlayerProperties` |
+| 7 | `onSendDelHorse` | 26 | `onSendRCChat` | 45 | `onSendNPCProperties` |
+| 8 | `onSendAddBomb` | 27 | `onSendRequestText` | 46 | `onSendFlag` |
+| 9 | `onSendDelBomb` | 28 | `onSendSetText` | 47 | `onSendUnsetFlag` |
+| 10 | `onSendServerWarp` | 29 | `onSendFileDeletion` | 48 | `onSendProjectile` |
+| 11 | `onSendTriggerAction` | 30 | `onSendFolderDeletion` | 49 | `onSendUpdatePackage` |
+| 12 | `onSendFireSpying` | 31 | `onSendFileRename` | 50 | `onSendPrivateMessage` |
+| 13 | `onSendExplosion` | 32 | `onSendFilesMove` | 51 | `onSendUploadStart` |
+| 14 | `onSendWeaponHit` | 33 | `onSendHaveWindow` | 52 | `onSendSaveFile` |
+| 15 | `onSendPlayerHurt` | 34 | `onSendEnterLevel` | 53 | `onSendUploadEnd` |
+| 16 | `onSendDeleteNPC` | 35 | `onSendWantImage` | 55 | `onSendPingAnswer` |
+| 17 | `onSendDeleteWeapon` | 36 | `onSendImageUpdate` | 56 | `onSendWindowList` |
+| 18 | `onSendExtra` | 37 | `onSendImageUpdateCRC` | | |
+
+Slots 6, 7, 23, 24 and 50 (`onSendAddHorse`, `onSendDelHorse`, `onSendBaddyProperties`,
+`onSendBaddyHurt`, `onSendPrivateMessage`) are reported only from the 6.11 desktop builds;
+the decompiled mobile engine has no event for them. The other 51 named slots match the
+mobile engine's event names one for one.
 
 ### Server-to-client direction
 

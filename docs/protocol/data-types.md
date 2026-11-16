@@ -296,18 +296,59 @@ local = world % 64
 `X2/Y2/Z2` use the signed pixel packing above. The NPC equivalents use the same GSHORT
 encoding.
 
-The one-byte player/NPC `X` and `Y` properties are signed half-tile coordinates, not
-ordinary unsigned GCHARs. After removing the +32 wire bias, values `216..255` are
-interpreted as signed 8-bit values (`-40..-1`) before division by two. This is the
+The one-byte player/NPC `X` and `Y` properties are half-tile coordinates. In the reference
+server they are signed: after removing the +32 wire bias, values `224..255`
+(`halfTile > MAX_LENGTH_BEFORE_OVERFLOW`, `server/include/utilities/CommonTypes.h:535`
+at origin/beta4) are read as `value - 256` (`-32..-1`) before division by two. This is the
 `PropertyTileCoordinate::deserialize` contract
-(`server/src/utilities/PropertySerializers.cpp:487-501`). The writer
-(`PropertyTileCoordinate::serialize`, `PropertySerializers.cpp:473-485`) writes the
-half-tile byte without the +32 check, so for negative values the wire byte can be below
-32, and it replaces a half-tile value of 223 with 224. The source comment says 223 would
-overflow to the newline, but the arithmetic does not support that: the wire byte is
-`(223 + 32) & 0xFF = 255`. The value that produces `0x0A` is 234 (-11 tiles), which is not
-remapped, so the writer can still emit a newline byte there (gs2lib `CString.cpp:1724-1731`
-only throws on 233). A reader of these two properties must therefore accept bytes below 32.
+(`server/src/utilities/PropertySerializers.cpp:499-509` at origin/beta4). The 25396a18
+reader used `216..255` (`-40..-1`); upstream changed it on 2026-11-11 (commit 1b9b9925).
+At origin/beta4 the writer (`PropertyTileCoordinate::serialize`,
+`PropertySerializers.cpp:484-497`) clamps the value to -256..1784 pixels (-16 to +111.5
+tiles) and nudges -11 tiles, whose wire byte would be `0x0A`, to -10.5 tiles
+(`PropertySerializers.cpp:490-491`). The 25396a18 writer wrote the half-tile byte without
+the +32 check, so for negative values the wire byte can be below 32, and it replaced a
+half-tile value of 223 with 224. The source comment said 223 would overflow to the
+newline, but the arithmetic does not support that: the wire byte is
+`(223 + 32) & 0xFF = 255`. The value that produces `0x0A` is 234 (-11 tiles), which that
+writer did not remap, so it could still emit a newline byte there (gs2lib
+`CString.cpp:1724-1731` only throws on 233). A reader of these two properties must
+therefore accept bytes below 32.
+
+The original clients are reported to read these bytes unsigned. At GServer-v2 25396a18 the
+reference read them differently; upstream beta4 has since changed (1b9b9925) and now
+agrees with the clients for every byte except where noted:
+
+| Wire byte | Real clients (2.05, 2.22, 2.31, live; reported) | GServer-v2 `PropertyTileCoordinate` (25396a18) |
+|---|---|---|
+| `0x00` | reported dropped on the desktop builds, not verified against the reference; the old value stays | -16 tiles |
+| `0x01`-`0x1F` | -15.5 to -0.5 tiles | -15.5 to -0.5 tiles |
+| `0x0A` | ends the message (newline): this prop and every prop after it are lost | same |
+| `0x20`-`0xF7` | 0 to +107.5 tiles | 0 to +107.5 tiles |
+| `0xF8`-`0xFF` | **+108 to +111.5 tiles** | **-20 to -16.5 tiles** (25396a18: `uread >= 216` read as signed int8; origin/beta4 now reads +108 to +111.5) |
+
+At origin/beta4 since 1b9b9925, wire bytes `0xF8`-`0xFF` are +108 to +111.5 tiles and wire
+`0x00` is -16 tiles (`PropertySerializers.cpp:503-506`; the threshold is `> 223`,
+`CommonTypes.h:535`).
+
+- The clients are reported to read the byte **unsigned**: `(byte - 32) / 2`. A byte below
+  `0x20` gives a negative value. No byte is read as a signed 8-bit value. Static reads of
+  clients from 1.21 to 6.03r7 are reported to show the same decode. The decompiled mobile
+  engine reads it this way, including `0x00` as -16 (`Preagonal/FourPlay/quattroplay/src/TServerPlayer.cpp:30-41`).
+- So the lowest value a server can send to those clients is -15.5 tiles, and -11 tiles
+  cannot be sent at all.
+- The pre-rename GServer-v2 reader (`TPlayerProps.cpp`, before commit 0ca668c6 renamed
+  it) read `readGUChar() / 2`, i.e. `(byte - 32)` as an unsigned byte, so wire bytes below
+  `0x20` came out as +112 to +127.5 tiles, not negative. The 25396a18
+  `PropertyTileCoordinate` added a signed rule starting at 216; origin/beta4 later changed
+  it to start at 224 (`PropertySerializers.cpp:503-506`).
+- Reported, not verified against the reference: in 2.22 and 2.31 the local player's own x
+  wraps below -10 tiles: -10.5 becomes 245.5.
+- For positions outside -15.5 to +111.5 tiles, use X2/Y2 on clients that parse them.
+
+Source: squirelworks' client-analysis notes, `protocol/player-x-half-tile.md` (live runs of
+the 2.05, 2.22 and 2.31 clients, and static reads of 1.21 to 6.03r7); reported, not
+verified against the reference.
 
 ## Player Property Data Types
 
@@ -331,6 +372,39 @@ Each byte: color index (+ 32 for encoding)
 > property stream to consume cleanly in ascending-ID order, and retry once with the other
 > width if the first interpretation overruns, leaves bytes, or produces an invalid/decreasing
 > next ID. Never merge partial results from the failed attempt.
+
+#### The colour indexes
+
+Each byte is an index into a fixed table of 20 named colours. Indexes 0-19 are the classic
+colours. A server running new-world mode with `enableexbodycolors` can send 20 and above,
+which are HTML colours (`Character.h:43`). The names and indexes match the reference
+(`server/include/object/Character.h:132-156` at origin/beta4, gs2lib `src/IUtil.cpp:28-48`).
+The RGB values are the ones the 2.05 client is reported to hold, from squirelworks'
+client-analysis notes, `client-internals/body-colours-and-attributes.md`; reported, not
+verified against the reference:
+
+| Index | Colour | RGB | Index | Colour | RGB |
+|---:|---|---|---:|---|---|
+| 0 | white | 255, 255, 255 | 10 | blue | 0, 0, 255 |
+| 1 | yellow | 255, 255, 0 | 11 | darkblue | 0, 0, 198 |
+| 2 | orange | 255, 173, 107 | 12 | brown | 132, 0, 0 |
+| 3 | pink | 255, 132, 132 | 13 | cynober | 0, 255, 255 |
+| 4 | red | 255, 0, 0 | 14 | purple | 255, 0, 255 |
+| 5 | darkred | 206, 24, 41 | 15 | darkpurple | 132, 0, 132 |
+| 6 | lightgreen | 132, 255, 132 | 16 | lightgray | 206, 206, 206 |
+| 7 | green | 0, 255, 0 | 17 | gray | 132, 132, 132 |
+| 8 | darkgreen | 0, 198, 0 | 18 | black | 0, 0, 8 |
+| 9 | lightblue | 132, 132, 255 | 19 | transparent | 0, 0, 0 |
+
+How the 2.05 client is reported to apply them (reported, not verified against the
+reference): a body picture is a palette image. The palette entry numbers below are
+positions in that image, not the colour slot order skin, coat, sleeves, shoes, belt above.
+Before drawing, palette
+entry 5 takes the skin colour, 6 the coat, 4 the sleeves, 3 the shoes and 1 the belt; entry 0
+always takes colour 18 (black, the outline), and in the stock bodies entry 2 is the clear
+colour. A new 2.05 player is reported to start as orange, darkred, black, darkred, black
+(2, 5, 18, 5, 18) with `body.png` and `head0.gif`. The reference gives a new account
+2, 0, 10, 4, 18 (`Character.h:43` at origin/beta4).
 
 ### Status Flags (Bitfield)
 
