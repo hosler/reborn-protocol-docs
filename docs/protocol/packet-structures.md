@@ -306,9 +306,11 @@ the leader, which is the first player in the level's list (`msgPLI_BADDYPROPS`,
 documented only in a comment. The server does not parse them. It forwards the raw bytes as
 `PLO_BADDYHURT` to the level leader only, and ignores the packet when there is no leader.
 
-**What the original clients write**: the knockback bytes are `(dx + 4) × 16` and
-`(dy + 4) × 16`, the same form as `PLI_HURTPLAYER`; the "midpoint 64" is that encoding for
-`dx = 0`. Sent from 1.21; the New World betas do not send it ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**What the original clients write** (reported, not verified against the reference): the
+knockback bytes are `(dx + 4) × 16` and `(dy + 4) × 16`, the same form as `PLI_HURTPLAYER`;
+the "midpoint 64" is that encoding for `dx = 0`. The unit of `dx` and `dy` is not stated in
+the notes. Sent from 1.21; the New World betas do not send it (squirelworks' client-analysis
+notes, `protocol/packet-layouts.md`).
 
 ### PLI_BADDYADD (17) - Add Baddy
 **Trigger**: Player spawns a baddy
@@ -320,8 +322,9 @@ documented only in a comment. The server does not parse them. It forwards the ra
 [STRING: image]      // Baddy image filename
 ```
 
-**Original clients**: sent from 1.21, not by the New World betas. The image runs to the end of
-the packet. The server answers with `PLO_BADDYPROPS (2)` ([`protocol/packet-layouts.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/packet-layouts.md)).
+**Original clients** (reported, not verified against the reference): sent from 1.21, not by
+the New World betas. The image runs to the end of the packet. The server answers with
+`PLO_BADDYPROPS (2)` (squirelworks' client-analysis notes, `protocol/packet-layouts.md`).
 
 ### PLI_FLAGSET (18) - Set Flag/Variable
 **Trigger**: Player/script sets a client or server flag
@@ -1465,16 +1468,22 @@ player/NPC props. `getProps()` emits props 1..10 in order (prop 0 = ID is the le
 > A parser can lose synchronization if it reads power as a bare byte. pyReborn reliably
 > reads ID/X/Y/TYPE. Clients that only need the type can stop after prop 3.
 
-**Original clients**: an unknown baddy id creates the baddy (2.05). What the 2.22 client does
-with the props ([`protocol/player-props.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/player-props.md); [`client-internals/baddies-222.md`](https://github.com/squirelworks/Graal_analysis/blob/main/client-internals/baddies-222.md)):
-- X and Y (1, 2) are clamped to 0 to 63 tiles and also taken as the start position.
+**Original clients** (reported, not verified against the reference): an unknown baddy id
+creates the baddy (2.05). What the 2.22 client does with the props (squirelworks'
+client-analysis notes, `protocol/player-props.md` and `client-internals/baddies-222.md`):
+- X and Y (1, 2) are clamped to 0 to 63.5 tiles (`server/src/level/LevelBaddy.cpp:207,211`)
+  and also taken as the start position.
 - POWERIMAGE (4): an empty image means the default image for the type.
-- MODE (5): 0 walk, 1 look, 2 hunt, 3 hurt, 4 bumped, 5 die, 6 swamp soldier, 7 frog jumping,
-  8 octopus ink, 9 dead. On mode 5 the server switches to 9 after 2 s, and 9 removes the
+- MODE (5): 0 walk, 1 look, 2 hunt, 3 hurt, 4 bumped, 5 die, 6 swamp shot, 7 hare jump,
+  8 octopus shot, 9 dead (`server/include/level/LevelBaddy.h:72-86`). On mode 5 the server
+  switches to 9 after 2 s (`server/src/level/LevelBaddy.cpp:289-298`), and 9 removes the
   baddy on the client.
 - ANI (6) is, in 2.22, the AI step counter, not an animation frame: 44 when looking about
-  starts, 16 when the hunt starts, then 0, 3, 2, 1 while chasing.
-- DIR (7) holds two directions: `v >> 2` the body, `v & 3` the head.
+  starts, 16 when the hunt starts, then 0, 3, 2, 1 while chasing (the reference only stores
+  the value, `server/src/level/LevelBaddy.cpp:307-309`).
+- DIR (7) holds two directions: `v >> 2` the head, `v & 3` the body (the reference's
+  `(headDirection << 2) | direction`, `server/src/level/LevelBaddy.cpp:167-168`). The notes
+  give them the other way round and need a recheck against 2.22.
 
 ### PLO_NPCPROPS (3) - NPC Properties  
 **Trigger**: NPC properties change or player enters level
