@@ -2316,14 +2316,16 @@ data, 7 angle, 8 particle). The server serializes them in
 
 ### PLO_GHOSTMODE (170) - Ghost Mode
 **Trigger**: Player enters/exits ghost mode. The reference server never sends it and the
-enum gives no layout (gs2lib `IEnums.h:291`). The body below is what the original clients read.
+enum gives no layout (gs2lib `IEnums.h:291`). The body below is as reported by squirelworks for
+the 2.17 to 2.31 clients and has not been verified against the reference.
 ```
-[GCHAR: ghost_state] // > 0 = ghost mode on, 0 = off (2.17 to 2.31)
+[GCHAR: ghost_state] // reported: > 0 = ghost mode on, 0 = off (2.17 to 2.31)
 ```
 
-**Original clients**: 2.17 to 2.31 turn ghost mode on when the byte is above 0. 5.00r7 reads the
+**Reported client behaviour** (squirelworks' client-analysis notes, `version-profiles/plo-layouts-217-231.tsv`; `protocol/v5x-clients.md`; not verified against the reference): 2.17 to 2.31 turn ghost mode on when the byte is above 0. 5.00r7 reads the
 same byte differently: it stores it as the connection mode, and a change resets a player
-field ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv); [`protocol/v5x-clients.md`](https://github.com/squirelworks/Graal_analysis/blob/main/protocol/v5x-clients.md)).
+field. The v6 engine in the C# client's reference tree stores it as a plain ghost value
+(`Preagonal/FourPlay/quattroplay/src/TClient.cpp:5159-5163`).
 
 ### PLO_BIGMAP (171) - Big Map Data
 **Trigger**: Sent at login to clients 2.1 and later when the `bigmap` option is set to
@@ -2357,8 +2359,8 @@ whatever the operator configured; the reference does not settle which one is rig
 [STRING: text]       // Ghost mode text
 ```
 
-**Original clients** (2.17 to 2.31): the rest of the packet is stored as the ghost-mode
-text ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+**Reported client behaviour** (squirelworks' client-analysis notes, `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): in 2.17 to 2.31 the rest of the packet is stored as the ghost-mode
+text.
 
 ### PLO_GHOSTICON (174) - Ghost Icon
 **Trigger**: Ghost mode icon state
@@ -2366,8 +2368,11 @@ text ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelwor
 [GCHAR: icon_state]  // 1=show icon, 0=hide icon
 ```
 
-**Original clients** (2.17 to 2.31): the icon shows when the byte is above 0, so any value
-1 or more turns it on ([`version-profiles/plo-layouts-217-231.tsv`](https://github.com/squirelworks/Graal_analysis/blob/main/version-profiles/plo-layouts-217-231.tsv)).
+The reference sends this packet with 0 on every level entry
+(`server/src/player/PlayerClient.cpp:1554`).
+
+**Reported client behaviour** (squirelworks' client-analysis notes, `version-profiles/plo-layouts-217-231.tsv`; not verified against the reference): in 2.17 to 2.31 the icon shows when the byte is above 0, so any value
+1 or more turns it on.
 
 ### PLO_SHOOT (175) - Shoot Projectile (v1, < CLVER_5_07)
 **Trigger**: Projectile broadcast to clients below `CLVER_5_07`. See
