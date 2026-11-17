@@ -302,7 +302,7 @@ server they are signed: after removing the +32 wire bias, values `224..255`
 at origin/beta4) are read as `value - 256` (`-32..-1`) before division by two. This is the
 `PropertyTileCoordinate::deserialize` contract
 (`server/src/utilities/PropertySerializers.cpp:499-509` at origin/beta4). The 25396a18
-reader used `216..255` (`-40..-1`); upstream changed it on 2026-11-11 (commit 1b9b9925).
+reader used `216..255` (`-40..-1`); upstream changed it on 2026-11-11 (commit 18cf7639).
 At origin/beta4 the writer (`PropertyTileCoordinate::serialize`,
 `PropertySerializers.cpp:484-497`) clamps the value to -256..1784 pixels (-16 to +111.5
 tiles) and nudges -11 tiles, whose wire byte would be `0x0A`, to -10.5 tiles
@@ -316,7 +316,7 @@ writer did not remap, so it could still emit a newline byte there (gs2lib
 therefore accept bytes below 32.
 
 The original clients are reported to read these bytes unsigned. At GServer-v2 25396a18 the
-reference read them differently; upstream beta4 has since changed (1b9b9925) and now
+reference read them differently; upstream beta4 has since changed (18cf7639) and now
 agrees with the clients for every byte except where noted:
 
 | Wire byte | Real clients (2.05, 2.22, 2.31, live; reported) | GServer-v2 `PropertyTileCoordinate` (25396a18) |
@@ -327,7 +327,7 @@ agrees with the clients for every byte except where noted:
 | `0x20`-`0xF7` | 0 to +107.5 tiles | 0 to +107.5 tiles |
 | `0xF8`-`0xFF` | **+108 to +111.5 tiles** | **-20 to -16.5 tiles** (25396a18: `uread >= 216` read as signed int8; origin/beta4 now reads +108 to +111.5) |
 
-At origin/beta4 since 1b9b9925, wire bytes `0xF8`-`0xFF` are +108 to +111.5 tiles and wire
+At origin/beta4 since 18cf7639, wire bytes `0xF8`-`0xFF` are +108 to +111.5 tiles and wire
 `0x00` is -16 tiles (`PropertySerializers.cpp:503-506`; the threshold is `> 223`,
 `CommonTypes.h:535`).
 
