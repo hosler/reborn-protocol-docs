@@ -34,12 +34,11 @@ party. Server to client: `I<id8>` your id (`0000` plus a 4-digit counter), `+<id
 in the same game, `-<id8>` a player left, `P<id8>` the partnership is confirmed (the client
 then pushes its whole state), `C<id8>` the partner left, `D<data>` relayed data. From the
 15th beta on, the 1.1.9 server also sends `NR` or `NL` after `N`; with `NL` the client
-starts in a local-start level file (`onlinestartlocal` with the level extension).
+starts in a local-start level file (`onlinestartlocal.graal`).
 
 **Game names.** The name sent with `N` keeps incompatible builds apart: `Zelda2` (1st, 2nd),
-then the game's own name with a digit suffix: the base name (3rd, 4th), the base name + `2`
-(4th alpha), `3` (5th), `4` (6th), `5` (7th to 9th), `6` (10th to 12th), `7` (13th), `8`
-(14th, 15th, 1.1, 1.1.9). On a level the client
+then `Graal` (3rd, 4th), `Graal2` (4th alpha), `Graal3` (5th), `Graal4` (6th), `Graal5`
+(7th to 9th), `Graal6` (10th to 12th), `Graal7` (13th), `Graal8` (14th, 15th, 1.1, 1.1.9). On a level the client
 builds the name from `G<n>` plus the level's location instead, so each level is its own room
 and players only meet on the same level with a compatible build.
 

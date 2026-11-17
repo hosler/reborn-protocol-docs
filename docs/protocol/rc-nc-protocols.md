@@ -210,7 +210,7 @@ as live ids gets no reply.
 **What the 2004 RC handles from the server** (reported): 13, 16, 30, 35, 37, 55–59, 61–70, 72–74, 76, 77, 79,
 100, 103 and 180. Id 55 (`PLO_ADDPLAYER`) creates or updates a player-list row from a
 `gshort` id, the account name and a prop stream; a new row defaults to 3 hearts, `sword1.gif`,
-`body.png` and `onlinestartlocal` plus the level-file extension. The reference also sends 25,
+`body.png` and `onlinestartlocal.graal`. The reference also sends 25,
 47 and 194 to an RC at login; the notes do not say whether the 2004 RC handles them.
 
 ### `getPropsForRCPacket()` blob (inside PLO_RC_PLAYERPROPSGET, after `gshort(id)`)

@@ -2316,7 +2316,7 @@ raises it to script as the `receivetext` event; 5.00r7 also feeds its buddy list
 **Buddy lists and list-server tabs.** These ride on 152/154/82 as gtokenized text, as reported
 in squirelworks' client-analysis notes, `client-internals/feature-specs/14-friends-ignore.md`
 (server-source reads, not a capture):
-- Buddy requests go in `PLI_SENDTEXT` as the engine's own weapon name, `lister`, then
+- Buddy requests go in `PLI_SENDTEXT` as the engine weapon field `GraalEngine`, `lister`, then
   `verifybuddies`, `addbuddy` or `deletebuddy`, then the account list
   (`server/src/player/PlayerRequestText.cpp:246-254`). The server forwards those three options
   to the list server, never for guest accounts, and stores nothing itself.
